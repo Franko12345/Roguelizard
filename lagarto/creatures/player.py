@@ -308,6 +308,10 @@ class Player(Lizard):
             self.health = 0
             self.down = True
             self.revive = 6.0
+            # Drop the tongue. A downed player's update() early-outs before
+            # _tongue_step, so anything left mid-flight would hang in the air
+            # for the whole six seconds and then resume from a stale anchor.
+            self._drop_tongue()
             game.fx.burst(self.pos, C.COL_WHITE, 26, 260)
             game.fx.ring(self.pos, self.color)
         return True
@@ -940,18 +944,24 @@ class Player(Lizard):
             r = int((6 + 26 * u) * z)
             palette.glow(surf, pts[-1], r, (255, 210, 180), 0.5 * (1.0 - u))
 
+    def _drop_tongue(self):
+        """Retract everything with no payoff. The one place tongue state is
+        cleared, so a new launch can never inherit half of an old one."""
+        self.tongue_t = 0.0
+        self.tongue_target = None
+        self.tongue_grabbed = None
+        self._tongue_hit = False
+        self._tongue_len = 0.0
+        self._tongue_shaft = []
+        self._tongue_shaft_v = []
+
     def _tongue_finish(self, game):
         """Back in the mouth: swallow whatever made it home, then reset."""
         g = self.tongue_grabbed
         if g is not None and not g.dead and getattr(g, 'kind', None) != 'enemy':
             game.eat(self, g)                # eat() owns its own burst/popup
             self.squat_bias = 0.88           # the gulp
-        self.tongue_t = 0.0
-        self.tongue_target = None
-        self.tongue_grabbed = None
-        self._tongue_hit = False
-        self._tongue_shaft = []
-        self._tongue_shaft_v = []
+        self._drop_tongue()
 
     def _draw_slow_mark(self, surf, cam):
         """Show WHY you are slow.

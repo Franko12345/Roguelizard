@@ -294,8 +294,6 @@ TONGUE_LAG = 500.0               # shaft spring stiffness toward its ideal curve
                                  # -- the reel is only ~10 frames long. Raising it
                                  # past ~700 lets the bow reach the span itself,
                                  # which is where lobes start meeting each other.
-TONGUE_SAG = 0.16                # gravity droop, as a fraction of tongue length
-TONGUE_WAVE_AMP = 0.17           # travelling undulation, same units
 TONGUE_WAVE_CYCLES = 1.2         # how many waves fit along the tongue. More lobes
                                  # means more chances for two of them to cross once
                                  # the shaft is wide relative to its span.

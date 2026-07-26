@@ -256,4 +256,38 @@ assert max(jumps) < 40, f"an enemy was teleported {max(jumps):.0f} px in one fra
 assert foe.pos.distance_to(p.pos) < start.distance_to(p.pos), "the enemy was not pulled in"
 print(f"enemy pulled by force: max {max(jumps):.1f} px/frame, "
       f"{start.distance_to(p.pos):.0f} -> {foe.pos.distance_to(p.pos):.0f} px away")
+
+# --- 8. going down must drop the tongue --------------------------------- #
+# A downed player's update() early-outs before _tongue_step, so a tongue left
+# mid-flight would hang in the air for the whole six-second revive and then
+# resume from a stale anchor.
+g, p, prey = fresh(prey_at=150)
+p._pending_tongue_target = prey
+p._launch_tongue(g)
+for _ in range(3):
+    p._tongue_step(DT, g)
+assert p.tongue_t > 0 and p.tongue_path() is not None, "harness: tongue should be out"
+p.health = 1
+p.hit_flash = 0.0
+p.shed_t = 0.0
+p.extra_life = False
+p.hurt(g, Vector2(1, 0), 999)
+assert p.down, "harness: player should be down"
+assert p.tongue_t == 0, "a downed player left the tongue hanging in the air"
+assert p.tongue_path() is None and p.tongue_grabbed is None, "tongue state survived a death"
+print("going down drops the tongue")
+
+# and a fresh launch after reviving must not inherit any of it
+p.down = False
+p.health = p.max_health
+p.energy = p.max_energy
+p._pending_tongue_target = None
+p._launch_tongue(g)
+assert p._tongue_len == 0.0 and not p._tongue_hit, "new launch inherited old tongue state"
+n = 0
+while p.tongue_t > 0 and n < 200:
+    p._tongue_step(DT, g)
+    n += 1
+assert p.tongue_t == 0, "the tongue after a revive never retracted"
+print(f"tongue after revive is clean and retracts in {n} frames")
 print("ALL OK")
