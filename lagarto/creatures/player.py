@@ -5,9 +5,11 @@ here is the run state a human drives -- energy, charms, items, mutations, xp.
 """
 
 import math
+import random
 from pygame import Vector2
 import pygame
 
+from ..anim.anim import Anticipation
 from ..core import config as C
 from ..audio import engine as audio
 from ..core import palette
@@ -48,8 +50,31 @@ class Player(Lizard):
         self.whip_hits = set()    # one hit per enemy per swing (see dash_hits)
         self.whip_side = 1
         self.whip_dir = Vector2()
+        # Tongue. ``tongue_t`` is elapsed SECONDS since the launch, 0 = idle, and
+        # the three phase lengths in config carve it into out / stick / reel.
+        # Everything visual is derived from it, so there is no second clock to
+        # drift out of sync with the one the hit resolves against.
         self.tongue_t = 0.0
         self.tongue_target = None
+        self.tongue_grabbed = None      # what the tip is carrying home
+        self._tongue_anchor = Vector2()  # where the tip stuck; reel lerps from here
+        self._tongue_hit = False         # the connect beat fires exactly once
+        self._tongue_shaft = []          # interior shaft points (springs)
+        self._tongue_shaft_v = []
+        self._tongue_wave = 0.0          # travelling undulation phase
+        self._tongue_len = 0.0           # reach at the taut frame (see _tongue_bulge)
+        # Issue #5: every offensive verb goes through an Anticipation gate, so
+        # `update` returns the action exactly once per press and holding a
+        # button can never repeat-fire. The durations are 0 by default (see
+        # config): the player fires on the press frame, and wind-up is left to
+        # the things you fight. The choice made at the press (tongue target,
+        # whip side) is parked here so a non-zero duration still aims at what
+        # the player actually saw.
+        self.dash_antic = Anticipation(duration=C.DASH_ANTIC_T)
+        self.tongue_antic = Anticipation(duration=C.TONGUE_ANTIC_T)
+        self.whip_antic = Anticipation(duration=C.WHIP_ANTIC_T)
+        self._pending_tongue_target = None
+        self._pending_whip_side = 1
         self.aim = Vector2(1, 0)
         self.down = False
         self.revive = 0.0
@@ -247,6 +272,15 @@ class Player(Lizard):
         scorpion's slow) must not fire when the hit bounced off i-frames --
         otherwise you get a debuff with no damage number to explain it.
         """
+        # Sandbox god mode (SB6): the player under test ignores all damage
+        # application -- energy, movement and dash stay real. ``hurt`` is THE
+        # single choke point every damage source funnels through (projectiles,
+        # body contact, boss AoEs), so guarding it here covers them all with one
+        # early-out. No-op on the normal path: the check short-circuits on
+        # ``game.mode == 'sandbox'`` before ``god_mode`` is ever read, and only a
+        # player (never an enemy) is in ``game.players``.
+        if game.mode == 'sandbox' and game.god_mode and self in game.players:
+            return False
         if self.dashing or self.hit_flash > 0.45 or self.down or self.shed_t > 0:
             return False
         dmg *= (1.0 - self.armor)                       # carapaca charm blocks a %
@@ -274,6 +308,10 @@ class Player(Lizard):
             self.health = 0
             self.down = True
             self.revive = 6.0
+            # Drop the tongue. A downed player's update() early-outs before
+            # _tongue_step, so anything left mid-flight would hang in the air
+            # for the whole six seconds and then resume from a stale anchor.
+            self._drop_tongue()
             game.fx.burst(self.pos, C.COL_WHITE, 26, 260)
             game.fx.ring(self.pos, self.color)
         return True
@@ -322,9 +360,22 @@ class Player(Lizard):
         speed_mul *= drag
         self.dash_cd = decay(self.dash_cd, dt)
 
+        # Issue #5: the press goes through an Anticipation gate. At DASH_ANTIC_T
+        # = 0 (the default -- see config) it fires on this very frame, but still
+        # exactly once per press, so holding the button cannot repeat-fire.
+        # Raise the constant and the same code becomes a real wind-up with the
+        # coil below.
         if c.dash_edge and self.can_dash and self.dash_cd <= 0 \
-                and self.energy >= C.DASH_COST:
+                and self.energy >= C.DASH_COST and not self.dash_antic.is_active \
+                and self.dash_antic.action is None:
             c.consume('dash')
+            self.dash_antic.trigger('dash')
+        if self.dash_antic.is_active:
+            self.squat_bias = C.DASH_ANTIC_SQUAT
+        # Energy is re-checked here, not just at the press: a wind-up is real
+        # time, and a weapon can spend the last of it while the coil plays.
+        if self.dash_antic.update(dt) == 'dash' and self.dash_time <= 0 \
+                and self.energy >= C.DASH_COST:
             move = c.move if c.move.length_squared() > 0.1 else self.facing
             self.vel = safe_norm(move) * self.max_speed * (3.5 if self.wings else 3.0)
             self.dash_time = 0.2 if self.wings else 0.16
@@ -334,46 +385,45 @@ class Player(Lizard):
             audio.play('dash')
             game.fx.burst(self.pos, self.color, 14, 200)
             game.fx.spark_burst(self.pos, palette.lighten(self.color, 0.3), 12, 340)
+            # Issue #9's kicked-up dust, moved off the wind-up and onto the
+            # launch: at zero wind-up there is no window to spawn it in, and
+            # dust leaving the feet as you go reads better than dust before.
+            perp = Vector2(-self.facing.y, self.facing.x)
+            for s in (-1, 1):
+                game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
             game.shake(5)
 
         self.steer(c.move, dt, speed_mul)
-        self.integrate(dt, on_plant=game.fx.dust)
+        self.integrate(dt, on_plant=game.fx.dust, bounds=game.arena_bounds)
         self._whip_arc(dt)
 
-        if c.tongue_edge and self.tongue_t == 0 and self.energy >= C.TONGUE_COST:
+        # Issue #5/#9: same wind-up contract as the dash. The target is picked at
+        # the PRESS so the aim is what the player saw, then held until the
+        # tongue actually shoots.
+        if c.tongue_edge and self.tongue_t == 0 and self.energy >= C.TONGUE_COST \
+                and not self.tongue_antic.is_active and self.tongue_antic.action is None:
             c.consume('tongue')
-            self.tongue_t = 0.001
-            self.energy -= C.TONGUE_COST                       # tongue costs energy
+            self.tongue_antic.trigger('tongue')
             # auto-aim at the nearest edible OR enemy, whichever is closer
             ed = game.nearest_edible(self.pos, self.tongue_range)
             en = game.nearest_enemy(self.pos, self.tongue_range)
             if ed and en:
-                self.tongue_target = ed if self.pos.distance_to(ed.pos) <= \
+                tgt = ed if self.pos.distance_to(ed.pos) <= \
                     self.pos.distance_to(en.pos) else en
             else:
-                self.tongue_target = ed or en
-            if self.tongue_target:
-                self.aim = safe_norm(self.tongue_target.pos - self.pos)
+                tgt = ed or en
+            if tgt:
+                self.aim = safe_norm(tgt.pos - self.pos)
+            self._pending_tongue_target = tgt
+        if self.tongue_antic.is_active:
+            # jaw-open: stretch UP rather than coil down, so it reads as the
+            # opposite gesture to the dash's crouch.
+            self.squat_bias = C.TONGUE_ANTIC_SQUAT
+        if self.tongue_antic.update(dt) == 'tongue' and self.tongue_t == 0 \
+                and self.energy >= C.TONGUE_COST:
+            self._launch_tongue(game)
         if self.tongue_t > 0:
-            self.tongue_t += dt / 0.22
-            if self.tongue_t >= 1:
-                self.tongue_t = 0.0
-                t = self.tongue_target
-                if t and not t.dead:
-                    if getattr(t, 'kind', None) == 'enemy':    # tongue: hurt + move
-                        t.take_hit(game, safe_norm(t.pos - self.pos), 2)
-                        if self.tongue_throw:      # Arremesso: fling OUT, not in
-                            t.vel += safe_norm(t.pos - self.pos) * C.ITEM_THROW_SPEED
-                        else:
-                            t.vel += safe_norm(self.pos - t.pos) * 200   # yank in
-                        if self.tongue_drain:      # Sanguessuga: steal life
-                            self.health = min(self.max_health,
-                                              self.health + C.ITEM_DRAIN)
-                            game.fx.popup(self.pos, "+vida", (120, 240, 140))
-                        game.fx.spark_burst(t.pos, C.COL_FX_SPARK, 7, 240)
-                    else:
-                        game.eat(self, t)
-                self.tongue_target = None
+            self._tongue_step(dt, game)
 
         # Iman de Polen: coletaveis (fruta/inseto/ovo) driftam ate voce. Pollen is
         # a counter, not a world pickup, so the magnet pulls the things you can
@@ -399,18 +449,28 @@ class Player(Lizard):
 
         # --- tail whip ("rabada") ---------------------------------------- #
         self.whip_cd = decay(self.whip_cd, dt)
-        if c.whip_edge and self.whip_cd <= 0 and self.energy >= C.WHIP_COST:
+        # Issue #5/#9: the swing side is chosen at the PRESS so the wind-up can
+        # already lean into it, and the shortest coil of the three -- the whip is
+        # the panic button, so it stays the most responsive.
+        if c.whip_edge and self.whip_cd <= 0 and self.energy >= C.WHIP_COST \
+                and not self.whip_antic.is_active and self.whip_antic.action is None:
             c.consume('whip')
-            self.whip_t = 0.001
-            self.whip_cd = self.whip_cooldown
-            self.energy -= C.WHIP_COST
-            self.whip_hits.clear()          # fresh swing -> everyone hittable again
-            # swing toward the nearest enemy; with nobody around, alternate sides
+            self.whip_antic.trigger('whip')
             side = self.whip_side
             foe = game.nearest_enemy(self.pos, 280)
             if foe is not None:
                 d = foe.pos - self.pos
                 side = 1 if (self.facing.x * d.y - self.facing.y * d.x) > 0 else -1
+            self._pending_whip_side = side
+        if self.whip_antic.is_active:
+            self.squat_bias = C.WHIP_ANTIC_SQUAT
+        if self.whip_antic.update(dt) == 'whip' and self.whip_t == 0 \
+                and self.energy >= C.WHIP_COST:
+            self.whip_t = 0.001
+            self.whip_cd = self.whip_cooldown
+            self.energy -= C.WHIP_COST
+            self.whip_hits.clear()          # fresh swing -> everyone hittable again
+            side = self._pending_whip_side
             self.whip_side = -side
             # Sideways ARC, not a velocity impulse. An impulse got erased within a
             # few frames by steer() pulling velocity back to the input direction --
@@ -586,16 +646,322 @@ class Player(Lizard):
                     game.punch(0.05, 7)
                 break
 
+    # ---- tongue ---------------------------------------------------------- #
+    # A chameleon slingshot in three beats. OUT throws the tip at the target and
+    # decelerates into it, STICK is the frame it snaps taut (where the hit lands
+    # and all the impact juice fires), REEL drags whatever it caught home. The
+    # shaft is a spring chain pinned at both ends, so it whips and undulates
+    # without ever moving the tip -- the tip is kinematic, and the hit and the
+    # drawing read the same function for it.
+
+    def _mouth(self):
+        return self.spine.joints[0] + self.spine.head_dir() * self.max_r
+
+    def _tongue_aim(self):
+        """Where the tip is headed. Follows a live target, so the tongue tracks
+        something that moves while the tongue is in the air."""
+        t = self.tongue_target
+        if t is not None and not t.dead:
+            return Vector2(t.pos)
+        return self.pos + self.aim * C.TONGUE_REACH_MISS
+
+    def tongue_phase(self):
+        """``(name, u)`` -- which beat, and progress 0..1 through it."""
+        t = self.tongue_t
+        if t <= 0:
+            return None, 0.0
+        if t < C.TONGUE_OUT_T:
+            return 'out', t / C.TONGUE_OUT_T
+        t -= C.TONGUE_OUT_T
+        if t < C.TONGUE_STICK_T:
+            return 'stick', t / C.TONGUE_STICK_T
+        t -= C.TONGUE_STICK_T
+        if t < C.TONGUE_REEL_T:
+            return 'reel', t / C.TONGUE_REEL_T
+        return None, 1.0
+
     def tongue_tip(self):
+        """(tip, mouth) -- THE tongue's position, for hits and for the drawing.
+
+        One function, read by both, so what you see is where the tongue is.
+        Anything that wants to bend the tongue bends the SHAFT (see
+        ``tongue_path``), never this endpoint.
+        """
         if self.tongue_t <= 0:
             return None
-        reach = math.sin(self.tongue_t * math.pi)
-        if self.tongue_target and not self.tongue_target.dead:
-            aim = self.tongue_target.pos
+        mouth = self._mouth()
+        ph, u = self.tongue_phase()
+        if ph == 'out':
+            # ease-out cubic: leaves the mouth explosively, decelerates in
+            return mouth.lerp(self._tongue_aim(), 1.0 - (1.0 - u) ** 3), mouth
+        if ph == 'stick':
+            # springs past the target and settles -- the slingshot snapping taut
+            aim = self._tongue_aim()
+            over = C.TONGUE_OVERSHOOT * math.sin(u * math.pi * 2.0) * (1.0 - u)
+            return aim + (aim - mouth) * over, mouth
+        # reel: from where it stuck back into the mouth, smoothstepped
+        e = u * u * (3.0 - 2.0 * u)
+        return self._tongue_anchor.lerp(mouth, e), mouth
+
+    def tongue_path(self):
+        """The tongue as a list of world points, mouth first, tip last.
+
+        Interior points are springs (``_tongue_shaft``) chasing an ideal curve:
+        a gravity sag plus a wave travelling toward the tip, both scaled by
+        ``sin(s * pi)`` so they vanish at the pinned ends. The springs are what
+        make it whip on the launch and slacken on the way back; the pinning is
+        what keeps the tip honest.
+
+        Only the segments still OUTSIDE the mouth are returned -- the rest have
+        been swallowed (see ``_tongue_active``).
+        """
+        t = self.tongue_tip()
+        if t is None or not self._tongue_shaft:
+            return None
+        tip, mouth = t
+        n_in = self._tongue_active(self._tongue_material()) - 2
+        return [mouth] + [Vector2(p) for p in self._tongue_shaft[:max(0, n_in)]] + [tip]
+
+    def _tongue_material(self):
+        """How much tongue is still OUTSIDE the mouth, in px.
+
+        The mouth swallows the tongue as it reels: this is the length of the
+        part that is still out. It runs out at the end of the reel, and it
+        shrinks more slowly than the ends close on each other -- that difference
+        is the slack, and the slack is the coil.
+        """
+        ph, u = self.tongue_phase()
+        if ph is None:
+            return 0.0
+        if ph != 'reel':
+            return self._tongue_len or C.TONGUE_REACH_MISS
+        return self._tongue_len * (1.0 - u * u)
+
+    def _tongue_active(self, material):
+        """How many path points are still out of the mouth, ends included.
+
+        THE fix for the knot. The shaft used to keep all its segments while only
+        the tip came home, so segment spacing collapsed toward zero and the same
+        number of points had to fit an ever-shorter span -- they had nowhere to
+        go but sideways, folding the shaft over itself. Real segment spacing is
+        fixed (it is a physical length of tongue); what changes is HOW MANY
+        segments are still outside. Swallow them.
+        """
+        if self._tongue_len <= 1e-4:
+            return C.TONGUE_SEGMENTS
+        frac = clamp(material / self._tongue_len, 0.0, 1.0)
+        return max(2, int(round(C.TONGUE_SEGMENTS * frac)))
+
+    def _tongue_bulge(self, span, material):
+        """Lateral amplitude in ABSOLUTE px -- how much tongue is spare.
+
+        A thrown tongue is ballistic and nearly straight. A retracting one has
+        more tongue out than the gap between its ends, and the excess bows to
+        the side: that is what coiling is. Scaling the bow by the CURRENT span
+        instead makes it vanish exactly when the tongue is longest, which reads
+        as a stiff arc.
+        """
+        ph, _u = self.tongue_phase()
+        if ph != 'reel':
+            return span * C.TONGUE_TAUT_BOW
+        return clamp(material - span, 0.0, self._tongue_len * C.TONGUE_COIL_MAX)
+
+    def _tongue_ideal(self, i, mouth, tip, bulge, active):
+        """Rest position of interior shaft point ``i``.
+
+        ``active`` is how many points are still out of the mouth, so the ones
+        that remain spread over the CURRENT span instead of being crammed
+        together -- which is what stopped the shaft folding over itself.
+        """
+        s = (i + 1) / max(1.0, active - 1.0)
+        d = tip - mouth
+        length = d.length()
+        if length < 1e-4:
+            return Vector2(mouth)
+        d = d / length
+        env = math.sin(s * math.pi)          # 0 at both pinned ends
+        down = Vector2(-d.y, d.x)
+        if down.y < 0:                       # sag toward world down
+            down = -down
+        side = Vector2(-d.y, d.x)
+        sag = bulge * C.TONGUE_SAG_SHARE * env
+        wave = (bulge * C.TONGUE_WAVE_SHARE * env
+                * math.sin(s * C.TONGUE_WAVE_CYCLES * C.TAU - self._tongue_wave))
+        return mouth + d * (s * length) + down * sag + side * wave
+
+    def _launch_tongue(self, game):
+        """Fire the tongue: commit the target, seed the shaft, sell the launch."""
+        self.tongue_t = 1e-4
+        self.energy -= C.TONGUE_COST
+        self.tongue_target = self._pending_tongue_target
+        self._pending_tongue_target = None
+        self.tongue_grabbed = None
+        self._tongue_hit = False
+        self._tongue_wave = 0.0
+        self._tongue_len = 0.0
+        mouth = self._mouth()
+        # every shaft point starts AT the mouth, so the tongue visibly shoots
+        # out of the head instead of appearing along its full length
+        self._tongue_shaft = [Vector2(mouth) for _ in range(C.TONGUE_SEGMENTS - 2)]
+        self._tongue_shaft_v = [Vector2() for _ in range(C.TONGUE_SEGMENTS - 2)]
+        audio.play('tongue_out', 0.55)
+        game.fx.dust(mouth)
+        game.shake(1.5)
+
+    def _tongue_connect(self, game):
+        """The taut frame: resolve the hit and spend the impact juice."""
+        self._tongue_hit = True
+        tip, mouth = self.tongue_tip()
+        self._tongue_anchor = Vector2(tip)
+        # the material length, frozen here: the reel bulges by whatever of
+        # this the closing endpoints no longer account for
+        self._tongue_len = mouth.distance_to(tip)
+        t = self.tongue_target
+        if t is None or t.dead:
+            game.fx.dust(tip)                # whiffed: a puff, nothing more
+            return
+        audio.play('tongue_hit', 0.6)
+        game.punch(0.045, 5)
+        game.fx.spark_burst(tip, C.COL_FX_SPARK, 9, 260)
+        game.fx.ring(tip, getattr(t, 'color', C.COL_WHITE))
+        # the line snaps taut and tugs the LIZARD toward its catch -- small, but
+        # it is what makes the tongue feel attached to a body with mass
+        self.vel += safe_norm(tip - self.pos) * C.TONGUE_RECOIL
+        if getattr(t, 'kind', None) == 'enemy':
+            away = safe_norm(t.pos - self.pos)
+            t.take_hit(game, away, 2)
+            if self.tongue_throw:            # Arremesso: fling OUT, never carried
+                t.vel += away * C.ITEM_THROW_SPEED
+            else:
+                # A hit cannot knock away something on a leash. take_hit has
+                # just pushed it outward; cancel that component and replace it
+                # with a yank toward the mouth, or the knockback wins and the
+                # reel spends its whole 170 ms undoing it.
+                out = t.vel.dot(away)
+                if out > 0:
+                    t.vel -= away * out
+                t.vel -= away * C.TONGUE_YANK
+                self.tongue_grabbed = t
+            if self.tongue_drain:            # Sanguessuga: steal life
+                self.health = min(self.max_health, self.health + C.ITEM_DRAIN)
+                game.fx.popup(self.pos, "+vida", (120, 240, 140))
         else:
-            aim = self.pos + self.aim * 210
-        mouth = self.spine.joints[0] + self.spine.head_dir() * self.max_r
-        return mouth.lerp(aim, reach), mouth
+            self.tongue_grabbed = t          # food rides the tip home
+
+    def _tongue_step(self, dt, game):
+        """Advance the tongue one sim step: phase beats, shaft springs, drag."""
+        self.tongue_t += dt
+        ph, u = self.tongue_phase()
+        self._tongue_wave += dt * C.TONGUE_WAVE_SPEED
+
+        if ph in ('stick', 'reel') and not self._tongue_hit:
+            self._tongue_connect(game)       # crossed into STICK: land the hit
+        if ph is None:                        # arrived home
+            self._tongue_finish(game)
+            return
+
+        tip, mouth = self.tongue_tip()
+        # Shaft springs. Critically damped so it whips without jittering, and
+        # advanced with the sim step so the shape is timestep independent.
+        k = C.TONGUE_LAG
+        c = 2.0 * math.sqrt(k)
+        span = mouth.distance_to(tip)
+        material = self._tongue_material()
+        active = self._tongue_active(material)
+        bulge = self._tongue_bulge(span, material)
+        # Only the segments still outside the mouth are simulated. The ones
+        # behind them have been swallowed, and a swallowed segment has no shape
+        # to hold -- it is what kept the shaft from having to fold up.
+        n_in = max(0, active - 2)
+        for i in range(n_in):
+            p, v = self._tongue_shaft[i], self._tongue_shaft_v[i]
+            ideal = self._tongue_ideal(i, mouth, tip, bulge, active)
+            v.x += ((ideal.x - p.x) * k - v.x * c) * dt
+            v.y += ((ideal.y - p.y) * k - v.y * c) * dt
+            p.x += v.x * dt
+            p.y += v.y * dt
+
+        g = self.tongue_grabbed
+        if g is not None and g.dead:
+            self.tongue_grabbed = None       # it died mid-reel; drop it
+        elif g is not None and ph == 'reel':
+            # Only on the way back. During STICK the tip deliberately springs
+            # PAST the target, so hauling the target onto the tip there would
+            # drag it outward by the overshoot -- the wrong direction.
+            if getattr(g, 'kind', None) == 'enemy':
+                # heavy: pulled by force, so the world can still block it
+                g.vel += safe_norm(tip - g.pos) * C.TONGUE_DRAG * dt
+            else:
+                # light: STUCK to the pad, so it rides the tip exactly. A soft
+                # follow lags a tip moving ~900 px/s by tens of pixels, which
+                # reads as food trailing on a string instead of being caught.
+                # Its own velocity is cleared so fleeing cannot fight the glue.
+                g.pos = Vector2(tip)
+                if hasattr(g, 'vel'):
+                    g.vel *= 0.0
+                if random.random() < dt * 26:
+                    game.fx.trail(g.pos, getattr(g, 'color', C.COL_BUG))
+
+    def _draw_tongue(self, surf, cam):
+        """Stroke the shaft twice -- ink underneath, tongue on top.
+
+        Same ink boundary the body has, for ~2 * segments draw calls and no
+        surface allocation. Two things carry the feel:
+
+        - the shaft THINS as it extends, like something elastic under tension,
+          and thickens again as it slackens on the way back;
+        - the sticky tip swells when it is carrying something home.
+        """
+        path = self.tongue_path()
+        if path is None:
+            return
+        pts = cam.w2s_many(path)
+        n = len(pts) - 1
+        z = cam.zoom
+        ph, u = self.tongue_phase()
+        # 1.0 at the mouth, 0 fully retracted: how much tongue is out there
+        mouth, tip = path[0], path[-1]
+        ext = min(1.0, mouth.distance_to(tip) / max(1.0, C.TONGUE_REACH_MISS))
+        stretch = 1.0 - 0.35 * ext           # thin under tension
+        shaft = max(2, int(3.4 * z * stretch))
+        ink = max(1, int(2 * z))
+        carrying = self.tongue_grabbed is not None and not self.tongue_grabbed.dead
+        tip_r = max(3, int((6.5 if carrying else 5.0) * z))
+        body_col = (230, 60, 90)
+        for col, pad in ((C.COL_INK, ink), (body_col, 0)):
+            for i in range(n):
+                # taper toward the tip, where the sticky pad is
+                w = int(shaft * (1.5 + 0.85 * (i / n))) + 2 * pad
+                pygame.draw.line(surf, col, pts[i], pts[i + 1], max(1, w))
+            pygame.draw.circle(surf, col, pts[-1], tip_r + pad)
+        # wet highlight on the pad, offset toward the mouth so it reads as 3D
+        hl = (pts[-1][0] + (pts[-2][0] - pts[-1][0]) * 0.28,
+              pts[-1][1] + (pts[-2][1] - pts[-1][1]) * 0.28)
+        pygame.draw.circle(surf, (255, 180, 200), (int(hl[0]), int(hl[1])),
+                           max(2, int(2.6 * z)))
+        if ph == 'stick':
+            # the taut flash: a ring snapping outward at the moment of contact
+            r = int((6 + 26 * u) * z)
+            palette.glow(surf, pts[-1], r, (255, 210, 180), 0.5 * (1.0 - u))
+
+    def _drop_tongue(self):
+        """Retract everything with no payoff. The one place tongue state is
+        cleared, so a new launch can never inherit half of an old one."""
+        self.tongue_t = 0.0
+        self.tongue_target = None
+        self.tongue_grabbed = None
+        self._tongue_hit = False
+        self._tongue_len = 0.0
+        self._tongue_shaft = []
+        self._tongue_shaft_v = []
+
+    def _tongue_finish(self, game):
+        """Back in the mouth: swallow whatever made it home, then reset."""
+        g = self.tongue_grabbed
+        if g is not None and not g.dead and getattr(g, 'kind', None) != 'enemy':
+            game.eat(self, g)                # eat() owns its own burst/popup
+            self.squat_bias = 0.88           # the gulp
+        self._drop_tongue()
 
     def _draw_slow_mark(self, surf, cam):
         """Show WHY you are slow.
@@ -620,12 +986,7 @@ class Player(Lizard):
             w = weapons.WEAPONS[wid]
             if w.layer == 'under':
                 w.draw(surf, cam, self, self.weapon_state[wid], lvl)
-        tip = self.tongue_tip()
-        if tip:
-            t, mouth = tip
-            pygame.draw.line(surf, (230, 60, 90), cam.w2s(mouth), cam.w2s(t),
-                             max(2, int(3 * cam.zoom)))
-            pygame.draw.circle(surf, (255, 90, 120), cam.w2s(t), max(2, int(4 * cam.zoom)))
+        self._draw_tongue(surf, cam)
         super().draw(surf, cam)
         for wid, lvl in self.weapons.items():        # orbitals in front
             w = weapons.WEAPONS[wid]

@@ -3,6 +3,46 @@
 Two passes of balancing recorded here. The design rules are more
 important than the specific numbers.
 
+## 3rd pass — steeper mid/late-game scaling (issue #23)
+
+The 2nd pass raised enemy damage but kept HP/speed/count scaling flat.
+With Might/Area/Amount upgrades stacked by wave 10+, enemies died
+before reaching the player and the run snowballed. The 3rd pass
+**steepens the per-wave dials past wave-specific knees** so the
+mid-game stays threatening without re-sponging the early game.
+
+The dials now live in named helpers in `rounds.py`
+(`wave_hp_bonus`, `wave_speed_mul`, `wave_budget`, `wave_cap`) —
+inline formulas were a maintenance hazard (one of the three call sites
+had already drifted). The knees are in `config.py` so they can be
+tuned without touching `rounds.py`:
+
+| Dial | Knee | Pre-knee (early game) | Post-knee (mid/late game) |
+|------|------|----------------------|---------------------------|
+| HP bonus | wave 10 | `wave * 0.7` (unchanged) | `+ (wave-10)^1.4 * 1.2` (super-linear) |
+| Speed mul | wave 10 | `1.0 + min(wave * 0.025, 0.60)` | `+ min((wave-10) * 0.015, 0.15)` |
+| Budget | wave 10 | `(3 + wave * 1.1) * theme_budget` | `+ (wave-10) * 0.6 * theme_budget` |
+| Cap | wave 8 | theme cap (unchanged) | `+ min(4, (wave-8) // 2)` |
+| Champion chance | wave 7 (ramp start) | `0.05 + 0.018 * (wave-1)`, cap 0.30 | (same ramp, hits cap at wave 21) |
+
+Wave 20 numbers (enxame theme, before vs after): HP bonus 14 → 44,
+speed mul 1.4 → 1.65, budget 32 → 40, cap 7 → 11, champion chance
+22% → 30%. Waves 1-9 are within measurement noise of the old curve
+by design — the early game is preserved.
+
+Bot measurement + full before/after table in
+[triage-issue-23.md](../agents/triage-issue-23.md). The bot is a
+yardstick (no dash, per the issue spec); the deterministic curve in
+`scripts/compare_scaling.py` is the authoritative before/after
+artifact.
+
+The 2nd-pass rule "raise DAMAGE, not HP" still holds for the
+**per-enemy** dial (contact damage, projectile damage). The 3rd pass
+raises **per-wave** HP because the snowball was about TTK at scale,
+not about per-hit friction: a +14 HP enemy at wave 20 dies in one
+tongue-flick to a stacked Might build, while a +44 HP enemy survives
+long enough to close distance. Per-hit damage is unchanged.
+
 ## 2nd pass rule: raise DAMAGE, not HP
 
 Coming out of Isaac / Gungeon / VS research: in an auto-attack game the
@@ -60,9 +100,30 @@ change them**:
   the last 5 s and vanish), hp 3 → 2, attack every 0.6 s → 1.1 s; world
   eggs 6 → 3; shop egg 24 → 40 pollen.
 
+## Tracking — what this file asked for, and where it landed
+
+Issue #28 asked for tracking of the requests raised in this file.
+The table below maps each request to the issue/commit that addressed
+it (or "OPEN" if still unresolved).
+
+| Request | Source section | Status | Where |
+|---------|---------------|--------|-------|
+| Steeper HP scaling past wave 10 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Steeper speed scaling past wave 10 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Higher enemy count budget past wave 10 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Higher live-enemy cap past wave 8 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Faster champion ramp past wave 7 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Passive-play can't clear wave 1 | "Open" | OPEN | design decision, needs user call |
+| Boss HP scaling review | (implicit) | OPEN | boss HP `90 + 200 * tier` unchanged; not asked for in #23 |
+
+When you add a new balance request to this file, add a row to the
+tracking table in the same commit.
+
 ## Related
 
 - [Damage](./damage.md) — player-side HP flow.
 - [Combat](./combat.md) — dash / whip damage scaling.
 - [Round](./round.md) — theme caps, wave scale.
 - [Species](./species.md) — genome HP baselines.
+- [triage-issue-23.md](../agents/triage-issue-23.md) — 3rd-pass scaling
+  documentation + bot measurements.

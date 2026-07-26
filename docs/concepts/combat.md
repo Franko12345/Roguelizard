@@ -11,6 +11,60 @@ manual verbs on top:
 
 Combo streak (`game.combo`) climbs on kills and decays if you break off.
 
+## Tongue
+
+A chameleon slingshot in three beats, all driven off one clock
+(`Player.tongue_t`, elapsed seconds) so there is no second timer to drift out
+of sync with the one the hit resolves against. `Player.tongue_phase()` carves
+it up; the lengths are `C.TONGUE_OUT_T / _STICK_T / _REEL_T`.
+
+| Beat | What it is |
+|---|---|
+| **out** | Thrown. Ease-out cubic, so it leaves the mouth explosively and decelerates into the target. Ballistic and near-straight. |
+| **stick** | The frame it goes taut. Springs past the target and settles. **The hit lands here**, not when the tongue gets home, along with every bit of impact juice. |
+| **reel** | Drags the catch back. The longest beat, because watching your food come in is the payoff. |
+
+### The invariant
+
+`Player.tongue_tip()` is the tongue's position, and **both the hit and the
+drawing read it**. The tongue was once drawn from a spring that chased the tip
+with a settle time longer than the entire cycle, so the drawn tongue never
+reached the target and pointed somewhere the hit did not happen. Anything that
+wants to bend the tongue bends the *shaft*; the ends stay pinned to the mouth
+and to the true tip. `tools/check_tongue.py` fails if they drift by so much as
+a float.
+
+### The shaft
+
+`Player.tongue_path()` returns mouth-first, tip-last. The interior points are
+springs chasing an ideal curve made of a downward sag plus a wave travelling
+toward the tip, both enveloped by `sin(s * pi)` so they vanish at the pinned
+ends.
+
+The amplitude is **absolute pixels from conserved material**, not a fraction of
+the current length — that is the whole trick. A tongue that bows by a fraction
+of its length has its smallest bow exactly when it is longest, which reads as a
+stiff arc. Instead the tongue is as long as it reached (`_tongue_len`, frozen at
+the taut frame) and stays that long: as the ends close on each other during the
+reel, the excess has nowhere to go but sideways. That is what coiling *is*, and
+it is why the retract bunches into the mouth instead of sliding in like a tape
+measure. Measured bow: ~5 px on the throw, ~45 px on the reel.
+
+Spring stiffness is a trap worth naming: a *low* `C.TONGUE_LAG` looks like it
+should mean more lag and more whip, but the reel is only ~10 frames long, so a
+soft spring simply never arrives at the coiled shape and the tongue stays
+straight.
+
+### What it catches
+
+Set at **stick**. Food is glued to the sticky pad and rides the tip home, then
+`game.eat` fires on arrival — a soft follow instead lags a ~900 px/s tip by tens
+of pixels, which reads as food trailing on a string. Enemies are pulled by force
+so the world can still block them, and the outward knockback `take_hit` applies
+is cancelled first: a hit cannot knock away something on a leash. The
+**Arremesso** item inverts this — it flings the target out instead, and nothing
+is carried.
+
 ## Whip (Rabada)
 
 `Player._whip_hit`. Manual tail strike. Buttons: **middle click / Q**,

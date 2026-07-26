@@ -4,7 +4,7 @@ A player-selectable [Genome](./genome.md) template plus one exclusive
 mechanic. Four characters exist. Zero new art was written to add them —
 the same [Parts](./parts.md) drawing pipeline runs for each.
 
-Defined in `lagarto/characters.py`. Constrained by
+Defined in `lagarto/creatures/characters.py`. Constrained by
 [ADR-0001](../adr/0001-genome-is-the-creature.md).
 
 ## Roster

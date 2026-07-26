@@ -146,3 +146,30 @@ def wall_personality():
         mood_speed={'calm': 1.0, 'agitated': 1.0, 'enraged': 1.5,
                     'frustrated': 1.0, 'cornered': 1.0}
     )
+
+
+def ankh_personality():
+    """Antiga. Nao fala, nao reage, nao se irrita: cada fase e uma memoria de
+    um chefe anterior, e uma memoria nao fica com raiva.
+
+    Por isso ``tell_mult`` fica vazio -- o telegrafo dura o mesmo em todos os
+    humores. Todo o resto dos chefes encurta o aviso quando enraivecido; ANKH
+    nao, porque a leitura que voce aprendeu contra o chefe original tem que
+    continuar valendo aqui. A dificuldade vem das fases se sobreporem, nao de
+    voce perder tempo de reacao.
+
+    O humor ainda muda a cor do brilho e a velocidade, so que de leve -- ela
+    acelera de fase em fase, nao de raiva em raiva.
+    """
+    pers = BossPersonality(
+        pattern_weights={
+            'charge': {'cornered': 1.8},
+            'summon': {'agitated': 1.4},
+            'grapple': {'enraged': 1.5},
+            'bullet_hell': {'enraged': 1.8, 'cornered': 1.6},
+        },
+        mood_speed={'calm': 1.0, 'agitated': 1.15, 'enraged': 1.3,
+                    'frustrated': 1.15, 'cornered': 1.0},
+    )
+    pers.tell_mult = {}      # the memory never speeds up -- see docstring
+    return pers

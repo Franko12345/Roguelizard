@@ -19,9 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygame
 
-from lagarto import config as C
+from lagarto.core import config as C
 from lagarto.render import display
-from lagarto import fonts, audio, settings
+from lagarto.core import fonts, settings
+from lagarto.audio import engine as audio
 from lagarto.creatures import species
 from lagarto.input.controllers import Controller
 from lagarto.game.loop import Game

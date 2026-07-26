@@ -160,8 +160,34 @@ CHAR_LARVA_MAX_SLOTS = 6
 # campeoes fica MODESTA de proposito: campeao e ameaca pelo que FAZ; um que so
 # tem mais vida nao ensina nada e vira pedagio.
 CHAMP_CHANCE_BASE = 0.05
-CHAMP_CHANCE_PER_WAVE = 0.012
-CHAMP_CHANCE_MAX = 0.22
+# Issue #23: rampa mais ingreme a partir da onda 7 (antes 0.012/onda ate 0.22).
+# Mid-game tinha pouquissimo campeao; agora ondas 7+ tem pressao elite real.
+CHAMP_CHANCE_PER_WAVE = 0.018
+CHAMP_CHANCE_MAX = 0.30
+
+# --- dificuldade por onda (rounds.py) --------------------------------------- #
+# Issue #23: antes o HP subia +0.7/onda linear e a velocidade capava em +40%.
+# O jogador entrava em snowball no meio da run porque os inimigos morriam antes
+# de chegar nele. Os "joelhos" sao propositais: ondas 1-6 ficam EXATAMENTE como
+# eram, para nao punir quem esta aprendendo; a rampa engata onde o snowball
+# comecava. Toda a curva vive em rounds.wave_* -- estes sao so os numeros.
+WAVE_HP_KNEE = 10               # onda a partir da qual o HP escala super-linear
+WAVE_HP_BASE = 0.7              # bonus de HP por onda antes do joelho (linear)
+WAVE_HP_POST_KNEE_EXP = 1.4     # expoente do termo pos-joelho
+WAVE_HP_POST_KNEE_MULT = 1.2    # multiplicador do termo pos-joelho
+
+WAVE_SPEED_KNEE = 10
+WAVE_SPEED_PER_WAVE = 0.025     # antes 0.02/onda
+WAVE_SPEED_MAX = 0.60           # antes 0.40 (cap em +60%)
+WAVE_SPEED_POST_KNEE_PER_WAVE = 0.015
+WAVE_SPEED_POST_KNEE_MAX = 0.15  # +15% extra no fim, somando +75%
+
+WAVE_BUDGET_KNEE = 10
+WAVE_BUDGET_POST_KNEE_MULT = 0.6   # orcamento extra por onda pos-joelho
+
+WAVE_CAP_KNEE = 8               # onda a partir da qual o teto de vivos cresce
+WAVE_CAP_POST_KNEE_PER_WAVES = 2   # +1 inimigo a cada 2 ondas pos-joelho
+WAVE_CAP_POST_KNEE_MAX = 4      # teto do bonus, em cima do cap do tema
 CHAMP_MODIFIER_CHANCE = 0.28   # variante que ainda ganha um modificador em cima
 
 # Velocidade ABSOLUTA do filhote (jogador ~224, dash ~672): mais rapido que andar,
@@ -247,6 +273,70 @@ INPUT_BUFFER = 0.15
 
 DASH_COST = 14
 TONGUE_COST = 8
+
+# --- tongue: a chameleon slingshot, not an arc ------------------------------- #
+# Three beats, and the split between them IS the feel. OUT is short and
+# ease-out so the tongue leaves the mouth explosively and decelerates into the
+# target; STICK is the moment it snaps taut, which is where the hit lands and
+# where all the impact juice fires; REEL is the longest, because dragging your
+# food home is the payoff and it should be watchable.
+TONGUE_OUT_T = 0.085
+TONGUE_STICK_T = 0.075
+TONGUE_REEL_T = 0.17
+TONGUE_REACH_MISS = 210          # how far it shoots with nothing to aim at
+TONGUE_OVERSHOOT = 0.07          # springs this fraction past the target on STICK
+# Shaft. Pinned at the mouth and at the tip; every point between is a spring, so
+# the tongue whips and undulates like a tentacle instead of being a stiff curve.
+TONGUE_SEGMENTS = 13
+TONGUE_LAG = 500.0               # shaft spring stiffness toward its ideal curve.
+                                 # Low values LOOK like more lag but actually mean
+                                 # the shaft never reaches the coiled shape at all
+                                 # -- the reel is only ~10 frames long. Raising it
+                                 # past ~700 lets the bow reach the span itself,
+                                 # which is where lobes start meeting each other.
+TONGUE_WAVE_CYCLES = 1.2         # how many waves fit along the tongue. More lobes
+                                 # means more chances for two of them to cross once
+                                 # the shaft is wide relative to its span.
+TONGUE_WAVE_SPEED = 19.0         # rad/s the wave travels toward the tip
+# How far the shaft bows sideways, and it is NOT a fixed fraction of the current
+# length -- that made the bow vanish exactly when the tongue was longest.
+# Instead the tongue tracks MATERIAL: how much of it is still outside the mouth.
+# On the way back the mouth swallows the tongue, and it swallows more slowly
+# than the two ends close on each other -- that difference is the slack, and the
+# slack is the coil. Crucially the number of SEGMENTS still outside shrinks with
+# the material (see Player._tongue_active): keeping every segment while only the
+# tip came home crammed a fixed point count into a vanishing span, and the
+# points had nowhere to go but sideways, folding the shaft into a knot.
+TONGUE_TAUT_BOW = 0.03           # bow while it is being thrown: nearly straight
+TONGUE_COIL_MAX = 0.40           # cap on the bulge, fraction of material length
+TONGUE_SAG_SHARE = 0.34          # of the bulge that goes into the downward droop;
+                                 # kept below the wave share so the coil reads as
+                                 # gathering rather than as the tongue falling over
+TONGUE_WAVE_SHARE = 0.95         # ...and into the travelling wave
+TONGUE_RECOIL = 105.0            # px/s the lizard is tugged toward what it grabs
+TONGUE_DRAG = 1500.0             # px/s^2 pulling a grabbed enemy toward the mouth
+TONGUE_YANK = 240.0              # px/s inward impulse the moment the line goes taut
+
+# Wind-up before each player verb fires (issue #5), and the squat_bias the body
+# holds during it (issue #9).
+#
+# ZERO ON PURPOSE. Wind-up is for things you fight, not for the thing you ARE:
+# a boss telegraphing is information, the player's own dash stalling is just
+# latency, and 60-100 ms on the core verbs read as the whole game being
+# sluggish. The Anticipation gate is still in place at 0 -- it fires on the
+# press frame but still exactly once per press, so holding a button cannot
+# repeat-fire, which is the half of issue #5 worth having.
+#
+# Raise any of these above 0 and the coil comes back with it: the *_SQUAT value
+# is what the body holds during the window (< 1.0 crouches, > 1.0 stretches).
+# Enemy and boss wind-ups are a separate system and untouched -- see
+# BossAI's 'windup' state and the shoot_charge / lunge_t / grapple_t timers.
+DASH_ANTIC_T = 0.0
+DASH_ANTIC_SQUAT = 0.86
+TONGUE_ANTIC_T = 0.0
+TONGUE_ANTIC_SQUAT = 1.12
+WHIP_ANTIC_T = 0.0
+WHIP_ANTIC_SQUAT = 0.90
 KILL_ENERGY = 4      # energia devolvida ao abater (sustenta o combo agressivo)
 
 # rabada: golpe de cauda. A clava aumenta o dano e o empurrao; o ferrao envenena.
@@ -430,6 +520,7 @@ MURALHA_BREATH_SHOTS = 12       # shots per breath burst
 MURALHA_BREATH_GAP = 0.12       # gap between bursts
 MURALHA_BREATH_SPEED = 220
 MURALHA_BREATH_DMG = 12
+MURALHA_BREATH_SPREAD = 60      # degrees; the breath cone when a pattern omits it
 # Hand slam: stone hands from sides
 MURALHA_HAND_WINDUP = 0.5
 MURALHA_HAND_DMG = 22
@@ -442,12 +533,14 @@ MURALHA_EYE_BEAMS = 3
 MURALHA_EYE_SPEED = 400
 MURALHA_EYE_DMG = 10
 MURALHA_EYE_GAP = 0.08
+MURALHA_EYE_SPREAD = 45         # degrees between the outermost beams
 # Bouncing bullets (ricochete)
 MURALHA_BOUNCE_WINDUP = 0.5
 MURALHA_BOUNCE_COUNT = 5
 MURALHA_BOUNCE_SPEED = 280
 MURALHA_BOUNCE_DMG = 14
 MURALHA_BOUNCE_BOUNCES = 3
+MURALHA_BOUNCE_SPREAD = 70      # degrees the ricochet volley fans out over
 # Grid of fire (ground hazard)
 MURALHA_GRID_WINDUP = 0.8
 MURALHA_GRID_CELL = 80

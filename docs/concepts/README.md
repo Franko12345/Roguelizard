@@ -80,3 +80,4 @@ wrong.
 3. Update this index.
 4. Grep for the word in existing concept docs and link back to yours where
    it's referenced.
+- [Sandbox](./sandbox.md) — dev-only debug overlay behind `--sandbox`

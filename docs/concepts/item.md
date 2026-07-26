@@ -4,7 +4,7 @@ An artifact that either fires on a button (**active**) or rewrites a
 mechanic (**passive**). 4 actives + 16 mechanic-changing passives.
 Quality 0-4, drawn from pools by origin (level/shop/nest/boss).
 
-Defined in `lagarto/items.py`.
+Defined in `lagarto/combat/items.py`.
 
 ## Why the split matters
 

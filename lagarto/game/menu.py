@@ -45,25 +45,58 @@ def _make_backdrop():
     return demo, cam, World()
 
 
+def _step_creature_for_display(c, dt, cam=None, wobble=True):
+    """Run the canonical creature animation pipeline for a menu creature.
+
+    Single source of truth for menu-side creature stepping (issue #19).
+    Previously, `_step_backdrop`/`_preview_step`/`_char_preview_step` each
+    open-coded ``pos += vel*dt`` → ``spine.resolve`` → leg update →
+    ``update_secondary_springs`` → squash, and they had already drifted
+    (one forgot ``wobble``, one synced the cam, one did not). Changing
+    the in-game pipeline used to require editing all three; now it
+    requires editing this one function.
+
+    Caller responsibilities BEFORE calling this:
+      - set ``c.on_screen`` if you want it drawn (caller already does)
+      - call ``c.steer(dir, dt, speed_mul)`` so ``c.vel`` is fresh
+
+    Caller responsibilities AFTER (optional):
+      - sync ``cam.pos`` to ``c.pos`` if the cam should follow
+      - bounce ``c.pos``/``c.vel`` against world bounds if needed
+
+    ``world`` is NOT required: the menu has no enemies, no collisions, no
+    pickups -- just a creature walking for display. ``integrate(dt)`` is
+    skipped because it pulls contact-drag and dash physics that have no
+    meaning here; the menu replicates only the animation half of the
+    pipeline (the half that produces visible motion).
+    """
+    c.pos += c.vel * dt
+    c.spine.resolve(c.pos)
+    if c.vel.length_squared() > 1:
+        c.facing = safe_norm(c.vel)
+    for leg in c.legs:
+        leg.update(c.spine, c.vel, dt, None)
+    c.update_secondary_springs(dt)
+    c.squash = approach(c.squash, 1 + clamp(c.vel.length() / c.max_speed, 0, 1) * 0.16,
+                        9, dt)
+    if wobble:
+        c.wobble += dt * 6
+
+
 def _step_backdrop(demo, cam, world, dt):
     world.update(dt)
     for d in demo:
         d.on_screen = True
         d.steer(d.wander_dir(dt), dt, 0.5)
+        # bounce against the backdrop's invisible walls so the demo
+        # creatures never wander off-screen -- caller-side because the
+        # bounds are tied to the cam, not to the creature.
         for ax in (0, 1):
             if d.pos[ax] < cam.pos[ax] - 470:
                 d.vel[ax] = abs(d.vel[ax])
             if d.pos[ax] > cam.pos[ax] + 470:
                 d.vel[ax] = -abs(d.vel[ax])
-        d.pos += d.vel * dt
-        d.spine.resolve(d.pos)
-        if d.vel.length_squared() > 1:
-            d.facing = safe_norm(d.vel)
-        for leg in d.legs:
-            leg.update(d.spine, d.vel, dt, None)
-        d.update_secondary_springs(dt)
-        d.squash = approach(d.squash, 1 + clamp(d.vel.length() / d.max_speed, 0, 1) * 0.16,
-                            9, dt)
+        _step_creature_for_display(d, dt, cam=cam, wobble=False)
 
 
 def _draw_backdrop(screen, demo, cam, world):
@@ -171,15 +204,7 @@ def _preview_step(c, cam, dt, t):
     """Walk the bestiary creature in a slow circle so its legs animate."""
     c.on_screen = True
     c.steer(vfrom_angle(t * 45), dt, 0.5)
-    c.pos += c.vel * dt
-    c.spine.resolve(c.pos)
-    if c.vel.length_squared() > 1:
-        c.facing = safe_norm(c.vel)
-    for leg in c.legs:
-        leg.update(c.spine, c.vel, dt, None)
-    c.update_secondary_springs(dt)
-    c.squash = approach(c.squash, 1 + clamp(c.vel.length() / c.max_speed, 0, 1) * 0.16, 9, dt)
-    c.wobble += dt * 6
+    _step_creature_for_display(c, dt, cam=cam, wobble=True)
     cam.pos = Vector2(c.pos)
 
 
@@ -425,7 +450,10 @@ def run_menu(screen, font, bigfont, titlefont, joysticks):
     while True:
         dt = clock.tick(60) / 1000.0
         t += dt
-        mouse = pygame.mouse.get_pos()
+        # window px -> logical px, same as the click handler below. The hover
+        # highlight and the click must share a coordinate space; reading raw
+        # window pixels here left them in different spaces at any scale != 1x.
+        mouse = display.to_logical(pygame.mouse.get_pos())
 
         items = _items_for(mode, bkeys, tab, meta)
 
@@ -687,16 +715,7 @@ def _char_preview_step(c, cam, dt, t):
     c.on_screen = True
     sway = math.sin(t * 0.7 + c.preview_phase) * 34
     c.steer(vfrom_angle(sway), dt, 0.55)
-    c.pos += c.vel * dt
-    c.spine.resolve(c.pos)
-    if c.vel.length_squared() > 1:
-        c.facing = safe_norm(c.vel)
-    for leg in c.legs:
-        leg.update(c.spine, c.vel, dt, None)
-    c.update_secondary_springs(dt)
-    c.squash = approach(c.squash, 1 + clamp(c.vel.length() / c.max_speed, 0, 1) * 0.16,
-                        9, dt)
-    c.wobble += dt * 6
+    _step_creature_for_display(c, dt, cam=cam, wobble=True)
 
 
 def _draw_chars(screen, font, bigfont, sel, meta, t, anim, who, preview=None, dt=0.0):

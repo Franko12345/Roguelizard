@@ -347,7 +347,7 @@ def eye_laser(boss, game, target):
     """Multiple eyes fire simultaneous beams. Telegrafo: eyes glow."""
     pat = PATTERNS[boss.boss_ai.pattern_id]
     mouth = boss.spine.joints[0]
-    n = pat.get('count', C.MURALHA_EYE_COUNT)
+    n = pat.get('count', C.MURALHA_EYE_BEAMS)
     spread = pat.get('spread', C.MURALHA_EYE_SPREAD)
     # Eyes are along the wall - fire leftward toward player
     base = Vector2(-1, 0)
@@ -676,6 +676,35 @@ def muralha_phases():
         dict(hp_frac=1.0, patterns=['fire_breath', 'hand_slam', 'eye_laser'], cd_mul=1.0),
         dict(hp_frac=0.66, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets'], cd_mul=0.85),
         dict(hp_frac=0.33, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets', 'grid_of_fire'], cd_mul=0.7),
+    ]
+
+
+# --------------------------------------------------------------------------- #
+#  ANKH (B11, tier 7): "A Eterna" -- 4 phases, each the memory of a boss you    #
+#  already beat. It is the penultimate fight, NOT the climax: the Primordial    #
+#  is still the run's final boss.                                              #
+# --------------------------------------------------------------------------- #
+
+def ankh_phases():
+    """4 fases (75/50/25) -- a excecao a regra das 3, porque a estrutura E a
+    ideia: cada fase revive um chefe anterior, entao sao 3 memorias + a forma
+    propria dela.
+
+    Fase 1 = O Cacador (memoria do Rei Lagarto: investida e bote).
+    Fase 2 = O Tanque (memoria da Mae-Escaravelho: area e ninhada).
+    Fase 3 = O Tentaculo (memoria do Kraken-Mor: puxao e chuva de bracos).
+    Fase 4 = A Eterna: tudo junto, ritmo de bullet hell.
+
+    Todos os patterns ja existem -- e o ponto do chefe. ANKH nao traz ataque
+    novo nenhum: ela devolve os que voce ja aprendeu a ler, sobrepostos.
+    """
+    return [
+        dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0),
+        dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95),
+        dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85),
+        dict(hp_frac=0.25,
+             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral'],
+             cd_mul=0.6),
     ]
 
 

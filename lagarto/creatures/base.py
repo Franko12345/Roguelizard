@@ -34,7 +34,6 @@ HORN_SPRING_DAMP = 0.9
 PUPIL_SPRING_STIFF = 7.0        # loose = a subtle drift/lag toward the target
 PUPIL_SPRING_DAMP = 0.85
 
-TAIL_SPRING_JOINTS = 4          # how many tail joints get cosmetic overshoot
 TAIL_SPRING_MAX_LAG = 0.45      # cap on overshoot, as a fraction of max_r -- a
                                 # spring's steady-state lag scales with target
                                 # speed with no ceiling, so an uncapped spring
@@ -42,6 +41,16 @@ TAIL_SPRING_MAX_LAG = 0.45      # cap on overshoot, as a fraction of max_r -- a
                                 # backdrop lizard being repositioned) into a
                                 # tail stretched way past the body's own length
 TAIL_SPRING_STIFFNESS = 10.0
+
+# Issue #8 -- the tail is a chain of N springs instead of one, so a sudden stop
+# cascades down it rather than moving the whole tail as one lagging unit.
+# Stiffness is expressed as a RATIO of the tip spring's, base -> tip, so the tip
+# keeps behaving exactly as the old single spring did (ratio 1.0) and everything
+# ahead of it is progressively stiffer. Damping falls toward the tip: the base
+# settles almost at once, the tip rings on.
+TAIL_CHAIN_LEN = 5
+TAIL_CHAIN_STIFF_RATIO = [2.4, 1.9, 1.5, 1.2, 1.0]     # base -> tip
+TAIL_CHAIN_DAMPING     = [0.90, 0.85, 0.80, 0.75, 0.70]
 
 TAU = C.TAU
 
@@ -79,6 +88,7 @@ class Lizard:
         self.max_speed = 0.0
         self._speed_base = 0.0
         self.rebuild_body(keep_pose=False)
+        parts.init_oscillators(self)      # issue #4: one PhaseOscillator per part
         self.accel = 900.0
         self.target_dir = Vector2()
         # A3 (#6): plates tilt on accel, horns sway on turns, pupils lag the target.
@@ -140,17 +150,35 @@ class Lizard:
         self.spine = Spine(head, n, link, build_radii(n, maxr), bend=26)
         self.spine.resolve(head)
         if plan == 'normal':
-            tip = Vector2(self.spine.joints[-1])
-            if keep_pose and getattr(self, 'tail_spring', None) is not None:
-                self.tail_spring.target = tip     # keep momentum across a rebuild
+            js = self.spine.joints
+            if keep_pose and getattr(self, 'tail_chain', None):
+                # keep momentum across a rebuild: re-aim each link at its joint
+                # in the NEW spine instead of snapping to a fresh pose.
+                for i, s in enumerate(self.tail_chain):
+                    s.target = js[max(0, len(js) - TAIL_CHAIN_LEN + i)]
             else:
-                self.tail_spring = Vector2Spring(tip, stiffness=TAIL_SPRING_STIFFNESS, damping=0.75)
+                self.tail_chain = [
+                    Vector2Spring(Vector2(js[max(0, len(js) - TAIL_CHAIN_LEN + i)]),
+                                  stiffness=TAIL_SPRING_STIFFNESS * TAIL_CHAIN_STIFF_RATIO[i],
+                                  damping=TAIL_CHAIN_DAMPING[i])
+                    for i in range(TAIL_CHAIN_LEN)]
+            # ``tail_spring`` stays the public handle and IS the tip link, so the
+            # boss telegraph / mood pose / state posing keep writing one object.
+            self.tail_spring = self.tail_chain[-1]
+            # forces the stiffness fan-out on the next step (see
+            # update_secondary_springs), whatever the chain was rebuilt from
+            self._tail_stiff_seen = None
         else:
+            self.tail_chain = None
             self.tail_spring = None
+            self._tail_stiff_seen = None
         self.legs = self._build_legs(g, n, maxr)
         for leg in self.legs:
             leg.init_foot(self.spine)
         self.arms = self._build_arms(g, maxr) if plan in ('tentacle', 'orbital') else []
+        # issue #4: re-seed after a rebuild so a creature that mutates fins or
+        # antennae mid-run animates them (existing waves are kept, see init).
+        parts.init_oscillators(self)
 
         base = 165 * (0.85 + 0.4 / g.size) * g.speed
         mult = (self.max_speed / self._speed_base) if self._speed_base else 1.0
@@ -275,6 +303,9 @@ class Lizard:
                 t = i / (m - 1)
                 # a wave that travels down the arm (i term) + a constant swirl so
                 # even a still arm hooks like a tentacle, not a straight spoke
+                # Stays an inline sine: each arm carries its own phase offset
+                # INSIDE the sine, and PhaseOscillator's (time, segment) API has
+                # nowhere to put it -- sin(a) + sin(b) is not sin(a + b).
                 wave = math.sin(self.wobble * 2.4 - i * 0.9 + arm['phase'])
                 ang = anchor_ang + (swirl + wave * amp) * t
                 desired = js[i - 1] + vfrom_angle(ang, link) + trailing * (link * 0.9 * t)
@@ -333,17 +364,27 @@ class Lizard:
         else:
             target_v = Vector2()
         turn_resp = 1.0 - self.genome.angular_damping   # 1.0 = old behaviour unchanged
+        if self.max_speed <= 0:
+            return          # a creature that cannot move (A Muralha) never steers
         self.vel += (target_v - self.vel) * clamp(self.accel * dt * turn_resp / self.max_speed, 0, 1)
 
-    def integrate(self, dt, on_plant=None):
+    def integrate(self, dt, on_plant=None, bounds=None):
         self.pos += self.vel * dt
         m = self.max_r
-        for ax, lim in ((0, C.WORLD_W), (1, C.WORLD_H)):
-            if self.pos[ax] < m:
-                self.pos[ax] = m
+        # ``bounds`` is the per-boss arena box (issue #26) as
+        # (min_x, min_y, max_x, max_y); None = the full world. Same bounce
+        # either way, so an arena is just a tighter set of walls.
+        if bounds is None:
+            lo_x = lo_y = 0.0
+            hi_x, hi_y = C.WORLD_W, C.WORLD_H
+        else:
+            lo_x, lo_y, hi_x, hi_y = bounds
+        for ax, lo, hi in ((0, lo_x, hi_x), (1, lo_y, hi_y)):
+            if self.pos[ax] < lo + m:
+                self.pos[ax] = lo + m
                 self.vel[ax] = abs(self.vel[ax]) * 0.5
-            elif self.pos[ax] > lim - m:
-                self.pos[ax] = lim - m
+            elif self.pos[ax] > hi - m:
+                self.pos[ax] = hi - m
                 self.vel[ax] = -abs(self.vel[ax]) * 0.5
 
         self.spine.resolve(self.pos)
@@ -361,11 +402,15 @@ class Lizard:
 
         spd = self.vel.length()
         w = self.genome.weight
-        target_squash = (1.0 + clamp(spd / self.max_speed, 0, 1.6) * 0.16 / w) * self.squat_bias
+        # max_speed 0 = a creature that cannot move (A Muralha): no run-squash,
+        # just whatever squat_bias the animation layer is asking for.
+        run = clamp(spd / self.max_speed, 0, 1.6) if self.max_speed > 0 else 0.0
+        target_squash = (1.0 + run * 0.16 / w) * self.squat_bias
         self.squash = approach(self.squash, target_squash, 9 / math.sqrt(w), dt)
         self.squat_bias = approach(self.squat_bias, 1.0, 6, dt)  # decays if no one re-asserts it
         self.crest_bias = approach(self.crest_bias, 0.0, 6, dt)   # ditto (#13 telegraph)
         self.wobble += dt * 6
+        parts.update_oscillators(self)     # issue #4: oscillators ride wobble
         self.hit_flash = decay(self.hit_flash, dt, 3)
         self.attack_cd = decay(self.attack_cd, dt)
         self.slow_t = decay(self.slow_t, dt)
@@ -380,9 +425,30 @@ class Lizard:
         bestiary/char-select previews) MUST call this too, and adding a new
         spring later only means touching this one method.
         """
-        if self.tail_spring is not None:
-            self.tail_spring.target = self.spine.joints[-1]
-            self.tail_spring.update(dt)
+        if self.tail_chain:
+            # Issue #8: the tail is a CHAIN, not one spring. Each link tracks its
+            # own joint, and stiffness rises toward the base, so a sudden stop
+            # cascades: the base settles first and the tip whips last.
+            #
+            # Every link's stiffness is derived from the tip's each step, so the
+            # existing consumers that write ``tail_spring.stiffness`` (the boss
+            # body telegraph, the AI mood pose, the per-state posing) keep
+            # working untouched and now scale the WHOLE tail, not just its end.
+            # The stiffness fan-out only has to be redone when someone actually
+            # writes the tip -- which is a handful of frames per fight, not every
+            # frame of every creature. Damping never changes at all, so it is
+            # set once when the chain is built.
+            chain = self.tail_chain
+            tip_stiff = chain[-1].stiffness
+            if tip_stiff != self._tail_stiff_seen:
+                self._tail_stiff_seen = tip_stiff
+                for i in range(len(chain) - 1):
+                    chain[i].stiffness = tip_stiff * TAIL_CHAIN_STIFF_RATIO[i]
+            js = self.spine.joints
+            base_i = len(js) - len(chain)
+            for i, s in enumerate(chain):
+                s.target = js[base_i + i] if base_i + i >= 0 else js[0]
+                s.update(dt)
 
         # A3 (#6): acceleration = change in velocity this step; turn rate = change
         # in heading. Both are derived locally from the previous-frame value.
@@ -425,24 +491,37 @@ class Lizard:
         (``_whip_arc``), and the spring -- still chasing last frame's
         pre-whip position -- fought it, visibly dulling/glitching the swing.
         """
-        if self.tail_spring is None or getattr(self, 'whip_t', 0.0) > 0:
+        chain = self.tail_chain
+        if not chain or getattr(self, 'whip_t', 0.0) > 0:
             return None
         js = list(self.spine.joints)
         n = len(js)
-        k = min(TAIL_SPRING_JOINTS, n - 1)
+        clen = len(chain)
+        k = min(TAIL_CHAIN_LEN, n - 1)
         if k <= 0:
             return None
-        lag = self.tail_spring.value - js[-1]
         cap = self.max_r * TAIL_SPRING_MAX_LAG
-        if lag.length_squared() > cap * cap:
-            lag.scale_to_length(cap)
+        cap2 = cap * cap
         wave_amp = self.max_r * 0.12    # traveling ripple (plans/01 #5), on top
-        for i in range(n - k, n):       # of the overshoot -- both draw-only
-            t = (i - (n - k - 1)) / k          # ramps 0 -> 1 toward the tip
-            fwd = safe_norm(js[i] - js[i + 1]) if i < n - 1 else safe_norm(js[i - 1] - js[i])
-            perp = Vector2(-fwd.y, fwd.x)
-            ripple = perp * (wave_amp * t * math.sin(self.wobble * 2.2 - i * 0.9))
-            js[i] = js[i] + lag * t + ripple
+        # This runs for every creature every frame, so the oscillator and the
+        # chain length are bound once here rather than looked up per joint.
+        osc = self.osc.get('tail_ripple') if getattr(self, 'osc', None) else None
+        # Each of the last k joints follows its OWN link's lag (issue #8), so the
+        # tail bends through the cascade instead of dragging as one rigid blob.
+        for ci in range(clen - k, clen):
+            i = n - clen + ci
+            if i < 1:
+                continue
+            t = (ci + 1) / clen                # ramps toward the tip
+            j = js[i]
+            lag = chain[ci].value - j
+            if lag.length_squared() > cap2:
+                lag.scale_to_length(cap)
+            fwd = safe_norm(j - js[i + 1]) if i < n - 1 else safe_norm(js[i - 1] - j)
+            amp = wave_amp * t * (osc.offset(i) if osc is not None else 0.0)
+            # perp * amp, inlined: this is the innermost line of the draw path
+            js[i] = Vector2(j.x + lag.x * t - fwd.y * amp,
+                            j.y + lag.y * t + fwd.x * amp)
         return js
 
     # ---- drawing -------------------------------------------------------- #
@@ -460,13 +539,22 @@ class Lizard:
         thin = (plan == 'segmented')      # many little legs read better skinny
         legw = max(1, int(self.max_r * (0.18 if thin else 0.42) * cam.zoom))
         footr = max(1, int(self.max_r * (0.14 if thin else 0.28) * cam.zoom))
+        # Issue #18: legs get the same dark ink boundary the body has, so they
+        # stop reading as floating shapes from a different art style. A leg is
+        # two lines and a circle, so the outline is those same primitives drawn
+        # fatter in ink underneath -- no mask trace, no per-leg surface, six
+        # extra draw calls. Solve each leg once and reuse for both passes.
+        ink_w = max(1, int(2 * cam.zoom))
+        solved = []
         for leg in self.legs:
             root = self.spine.joints[leg.idx]
             knee, foot = leg.solve(root)
-            r = cam.w2s(root); k = cam.w2s(knee); f = cam.w2s(foot)
-            pygame.draw.line(surf, leg_col, r, k, legw)
-            pygame.draw.line(surf, leg_col, k, f, legw)
-            pygame.draw.circle(surf, leg_col, f, footr)
+            solved.append((cam.w2s(root), cam.w2s(knee), cam.w2s(foot)))
+        for col, pad in ((C.COL_INK, ink_w), (leg_col, 0)):
+            for r, k, f in solved:
+                pygame.draw.line(surf, col, r, k, legw + 2 * pad)
+                pygame.draw.line(surf, col, k, f, legw + 2 * pad)
+                pygame.draw.circle(surf, col, f, footr + pad)
 
         if self.genome.radial:
             self._draw_spider(surf, cam)
@@ -490,12 +578,12 @@ class Lizard:
             base = palette.lighten(base, self.hit_flash)
         quads, head_fan, tail_fan, ring = self.spine.body_render_smooth(squish, cj)
         for q in quads:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in q])
+            pygame.draw.polygon(surf, base, cam.w2s_many(q))
         if len(head_fan) >= 3:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in head_fan])
+            pygame.draw.polygon(surf, base, cam.w2s_many(head_fan))
         if len(tail_fan) >= 3:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in tail_fan])
-        poly = [cam.w2s(p) for p in ring]
+            pygame.draw.polygon(surf, base, cam.w2s_many(tail_fan))
+        poly = cam.w2s_many(ring)
         if len(poly) >= 3:
             # rim light: a bright edge just inside the dark ink outline
             pygame.draw.polygon(surf, palette.lighten(base, 0.55), poly, max(1, int(3 * cam.zoom)))
@@ -566,7 +654,7 @@ class Lizard:
         acol = palette.darken(base, 0.2)
         for s in (-1, 1):                                   # antennae
             b = head + d * (r * 0.5) + perp * (s * r * 0.5)
-            wig = math.sin(self.wobble * 3 + s) * 0.3
+            wig = parts._osc_offset(self, 'antennae', s)
             tip = b + d * (r * 0.95) + perp * (s * r * (0.6 + wig))
             pygame.draw.line(surf, acol, cam.w2s(b), cam.w2s(tip), max(1, int(1.5 * cam.zoom)))
         look = self._pupil_offset()
@@ -591,7 +679,7 @@ class Lizard:
         tip, tdir = js[-1], safe_norm(js[-1] - js[-2])
         base_a = angle_of(tdir)
         cap = [tip + vfrom_angle(base_a + a, radii[-1] * 1.1) for a in (-60, -25, 0, 25, 60)]
-        return [cam.w2s(p) for p in (left + cap + right[::-1])]
+        return cam.w2s_many(left + cap + right[::-1])
 
     def _draw_tentacle(self, surf, cam):
         """Octopus/kraken: reaching arms drawn as smooth continuous tentacles
@@ -725,7 +813,7 @@ class Lizard:
         pygame.draw.line(surf, rim_col,
                          (wall_rect.left, wall_rect.top),
                          (wall_rect.left, wall_rect.bottom),
-                         max(2), max(1, int(3 * cam.zoom)))
+                         max(2, int(3 * cam.zoom)))
 
         # Pulsing veins from mouth outward
         vein_col = palette.mix((180, 60, 60), (255, 20, 20), min(1.0, phase_i / 2 + (1 - hp_frac) * 0.5))

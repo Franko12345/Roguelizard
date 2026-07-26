@@ -3,7 +3,7 @@
 A named [Genome](./genome.md) template plus metadata: role, xp reward,
 `grants`, diet. `species.make()` spawns a randomised variation.
 
-Defined in `lagarto/species.py`.
+Defined in `lagarto/creatures/species.py`.
 
 ## Roster
 

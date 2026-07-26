@@ -33,11 +33,12 @@ from .patterns import (
     wasp_phases, default_phases,
     eye_phases, eye_on_phase, eye_setup, eye_blink_tick,
     fire_breath, _tick_fire_breath, hand_slam, eye_laser, bouncing_bullets,
-    grid_of_fire, muralha_phases,
+    grid_of_fire, muralha_phases, ankh_phases,
 )
 from .personality import (
     BossPersonality, default_personality,
     king_personality, centipede_personality, kraken_personality,
     primordial_personality, beetle_personality, spider_king_personality,
     crystal_personality, wasp_personality, eye_personality, wall_personality,
+    ankh_personality,
 )

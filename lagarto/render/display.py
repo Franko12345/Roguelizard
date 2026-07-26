@@ -44,7 +44,11 @@ def apply(scale=None, fullscreen=None, vsync=None):
     if vsync is not None:
         _vsync = bool(vsync)
 
-    flags = pygame.FULLSCREEN if _fullscreen else 0
+    # RESIZABLE (windowed) lets tiling/compositing WMs push external resizes
+    # through as VIDEORESIZE events -> handle_resize() -> _recompute() picks up
+    # the true size and re-letters. Without it a WM that silently repositions
+    # the window leaves _rect stale, so mouse clicks land at an offset.
+    flags = pygame.FULLSCREEN if _fullscreen else pygame.RESIZABLE
     size = (0, 0) if _fullscreen else (C.WIDTH * _scale, C.HEIGHT * _scale)
     try:
         _screen = pygame.display.set_mode(size, flags, vsync=1 if _vsync else 0)
@@ -142,8 +146,22 @@ def present():
 
 
 def to_logical(pos):
-    """Window pixel -> logical pixel (undo letterbox + scale). Clamped in-bounds."""
-    x, y, w, h = _rect
+    """Window pixel -> logical pixel (undo letterbox + scale). Clamped in-bounds.
+
+    Recomputes the letterbox rect from the *live* ``_screen.get_size()`` rather
+    than trusting the cached ``_rect``. ``_rect`` is refreshed by ``_recompute()``
+    on every ``VIDEORESIZE``, but mouse input is user-driven and can arrive
+    before the matching resize event is pumped -- a stale ``_rect`` would then
+    map clicks to the wrong logical pixel. ``present()`` is fine using the cache
+    because it runs every frame and a resize always refreshes it by the next
+    flip; only this user-input path needs the live check.
+    """
+    sw, sh = _screen.get_size()
+    k = min(sw / C.WIDTH, sh / C.HEIGHT)
+    w = max(1, int(C.WIDTH * k))
+    h = max(1, int(C.HEIGHT * k))
+    x = (sw - w) // 2
+    y = (sh - h) // 2
     if w <= 0 or h <= 0:
         return (0, 0)
     lx = (pos[0] - x) * C.WIDTH / w

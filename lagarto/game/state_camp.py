@@ -18,6 +18,7 @@ from ..core import palette
 from ..core.mathutil import clamp, decay, pulse
 from ..creatures.ai import AILizard
 from ..flow import progression
+from ..render import assets
 from ..render import icons
 from ..render import ui
 from ..render.fx import shadow
@@ -301,7 +302,7 @@ def _draw_camp(game, surf):
                 edge = C.COL_WHITE if cur else ch.color
                 pygame.draw.rect(block, edge, rect, 3 if (equipped or cur) else 1,
                                  border_radius=7)
-                icons.draw(block, ccid, (bx + 14, rect.centery), 8, ch.color, glow=False)
+                icons.draw(block, ch.icon, (bx + 14, rect.centery), 8, ch.color, glow=False)
                 im = game.font.render(ui.fit(game.font, ch.name, sw - 40), True,
                                       (222, 222, 234))
                 block.blit(im, (bx + 26, rect.centery - im.get_height() // 2))
@@ -385,42 +386,54 @@ def _draw_camp_pois(game, surf):
         sp = cam.w2s(pos + Vector2(0, off))
         hot = game.camp['tent_landed'] and _near_player(game, pos, C.CAMP_TENT_R)
         gold = C.COL_POLLEN
-        w = int(120 * z)
-        palette.glow(surf, sp, int(w * (0.95 if hot else 0.72)), gold,
-                     (0.3 if hot else 0.17) + 0.1 * pulse(t, 2.4))
-        counter = pygame.Rect(sp[0] - w // 2, sp[1] - int(4 * z), w, int(34 * z))
-        pygame.draw.rect(surf, (120, 82, 54), counter, border_radius=int(6 * z))
-        pygame.draw.rect(surf, (60, 40, 26), counter, max(1, int(2 * z)),
-                         border_radius=int(6 * z))
-        roof_h = int(48 * z)
-        base_y = sp[1] - int(4 * z)
-        left = (sp[0] - w // 2 - int(8 * z), base_y)
-        right = (sp[0] + w // 2 + int(8 * z), base_y)
-        peak = (sp[0], base_y - roof_h)
-        pygame.draw.polygon(surf, (214, 74, 78), [left, right, peak])
-        pygame.draw.polygon(surf, C.COL_INK, [left, right, peak], max(1, int(2 * z)))
-        # scalloped valance: little triangles hanging under the awning base
-        n = 5
-        for k in range(n):
-            x0 = left[0] + (right[0] - left[0]) * k / n
-            x1 = left[0] + (right[0] - left[0]) * (k + 1) / n
-            tip = ((x0 + x1) / 2, base_y + int(9 * z))
-            shade = (214, 74, 78) if k % 2 == 0 else (245, 232, 210)
-            pygame.draw.polygon(surf, shade, [(x0, base_y), (x1, base_y), tip])
-        pygame.draw.circle(surf, gold, (sp[0], peak[1] - int(9 * z)), max(2, int(7 * z)))
-        pygame.draw.circle(surf, (200, 160, 40), (sp[0], peak[1] - int(9 * z)),
-                           max(2, int(7 * z)), max(1, int(2 * z)))
-        # the beetle merchant behind the counter
-        bc = (sp[0] - int(w * 0.26), base_y + int(6 * z))
-        pygame.draw.circle(surf, (74, 62, 88), bc, max(2, int(11 * z)))
-        for s in (-1, 1):                       # antennae
-            pygame.draw.line(surf, (74, 62, 88), (bc[0], bc[1] - int(8 * z)),
-                             (bc[0] + s * int(7 * z), bc[1] - int(16 * z)),
-                             max(1, int(2 * z)))
-        ui.text(surf, game.font, 'LOJA DO BESOURO', (sp[0], counter.bottom + int(6 * z)),
+        # Issue #25: prefer the PNG asset (assets/props/tent_beetle.png),
+        # fall back to the procedural tent drawing if the PNG is missing
+        # (stripped build, headless CI, etc.). The PNG is 640x640 -- a
+        # full tent+beetle sprite -- so it replaces the entire procedural
+        # block (counter + roof + valance + beetle + flag).
+        tent_diam = int(160 * z)
+        tent_png = assets.icon('tent_beetle', tent_diam)
+        if tent_png is not None:
+            palette.glow(surf, sp, int(tent_diam * (0.95 if hot else 0.72) * 0.6),
+                         gold, (0.3 if hot else 0.17) + 0.1 * pulse(t, 2.4))
+            surf.blit(tent_png, (sp[0] - tent_diam // 2, sp[1] - tent_diam // 2))
+        else:
+            w = int(120 * z)
+            palette.glow(surf, sp, int(w * (0.95 if hot else 0.72)), gold,
+                         (0.3 if hot else 0.17) + 0.1 * pulse(t, 2.4))
+            counter = pygame.Rect(sp[0] - w // 2, sp[1] - int(4 * z), w, int(34 * z))
+            pygame.draw.rect(surf, (120, 82, 54), counter, border_radius=int(6 * z))
+            pygame.draw.rect(surf, (60, 40, 26), counter, max(1, int(2 * z)),
+                             border_radius=int(6 * z))
+            roof_h = int(48 * z)
+            base_y = sp[1] - int(4 * z)
+            left = (sp[0] - w // 2 - int(8 * z), base_y)
+            right = (sp[0] + w // 2 + int(8 * z), base_y)
+            peak = (sp[0], base_y - roof_h)
+            pygame.draw.polygon(surf, (214, 74, 78), [left, right, peak])
+            pygame.draw.polygon(surf, C.COL_INK, [left, right, peak], max(1, int(2 * z)))
+            # scalloped valance: little triangles hanging under the awning base
+            n = 5
+            for k in range(n):
+                x0 = left[0] + (right[0] - left[0]) * k / n
+                x1 = left[0] + (right[0] - left[0]) * (k + 1) / n
+                tip = ((x0 + x1) / 2, base_y + int(9 * z))
+                shade = (214, 74, 78) if k % 2 == 0 else (245, 232, 210)
+                pygame.draw.polygon(surf, shade, [(x0, base_y), (x1, base_y), tip])
+            pygame.draw.circle(surf, gold, (sp[0], peak[1] - int(9 * z)), max(2, int(7 * z)))
+            pygame.draw.circle(surf, (200, 160, 40), (sp[0], peak[1] - int(9 * z)),
+                               max(2, int(7 * z)), max(1, int(2 * z)))
+            # the beetle merchant behind the counter
+            bc = (sp[0] - int(w * 0.26), base_y + int(6 * z))
+            pygame.draw.circle(surf, (74, 62, 88), bc, max(2, int(11 * z)))
+            for s in (-1, 1):                       # antennae
+                pygame.draw.line(surf, (74, 62, 88), (bc[0], bc[1] - int(8 * z)),
+                                 (bc[0] + s * int(7 * z), bc[1] - int(16 * z)),
+                                 max(1, int(2 * z)))
+        ui.text(surf, game.font, 'LOJA DO BESOURO', (sp[0], sp[1] + int(28 * z)),
                 gold, align='center')
         if hot:
-            ui.text(surf, game.font, 'ENCOSTE p/ abrir', (sp[0], counter.bottom + int(23 * z)),
+            ui.text(surf, game.font, 'ENCOSTE p/ abrir', (sp[0], sp[1] + int(45 * z)),
                     C.COL_WHITE, align='center')
 
 

@@ -3,6 +3,7 @@
 ```bash
 python lizard_game.py             # play (opens the menu)
 python lizard_game.py --smoke 90  # headless self-test: N frames and exit
+python lizard_game.py --sandbox   # dev-only debug overlay (skips the menu)
 python build.py                   # single-file binary in dist/ (needs pyinstaller)
 ```
 
@@ -27,7 +28,7 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python lizard_game.py --smoke 90
 
 ## Assets — the invariant is broken on purpose
 
-Phase 7 introduced `assets/` + `lagarto/assets.py`: weapon / mutation /
+Phase 7 introduced `assets/` + `lagarto/render/assets.py`: weapon / mutation /
 charm icons prefer a pixel-art PNG when it exists, and fall back to the
 procedural drawing (`icons.draw`). A build without the `assets/`
 directory (or an ID without a PNG) runs identically. Sound and music
@@ -47,3 +48,4 @@ Blit to `Surface(..., 0, 24)` and save BMP → PNG.
 - [Architecture](./architecture.md) — where `lizard_game.py`,
   `lagarto/app.py`, and the CLI flag land.
 - [Performance](./performance.md) — the timestep and render decoupling.
+- [Sandbox](./sandbox.md) — what `--sandbox` opens.

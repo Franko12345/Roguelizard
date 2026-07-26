@@ -5,7 +5,7 @@ The follow-the-leader chain of joints that is the physical body of every
 `spine.joints` directly; drawing may read the parallel
 [Cosmetic Skeleton](../../CONTEXT.md) instead.
 
-Defined in `lagarto/spine.py`. Constrained by
+Defined in `lagarto/anim/spine.py`. Constrained by
 [ADR-0007](../adr/0007-cosmetic-skeleton-for-tail.md).
 
 ## How it works

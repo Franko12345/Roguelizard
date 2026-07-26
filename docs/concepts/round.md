@@ -4,7 +4,7 @@ The unit of play between camps. `RoundManager` runs a themed wave:
 enemies drip from **Nests** via **Spawn Marks** until the budget is spent,
 then `cleared` opens the [Camp](./camp.md).
 
-Defined in `lagarto/rounds.py`.
+Defined in `lagarto/flow/rounds.py`.
 
 ## Themes
 

@@ -3,7 +3,7 @@
 The bag of numbers that fully describes a creature. Every enemy, prey,
 champion, boss, and playable character is a `Lizard` built from one.
 
-Defined in `lagarto/genome.py`. Constrained by
+Defined in `lagarto/creatures/genome.py`. Constrained by
 [ADR-0001](../adr/0001-genome-is-the-creature.md).
 
 ## What it contains
@@ -26,8 +26,9 @@ Colour and organs:
   at spawn so identical species look different.
 - **`eyes`, `horns`, `spikes`, `plates`, `fins`, `wings`** — number-per-
   part; drawn additively by [`parts.py`](./parts.md).
-- **`tail`** — `'none' | 'club' | 'sting'`. Player-visible; charms and
-  mutations flip it.
+- **`tail`** — `'normal' | 'club' | 'sting' | 'fin'`. Player-visible;
+  charms flip it (e.g. the `clava` charm sets `tail='club'`). The club
+  tail is charm-only since issue #22 — see [Charm](./charm.md).
 
 Behaviour and role:
 

@@ -20,7 +20,7 @@ re-exports so ``champions.maybe_promote`` keeps working unchanged.
 """
 
 from .base import (BY_ID, CHAMPIONS, MODIFIERS, VARIANTS, Champion, chance,
-                   maybe_promote)
+                   maybe_promote, promote_to)
 
 __all__ = ['BY_ID', 'CHAMPIONS', 'MODIFIERS', 'VARIANTS', 'Champion', 'chance',
-           'maybe_promote']
+           'maybe_promote', 'promote_to']

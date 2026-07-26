@@ -32,11 +32,20 @@ def update(game, dt):
     for p in game.players:
         if not p.dead:
             p.update(dt, game)
+    # Sandbox pause-AI (SB6): while frozen, enemy/boss/prey/friend update is
+    # skipped so the player can still walk around and inspect a held pose. A
+    # queued Step lifts the freeze for exactly one tick, then re-arms it -- the
+    # frame-by-frame tool for procedural animation. On a normal run ``mode`` is
+    # never 'sandbox', so ``freeze_ai`` is always False and ``e.update`` runs
+    # every group exactly as before -- byte-identical behaviour.
+    freeze_ai = game.mode == 'sandbox' and game.pause_ai and not game.step_once
+    game.step_once = False
     for group in (game.enemies, game.prey, game.friends):
         for e in group:
             if not e.dead:
                 e.on_screen = game.cam.visible(e.pos)
-                e.update(dt, game)
+                if not freeze_ai:
+                    e.update(dt, game)
     for pk in game.pickups:
         if not pk.dead:
             pk.update(dt, game)
