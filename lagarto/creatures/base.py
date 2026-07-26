@@ -165,9 +165,13 @@ class Lizard:
             # ``tail_spring`` stays the public handle and IS the tip link, so the
             # boss telegraph / mood pose / state posing keep writing one object.
             self.tail_spring = self.tail_chain[-1]
+            # forces the stiffness fan-out on the next step (see
+            # update_secondary_springs), whatever the chain was rebuilt from
+            self._tail_stiff_seen = None
         else:
             self.tail_chain = None
             self.tail_spring = None
+            self._tail_stiff_seen = None
         self.legs = self._build_legs(g, n, maxr)
         for leg in self.legs:
             leg.init_foot(self.spine)
@@ -430,13 +434,20 @@ class Lizard:
             # existing consumers that write ``tail_spring.stiffness`` (the boss
             # body telegraph, the AI mood pose, the per-state posing) keep
             # working untouched and now scale the WHOLE tail, not just its end.
-            tip_stiff = self.tail_spring.stiffness
+            # The stiffness fan-out only has to be redone when someone actually
+            # writes the tip -- which is a handful of frames per fight, not every
+            # frame of every creature. Damping never changes at all, so it is
+            # set once when the chain is built.
+            chain = self.tail_chain
+            tip_stiff = chain[-1].stiffness
+            if tip_stiff != self._tail_stiff_seen:
+                self._tail_stiff_seen = tip_stiff
+                for i in range(len(chain) - 1):
+                    chain[i].stiffness = tip_stiff * TAIL_CHAIN_STIFF_RATIO[i]
             js = self.spine.joints
-            n = len(js)
-            for i, s in enumerate(self.tail_chain):
-                s.stiffness = tip_stiff * TAIL_CHAIN_STIFF_RATIO[i]
-                s.damping = TAIL_CHAIN_DAMPING[i]
-                s.target = js[max(0, n - len(self.tail_chain) + i)]
+            base_i = len(js) - len(chain)
+            for i, s in enumerate(chain):
+                s.target = js[base_i + i] if base_i + i >= 0 else js[0]
                 s.update(dt)
 
         # A3 (#6): acceleration = change in velocity this step; turn rate = change
@@ -480,29 +491,37 @@ class Lizard:
         (``_whip_arc``), and the spring -- still chasing last frame's
         pre-whip position -- fought it, visibly dulling/glitching the swing.
         """
-        if not self.tail_chain or getattr(self, 'whip_t', 0.0) > 0:
+        chain = self.tail_chain
+        if not chain or getattr(self, 'whip_t', 0.0) > 0:
             return None
         js = list(self.spine.joints)
         n = len(js)
+        clen = len(chain)
         k = min(TAIL_CHAIN_LEN, n - 1)
         if k <= 0:
             return None
         cap = self.max_r * TAIL_SPRING_MAX_LAG
+        cap2 = cap * cap
         wave_amp = self.max_r * 0.12    # traveling ripple (plans/01 #5), on top
+        # This runs for every creature every frame, so the oscillator and the
+        # chain length are bound once here rather than looked up per joint.
+        osc = self.osc.get('tail_ripple') if getattr(self, 'osc', None) else None
         # Each of the last k joints follows its OWN link's lag (issue #8), so the
         # tail bends through the cascade instead of dragging as one rigid blob.
-        for ci in range(len(self.tail_chain) - k, len(self.tail_chain)):
-            i = n - len(self.tail_chain) + ci
+        for ci in range(clen - k, clen):
+            i = n - clen + ci
             if i < 1:
                 continue
-            t = (ci + 1) / len(self.tail_chain)    # ramps toward the tip
-            lag = self.tail_chain[ci].value - js[i]
-            if lag.length_squared() > cap * cap:
+            t = (ci + 1) / clen                # ramps toward the tip
+            j = js[i]
+            lag = chain[ci].value - j
+            if lag.length_squared() > cap2:
                 lag.scale_to_length(cap)
-            fwd = safe_norm(js[i] - js[i + 1]) if i < n - 1 else safe_norm(js[i - 1] - js[i])
-            perp = Vector2(-fwd.y, fwd.x)
-            ripple = perp * (wave_amp * t * parts._osc_offset(self, 'tail_ripple', i))
-            js[i] = js[i] + lag * t + ripple
+            fwd = safe_norm(j - js[i + 1]) if i < n - 1 else safe_norm(js[i - 1] - j)
+            amp = wave_amp * t * (osc.offset(i) if osc is not None else 0.0)
+            # perp * amp, inlined: this is the innermost line of the draw path
+            js[i] = Vector2(j.x + lag.x * t - fwd.y * amp,
+                            j.y + lag.y * t + fwd.x * amp)
         return js
 
     # ---- drawing -------------------------------------------------------- #
@@ -559,12 +578,12 @@ class Lizard:
             base = palette.lighten(base, self.hit_flash)
         quads, head_fan, tail_fan, ring = self.spine.body_render_smooth(squish, cj)
         for q in quads:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in q])
+            pygame.draw.polygon(surf, base, cam.w2s_many(q))
         if len(head_fan) >= 3:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in head_fan])
+            pygame.draw.polygon(surf, base, cam.w2s_many(head_fan))
         if len(tail_fan) >= 3:
-            pygame.draw.polygon(surf, base, [cam.w2s(p) for p in tail_fan])
-        poly = [cam.w2s(p) for p in ring]
+            pygame.draw.polygon(surf, base, cam.w2s_many(tail_fan))
+        poly = cam.w2s_many(ring)
         if len(poly) >= 3:
             # rim light: a bright edge just inside the dark ink outline
             pygame.draw.polygon(surf, palette.lighten(base, 0.55), poly, max(1, int(3 * cam.zoom)))
@@ -660,7 +679,7 @@ class Lizard:
         tip, tdir = js[-1], safe_norm(js[-1] - js[-2])
         base_a = angle_of(tdir)
         cap = [tip + vfrom_angle(base_a + a, radii[-1] * 1.1) for a in (-60, -25, 0, 25, 60)]
-        return [cam.w2s(p) for p in (left + cap + right[::-1])]
+        return cam.w2s_many(left + cap + right[::-1])
 
     def _draw_tentacle(self, surf, cam):
         """Octopus/kraken: reaching arms drawn as smooth continuous tentacles

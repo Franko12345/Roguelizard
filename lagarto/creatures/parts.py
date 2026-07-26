@@ -17,7 +17,7 @@ from ..anim.anim import PhaseOscillator
 
 
 def _poly(surf, cam, pts, fill, edge_w=1):
-    sp = [cam.w2s(p) for p in pts]
+    sp = cam.w2s_many(pts)
     if len(sp) >= 3:
         pygame.draw.polygon(surf, fill, sp)
         pygame.draw.polygon(surf, C.COL_INK, sp, max(1, int(edge_w * cam.zoom)))
