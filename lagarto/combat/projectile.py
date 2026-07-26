@@ -46,6 +46,31 @@ class Projectile:
         self.pos += self.vel * dt
         self.life -= dt
         self.spin += dt * 9
+        
+        # Bouncing off arena walls (for bouncing_bullets pattern)
+        bounces = getattr(self, 'bounces_left', 0)
+        if bounces > 0:
+            damp = getattr(self, 'bounce_damp', 0.8)
+            bounced = False
+            if self.pos.x <= 0:
+                self.pos.x = 0
+                self.vel.x = abs(self.vel.x) * damp
+                bounced = True
+            elif self.pos.x >= C.WORLD_W:
+                self.pos.x = C.WORLD_W
+                self.vel.x = -abs(self.vel.x) * damp
+                bounced = True
+            if self.pos.y <= 0:
+                self.pos.y = 0
+                self.vel.y = abs(self.vel.y) * damp
+                bounced = True
+            elif self.pos.y >= C.WORLD_H:
+                self.pos.y = C.WORLD_H
+                self.vel.y = -abs(self.vel.y) * damp
+                bounced = True
+            if bounced:
+                self.bounces_left = bounces - 1
+        
         if self.life <= 0 or self.pos.x < 0 or self.pos.y < 0 \
                 or self.pos.x > C.WORLD_W or self.pos.y > C.WORLD_H:
             self.dead = True

@@ -14,8 +14,10 @@ class BossPersonality:
     """How a boss REACTS. A generic default works for any boss; a named boss
     (Rei Lagarto) can pass its own to bias which patterns it favours."""
 
-    def __init__(self, pattern_weights=None):
-        self.mood_speed = {
+    def __init__(self, pattern_weights=None, mood_speed=None):
+        # mood_speed is overridable so a "calm observer" (Olho-Sismico) can barely
+        # move without touching any other boss; default keeps today's values.
+        self.mood_speed = mood_speed or {
             'calm': 1.0, 'agitated': 1.3, 'enraged': 1.6,
             'frustrated': 1.4, 'cornered': 0.8,
         }
@@ -115,3 +117,59 @@ def wasp_personality():
         'charge': {'calm': 1.5, 'agitated': 1.4, 'cornered': 1.6},
         'barrage': {'frustrated': 2.0},
     })
+
+
+def eye_personality():
+    """Observador calmo: mal se mexe (mood_speed baixo em tudo). O pânico do
+    <33% é um flip abrupto -- 'enraged' salta o mood_speed em vez de rampar. Os
+    telegrafos NUNCA encurtam (tell_mult zerado), então o gaze fica sempre 36
+    frames (a regra do telegrafo vale em qualquer mood)."""
+    p = BossPersonality(
+        pattern_weights={'bullet_hell': {'enraged': 1.8}, 'shockwave': {'enraged': 1.4}},
+        mood_speed={'calm': 0.2, 'agitated': 0.3, 'enraged': 0.9,
+                    'frustrated': 0.25, 'cornered': 0.2})
+    p.tell_mult = {}
+    return p
+
+
+def wall_personality():
+    """Implacavel: voce nao passa. A arena foi feita pra voce morrer aqui.
+    Sem estado de frustracao: so calmo e enraivecido, sem meio-termo.
+    Fase 3 e tudo ao mesmo tempo."""
+    return BossPersonality(
+        pattern_weights={
+            'fire_breath': {'enraged': 2.0, 'calm': 1.2},
+            'hand_slam': {'enraged': 1.8},
+            'bouncing_bullets': {'enraged': 1.5},
+            'grid_of_fire': {'enraged': 1.8},
+        },
+        mood_speed={'calm': 1.0, 'agitated': 1.0, 'enraged': 1.5,
+                    'frustrated': 1.0, 'cornered': 1.0}
+    )
+
+
+def ankh_personality():
+    """Antiga. Nao fala, nao reage, nao se irrita: cada fase e uma memoria de
+    um chefe anterior, e uma memoria nao fica com raiva.
+
+    Por isso ``tell_mult`` fica vazio -- o telegrafo dura o mesmo em todos os
+    humores. Todo o resto dos chefes encurta o aviso quando enraivecido; ANKH
+    nao, porque a leitura que voce aprendeu contra o chefe original tem que
+    continuar valendo aqui. A dificuldade vem das fases se sobreporem, nao de
+    voce perder tempo de reacao.
+
+    O humor ainda muda a cor do brilho e a velocidade, so que de leve -- ela
+    acelera de fase em fase, nao de raiva em raiva.
+    """
+    pers = BossPersonality(
+        pattern_weights={
+            'charge': {'cornered': 1.8},
+            'summon': {'agitated': 1.4},
+            'grapple': {'enraged': 1.5},
+            'bullet_hell': {'enraged': 1.8, 'cornered': 1.6},
+        },
+        mood_speed={'calm': 1.0, 'agitated': 1.15, 'enraged': 1.3,
+                    'frustrated': 1.15, 'cornered': 1.0},
+    )
+    pers.tell_mult = {}      # the memory never speeds up -- see docstring
+    return pers

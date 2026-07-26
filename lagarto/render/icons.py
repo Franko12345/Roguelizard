@@ -575,6 +575,22 @@ def _boss_crystal(s, c, r, col):
     pygame.draw.line(s, palette.lighten(col, 0.6), top, bot, 1)
 
 
+def _boss_ankh(s, c, r, col):
+    """ANKH: the loop-and-cross key of life -- the mark of the one that
+    keeps coming back wearing the shapes you already killed."""
+    w = max(1, r // 5)
+    lw = max(1, r // 8)
+    top = int(c[1] - r * 0.15)
+    # the loop
+    pygame.draw.circle(s, col, (int(c[0]), int(c[1] - r * 0.5)), int(r * 0.42), w)
+    pygame.draw.circle(s, INK, (int(c[0]), int(c[1] - r * 0.5)), int(r * 0.42), lw)
+    # the stem
+    pygame.draw.line(s, col, (c[0], top), (c[0], c[1] + r * 0.9), w)
+    # the crossbar
+    pygame.draw.line(s, col, (c[0] - r * 0.55, c[1] + r * 0.12),
+                     (c[0] + r * 0.55, c[1] + r * 0.12), w)
+
+
 def _boss_primordial_flame(s, c, r, col):
     """PRIMORDIAL: an ancient flame/rune -- the final boss's mark."""
     pts = [(c[0], c[1] - r), (c[0] + r * 0.55, c[1] - r * 0.1),
@@ -600,13 +616,14 @@ ICONS = {
     'char_lagarto': _char_lagarto, 'char_vibora': _char_vibora,
     'char_couracado': _char_couracado, 'char_larva': _char_larva,
     # weapons
-    'cuspe': _drop, 'ferrao': _arrow, 'teia': _star, 'esporos': _bubbles,
+    'cuspe': _drop, 'ferrao': _arrow, 'ferrao_charm': _arrow,  # issue #25: charm vs weapon
+    'teia': _star, 'esporos': _bubbles,
     'feromonio': _rings, 'sopro': _fan, 'enxame': _orbit, 'acido': _puddle,
     # mutations / passives
     'health': _heart, 'speed': _bolt, 'dash': _arrow, 'energy': _bolt,
     'regen': _heart, 'xp': _star, 'tongue': _tongue, 'thorns': _spikes_icon,
     'spikes': _spikes_icon, 'plates': _plates_icon, 'horns': _horns_icon,
-    'legs': _legs_icon, 'club': _club, 'venom': _drop, 'wings': _wings_icon,
+    'legs': _legs_icon, 'venom': _drop, 'wings': _wings_icon,   # 'club' -> charm-only (#22)
     'might': _bolt, 'area': _expand, 'haste': _clock, 'amount': _plus_one,
     # charms
     'antenas': _antennae, 'olhos': _eyes, 'carapaca': _plates_icon,
@@ -617,6 +634,8 @@ ICONS = {
     'boss_kraken_mor': _boss_kraken_eye, 'boss_mae_escaravelho': _boss_hive,
     'boss_primordial': _boss_primordial_flame, 'boss_aranha_rei': _boss_web,
     'boss_serpente_cristal': _boss_crystal, 'boss_terror_alado': _boss_wing,
+    'boss_olho_sismico': _boss_kraken_eye,   # an eye mark for the eye boss (reused)
+    'boss_ankh': _boss_ankh,
 }
 
 

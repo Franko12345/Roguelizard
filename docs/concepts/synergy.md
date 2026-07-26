@@ -2,11 +2,11 @@
 
 A named combo that fires when a set of tags is present. Tags flow from
 [Mutation](../../CONTEXT.md) cards, [Weapon](./weapon.md) ownership,
-[Item](../../CONTEXT.md) pickups, and the current
-[Character](./character.md) — all flattened into one set via
+[Item](../../CONTEXT.md) pickups, equipped [Charm](./charm.md)s, and the
+current [Character](./character.md) — all flattened into one set via
 `evolution.owned_tags`.
 
-Defined in `lagarto/evolution.py`.
+Defined in `lagarto/combat/evolution/`.
 
 ## Twelve synergies exist
 

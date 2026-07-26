@@ -15,28 +15,34 @@ SPECIES = {
     # ---- prey (wander / flee, feed the player and the predators) ---------- #
     'grazer': dict(role='prey', xp=3, score=15, grants=None,
                    genome=Genome(name='grazer', size=0.85, hue=95, sat=0.8, val=0.95,
-                                 behavior='flee', hp=2)),
+                                 behavior='flee', hp=2,
+                                 angular_damping=0.35, linear_damping=0.3, weight=1.3)),
     'critter': dict(role='prey', xp=2, score=10, grants=None,
                     genome=Genome(name='critter', size=0.62, leg_count=4, hue=190,
-                                  behavior='flee', hp=1, speed=1.15)),
+                                  behavior='flee', hp=1, speed=1.15,
+                                  angular_damping=0.15, linear_damping=0.15, weight=0.6)),
 
     # ---- enemies ---------------------------------------------------------- #
     'runner': dict(role='enemy', xp=5, score=40, grants=None,
                    genome=Genome(name='runner', size=0.72, leg_count=4, hue=42,
-                                 speed=1.5, behavior='chase', hp=4, diet=('prey',))),
+                                 speed=1.5, behavior='chase', hp=4, diet=('prey',),
+                                 angular_damping=0.1, linear_damping=0.1, weight=0.6)),
     'tank': dict(role='enemy', xp=9, score=70, grants='plates',
                  genome=Genome(name='tank', size=1.5, girth=1.25, leg_count=4, hue=6,
                                speed=0.68, plates=1, behavior='chase', hp=14, diet=('prey',),
                                angular_damping=0.6, linear_damping=0.5, weight=2.5)),
     'snake': dict(role='enemy', xp=6, score=50, grants=None,
                   genome=Genome(name='snake', size=0.95, length=1.9, leg_count=0, hue=282,
-                                speed=1.2, behavior='chase', hp=6, diet=('prey',))),
+                                speed=1.2, behavior='chase', hp=6, diet=('prey',),
+                                angular_damping=0.2, linear_damping=0.15, weight=0.7)),
     'horned': dict(role='enemy', xp=6, score=55, grants='horns',
                    genome=Genome(name='horned', size=1.12, leg_count=4, hue=20, horns=2,
-                                 behavior='chase', hp=8, diet=('prey',))),
+                                 behavior='chase', hp=8, diet=('prey',),
+                                 angular_damping=0.35, linear_damping=0.3, weight=1.2)),
     'spiky': dict(role='enemy', xp=6, score=55, grants='spikes',
                   genome=Genome(name='spiky', size=1.0, leg_count=4, hue=322, spikes=1,
-                                behavior='chase', hp=8, diet=('prey',))),
+                                behavior='chase', hp=8, diet=('prey',),
+                                angular_damping=0.25, linear_damping=0.25, weight=1.0)),
     'spider': dict(role='enemy', xp=7, score=60, grants='legs',
                    genome=Genome(name='spider', size=1.05, radial=True, leg_count=8,
                                  hue=265, sat=0.55, val=0.7, speed=1.15,
@@ -44,11 +50,13 @@ SPECIES = {
                                  angular_damping=0.15, linear_damping=0.2, weight=0.8)),
     'spitter': dict(role='enemy', xp=7, score=60, grants=None,
                     genome=Genome(name='spitter', size=0.95, leg_count=4, hue=150,
-                                  speed=0.85, behavior='ranged', hp=6, diet=('prey',))),
+                                  speed=0.85, behavior='ranged', hp=6, diet=('prey',),
+                                  angular_damping=0.3, linear_damping=0.25, weight=1.0)),
     'scorpion': dict(role='enemy', xp=8, score=65, grants='sting',
                      genome=Genome(name='scorpion', size=1.05, leg_count=6, hue=18,
                                    sat=0.7, tail='sting', speed=0.95, behavior='chase',
-                                   hp=8, diet=('prey',))),
+                                   hp=8, diet=('prey',),
+                                   angular_damping=0.4, linear_damping=0.35, weight=1.4)),
 
     # ---- phase 2: enemies that change how you must MOVE ------------------- #
     # Each one attacks a different habit: the flyer beats hiding behind the
@@ -57,20 +65,24 @@ SPECIES = {
     'wasp': dict(role='enemy', xp=5, score=45, grants=None,
                  genome=Genome(name='wasp', size=0.6, length=0.7, leg_count=0,
                                wings=True, antennae=True, hue=52, sat=0.95,
-                               speed=1.55, behavior='fly', hp=3, diet=('prey',))),
+                               speed=1.55, behavior='fly', hp=3, diet=('prey',),
+                               angular_damping=0.1, linear_damping=0.1, weight=0.5)),
     'bomber': dict(role='enemy', xp=7, score=65, grants=None,
                    genome=Genome(name='bomber', size=0.95, girth=1.45, length=0.7,
                                  leg_count=4, hue=28, sat=0.95, val=1.0,
                                  speed=1.0, behavior='bomber', hp=3,
-                                 spore_sacs=True, diet=())),
+                                 spore_sacs=True, diet=(),
+                                 angular_damping=0.1, linear_damping=0.1, weight=0.5)),
     'gunner': dict(role='enemy', xp=7, score=60, grants=None,
                    genome=Genome(name='gunner', size=0.9, leg_count=4, hue=200,
                                  sat=0.85, speed=0.9, behavior='gunner', hp=5,
-                                 extra_eyes=2, diet=('prey',))),
+                                 extra_eyes=2, diet=('prey',),
+                                 angular_damping=0.25, linear_damping=0.2, weight=0.9)),
     'venomer': dict(role='enemy', xp=8, score=70, grants='sting',
                     genome=Genome(name='venomer', size=1.05, leg_count=4, hue=100,
                                   sat=0.9, speed=0.8, behavior='venom', hp=6,
-                                  spore_sacs=True, tail='sting', diet=('prey',))),
+                                  spore_sacs=True, tail='sting', diet=('prey',),
+                                  angular_damping=0.3, linear_damping=0.25, weight=1.0)),
 
     # ---- phase B4: new procedural BODIES + their own mechanics ------------ #
     # CENTOPEIA: a segmented burrower (Isaac's Para-Bite/Moles). Dives, then
@@ -79,7 +91,8 @@ SPECIES = {
                       genome=Genome(name='centipede', plan='segmented', size=1.0,
                                     length=1.5, leg_count=2, hue=88, sat=0.85,
                                     val=0.92, speed=1.15, behavior='burrow', hp=6,
-                                    diet=('prey',))),
+                                    diet=('prey',),
+                                    angular_damping=0.3, linear_damping=0.2, weight=1.8)),
     # POLVO: a tentacle grappler (Gungeon's Gripmaster). Slow bruiser that reels
     # you in and slows you -- punishes lingering at its mid-range doorstep.
     'octopus': dict(role='enemy', xp=9, score=75, grants=None,
@@ -90,13 +103,35 @@ SPECIES = {
                                   angular_damping=0.7, linear_damping=0.6, weight=3.0,
                                   diet=('prey',))),
 
+    # OLHO-SISMICO: a floating eyeball (plan='orbital'). Only ever spawned as a
+    # boss (B9); the entry exists so species.make(key) works. Floating = heavy
+    # weight + high damping (no run inertia, holds its spot).
+    'olho_sismico': dict(role='enemy', xp=12, score=90, grants=None,
+                         genome=Genome(name='olho_sismico', plan='orbital', size=1.1,
+                                       leg_count=6, hue=280, sat=0.7, val=0.85,
+                                       speed=0.6, behavior='chase', hp=12, diet=(),
+                                       angular_damping=0.9, linear_damping=0.85, weight=4.0)),
+
+    # A MURALHA (B10): plan='fixed' - static wall occupying right side of arena.
+    # role='boss' keeps it OUT of ENEMY_SPECIES: the 'invasao' theme pool is
+    # literally list(ENEMY_SPECIES), and the boss summon pattern falls back to
+    # it, so with role='enemy' a normal wave could roll a wall as a mook -- and
+    # a wall has speed 0, which used to divide by zero the moment it steered.
+    'muralha': dict(role='boss', xp=15, score=120, grants=None,
+                    genome=Genome(name='muralha', plan='fixed', size=1.2,
+                                  leg_count=0, hue=15, sat=0.6, val=0.4,
+                                  speed=0.0, behavior='chase', hp=15, diet=(),
+                                  angular_damping=0.9, linear_damping=0.9, weight=10.0)),
+
     # ---- extra prey ------------------------------------------------------- #
     'frog': dict(role='prey', xp=3, score=18, grants=None,
                  genome=Genome(name='frog', size=0.7, leg_count=4, length=0.6, girth=1.3,
-                               hue=110, behavior='hop', hp=2)),
+                               hue=110, behavior='hop', hp=2,
+                               angular_damping=0.4, linear_damping=0.35, weight=1.5)),
     'fish': dict(role='prey', xp=3, score=15, grants=None,
                  genome=Genome(name='fish', size=0.75, leg_count=0, length=0.8, fins=1,
-                               tail='fin', hue=195, behavior='flee', hp=1, speed=1.1)),
+                               tail='fin', hue=195, behavior='flee', hp=1, speed=1.1,
+                               angular_damping=0.15, linear_damping=0.15, weight=0.6)),
 }
 
 PREY_SPECIES = [k for k, v in SPECIES.items() if v['role'] == 'prey']

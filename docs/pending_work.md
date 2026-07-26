@@ -1,5 +1,15 @@
 # Pending Work — From Plans
 
+> **LEGADO.** Este arquivo e o registro historico dos planos ANTES do
+> refactor T1-T16; os caminhos `lagarto/*.py` que ele cita sao os antigos,
+> de proposito, para o texto continuar batendo com a decisao da epoca. Os
+> caminhos vivos estao em [architecture.md](concepts/architecture.md).
+> `tools/check_doc_paths.py` pula este arquivo por isso.
+
+> **Legacy:** This file was extracted from `plans/` on 2026-07-21. Its items
+> have since been promoted to GitHub Issues. Kept for historical context only;
+> paths may be stale.
+
 Issues extracted from `plans/` — not yet implemented as of 2026-07-21.
 
 ---
@@ -179,22 +189,38 @@ Effort: ~2h
 
 **[B2] Patterns faltantes em `boss.py`**
 
+> **Triage decided 2026-07-26 — see [docs/agents/triage-issue-14.md](../agents/triage-issue-14.md).**
+>
+> The original list of 7 missing patterns has been distributed across the
+> three upcoming boss tickets:
+>
+> - `laser_sweep` → #73 (Olho-Sísmico's `gaze`)
+> - `beam_barrage` → #74 (A Muralha's 3-eye `eye_laser`)
+> - `bounce_shot` → #74 (A Muralha's `bouncing_bullets`)
+> - `creep_wave` → #74 (A Muralha's phase-2 advancing floor fire)
+> - `gravity_well` → #73 (Olho-Sísmico — eye pulls player toward it)
+> - `minefield` → #74 (A Muralha — corridor floor mines)
+> - `teleport_strike` → #75 (ANKH — in-phase dissolve/reform attack)
+>
+> Patterns are implemented **as part of** the consuming boss ticket, not
+> standalone. Issue #14 closes once #73 / #74 / #75 ship.
+
 Currently implemented: `radial_burst`, `fan_shot`, `aimed_barrage`, `summon_adds`, `shockwave`, `spiral_pattern`, `charge_attack` (7 total).
 
-Still missing from `plans/02 §7`:
+Still missing from `plans/02 §7` (all assigned per the triage doc above):
 
-| Pattern | Description | Telegraph | Inspiration |
-|---------|-------------|-----------|-------------|
-| `laser_sweep` | laser sweeps an arc | filling cone | Beholster, Bullet King |
-| `bounce_shot` | projectile ricochets N times | dashed line predicting bounces | Wallmonger |
-| `minefield` | places mines on ground | pulsing circles | Mine Flayer |
-| `gravity_well` | pulls player to a point | vortex with arrows | Lich phase 3 |
-| `creep_wave` | advancing puddle of damage | liquid creeping | Peep |
-| `beam_barrage` | telegraphed laser barrage | ground markers | High Dragun |
-| `teleport_strike` | vanishes, reappears, attacks | shadow at destination | Mine Flayer, Isaac |
+| Pattern | Description | Telegraph | Inspiration | Owner |
+|---------|-------------|-----------|-------------|-------|
+| `laser_sweep` | laser sweeps an arc | filling cone | Beholster, Bullet King | #73 |
+| `bounce_shot` | projectile ricochets N times | dashed line predicting bounces | Wallmonger | #74 |
+| `minefield` | places mines on ground | pulsing circles | Mine Flayer | #74 |
+| `gravity_well` | pulls player to a point | vortex with arrows | Lich phase 3 | #73 |
+| `creep_wave` | advancing puddle of damage | liquid creeping | Peep | #74 |
+| `beam_barrage` | telegraphed laser barrage | ground markers | High Dragun | #74 |
+| `teleport_strike` | vanishes, reappears, attacks | shadow at destination | Mine Flayer, Isaac | #75 |
 
-Files: `lagarto/boss.py`  
-Effort: ~3h
+Files: `lagarto/flow/boss/patterns.py`
+Effort: ~3h (folded into the consuming boss tickets)
 
 ---
 

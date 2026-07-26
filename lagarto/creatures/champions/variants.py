@@ -38,6 +38,9 @@ def _filhote(c, game):
     g.size *= 0.55
     g.hue = 205
     g.sat = 0.95
+    g.angular_damping = 0.1        # tiny + darty: light on its feet, near-zero inertia
+    g.linear_damping = 0.1
+    g.weight = 0.5
     _rebuild(c)
     c.hp = 1
     c.max_hp = 1

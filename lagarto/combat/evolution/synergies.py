@@ -48,7 +48,7 @@ SYNERGIES_LIST = [
             'estopim + carnica: cada abate alimenta o proximo', _syn_ceifador),
     Synergy('praga', 'PRAGA VIVA', {'contagio', 'venom'},
             'contagio + peconha: o veneno nunca para de se espalhar', _syn_praga),
-    Synergy('bola', 'BOLA DE DEMOLICAO', {'club', 'farpas'},
+    Synergy('bola', 'BOLA DE DEMOLICAO', {'clava', 'farpas'},
             'clava + farpas: a rabada vira arma de cerco', _syn_bola),
     Synergy('fantasma', 'FANTASMA', {'marcado', 'ricochete'},
             'presa marcada + ricochete: dash atras de dash', _syn_fantasma),
@@ -63,13 +63,18 @@ SYNERGIES = Registry(SYNERGIES_LIST)
 
 
 def owned_tags(player):
-    """Everything a synergy can key on: mutations, weapons, items, character.
+    """Everything a synergy can key on: mutations, weapons, items, character,
+    and equipped charms.
 
     One flat set on purpose -- a synergy should be able to say "this weapon plus
-    that item" without caring which system each half comes from.
+    that item" without caring which system each half comes from. Charms only
+    count when equipped (slot-bound, like Hollow Knight); issue #22 moved the
+    club tail here, so the BOLA synergy now keys on the ``clava`` charm instead
+    of the removed ``club`` mutation.
     """
     tags = set(player.mutations) | set(player.weapons)
     tags |= set(getattr(player, 'items', ()))
+    tags |= {cid for cid in player.charm_slots.values() if cid}
     cid = getattr(player, 'character_id', None)
     if cid:
         tags.add(cid)

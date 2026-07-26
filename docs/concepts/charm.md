@@ -3,7 +3,7 @@
 A permanent slot the player fills at the [Camp](./camp.md) shop. Persists
 across level-ups within a run. Costs 150 pollen.
 
-Defined in `lagarto/charms.py`.
+Defined in `lagarto/combat/charms.py`.
 
 ## What charms do
 

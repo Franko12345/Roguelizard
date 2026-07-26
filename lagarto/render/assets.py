@@ -9,7 +9,14 @@ import os
 import sys
 import pygame
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ``_ROOT`` is the repo root (one level above the ``lagarto/`` package),
+# so ``assets/`` resolves to ``<repo>/assets/`` -- where the PNGs actually
+# live. The old calculation (dirname twice) pointed at ``lagarto/`` and
+# silently never loaded any PNG; every caller fell back to the procedural
+# drawer and the bug was invisible because the procedural art is the
+# canonical source. Issue #25 fixed this so the PNGs (which exist for
+# the boss bar emblems and the camp tent) actually load.
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _CACHE = {}          # key -> raw Surface (convert_alpha'd), or False if missing
 _SCALED = {}         # (key, diameter) -> scaled Surface
 _SCALED_MAX = 300    # bounded, same pattern as palette._GLOW_CACHE / ui._TEXT_MAX

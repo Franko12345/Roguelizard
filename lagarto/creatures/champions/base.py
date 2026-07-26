@@ -65,10 +65,21 @@ def maybe_promote(creature, game, wave, rng=random):
         return None
     if rng.random() > chance(wave):
         return None
-    ch = rng.choice(VARIANTS)
-    _promote(creature, game, ch)
+    promote_to(creature, rng.choice(VARIANTS).id, game)
     if rng.random() < C.CHAMP_MODIFIER_CHANCE:
         _promote(creature, game, rng.choice(MODIFIERS), extra=True)
+    return creature.champion
+
+
+def promote_to(creature, champ_id, game):
+    """Apply a specific ``BY_ID`` Champion to ``creature`` and return it.
+
+    The deterministic counterpart to ``maybe_promote`` (which rolls one at
+    random): the sandbox and any test spawn name the champion outright. Both
+    funnel through ``_promote``, so tint + scale + glow + hp multiplier + ticks
+    are applied identically -- there is no second, lighter promotion path.
+    """
+    _promote(creature, game, BY_ID[champ_id])
     return creature.champion
 
 

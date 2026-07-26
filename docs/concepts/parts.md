@@ -2,7 +2,7 @@
 
 Additive decorations read from the [Genome](./genome.md) each frame:
 spikes, plates, horns, tail tip (club or sting), fins, wings, antennae,
-extra eyes. Drawn by `parts.draw_all` from `lagarto/parts.py`. Evolving a
+extra eyes. Drawn by `parts.draw_all` from `lagarto/creatures/parts.py`. Evolving a
 part _is_ setting a genome number.
 
 ## Where each part is drawn

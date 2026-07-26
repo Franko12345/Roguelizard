@@ -103,7 +103,8 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
   Mood, Tier, Telegraph, Cosmetic Skeleton, etc.).
 - [docs/README.md](docs/README.md) — mapa da árvore de docs.
 - [docs/adr/README.md](docs/adr/README.md) — regra dos 3-critérios pra ADR.
-- [docs/agents/](docs/agents/) — issue tracker, triage labels, domain skill.
+- [docs/agents/](docs/agents/) — issue tracker, triage labels, domain
+  skill, regra de verificação.
 
 ## Convenções mínimas
 
@@ -181,3 +182,6 @@ divergem em silêncio e ninguém sabe qual vale).
 - **Triage labels**: cinco rótulos canônicos. Ver [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
 - **Domain docs**: single-context — `CONTEXT.md` + `docs/adr/` na raiz.
   Ver [docs/agents/domain.md](docs/agents/domain.md).
+- **Verificação**: uma issue só fecha quando um check em `tools/` diz que
+  fechou — `python tools/check_issues.py` percorre todas. `--smoke` é o piso,
+  não o teto. Ver [docs/agents/verification.md](docs/agents/verification.md).

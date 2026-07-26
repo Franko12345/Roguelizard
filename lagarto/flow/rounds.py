@@ -113,6 +113,35 @@ BOSS_POOL = {
                          # flying=True: collision pula voadores (paira, nao empurra),
                          # mas hit_test continua acertando -- reuso do flag do wasp
                          boss_attrs=dict(flying=True)),
+    'olho_sismico': dict(species='olho_sismico', name='OLHO-SISMICO',
+                         emblem='boss_olho_sismico',
+                         phases=lambda: bossai.eye_phases(),
+                         personality=lambda: bossai.eye_personality(),
+                         on_phase=bossai.eye_on_phase, scar=None,
+                         # setup: liga a piscada (mecanica do Olho) + o tick por frame
+                         setup=bossai.eye_setup,
+                         overrides=dict(hue=280, sat=0.75, val=0.8)),
+    # Built from the dedicated 'muralha' species, not a re-skinned 'horned':
+    # that species is what carries plan='fixed', speed=0 and the wall-grade
+    # damping/weight. Overriding a mobile species into plan='fixed' left the
+    # wall walking at the player, which is not what a wall does.
+    'muralha': dict(species='muralha', name='A MURALHA',
+                     emblem='boss_muralha',
+                     phases=lambda: bossai.muralha_phases(),
+                     personality=lambda: bossai.wall_personality(),
+                     scar=None,
+                     overrides=dict(hue=0, sat=0.3, val=0.45)),
+    # ANKH (B11, tier 7): "A Eterna". A re-skin of the horned lizard is the
+    # RIGHT body here -- the design calls for a translucent golden lizard, and
+    # the fight's identity is the 4-phase memory structure, not a new anatomy.
+    # (Contrast A Muralha, which needed plan='fixed' because a wall is not a
+    # lizard.) NOT the run's climax: the Primordial still closes NORMAL mode.
+    'ankh': dict(species='horned', name='ANKH',
+                 emblem='boss_ankh',
+                 phases=lambda: bossai.ankh_phases(),
+                 personality=lambda: bossai.ankh_personality(),
+                 scar=None,
+                 overrides=dict(hue=45, sat=0.35, val=1.0, spikes=0, plates=2)),
 }
 
 # tier (wave // BOSS_EVERY) -> which pool ids can be rolled there. Ranges,
@@ -120,9 +149,10 @@ BOSS_POOL = {
 # every tier by hand. `range` end is exclusive, same as normal Python ranges.
 BOSS_TIER_POOLS = [
     (range(1, 4), ['rei_lagarto', 'centopeiadeira', 'kraken_mor']),   # onda 5/10/15
-    (range(5, 10_000), ['mae_escaravelho', 'aranha_rei', 'serpente_cristal',
-                        'terror_alado']),      # onda 25+ (so infinito) -- cresce
-                                               # conforme mais chefes entram
+    (range(4, 6), ['mae_escaravelho', 'aranha_rei', 'serpente_cristal',
+                   'terror_alado', 'olho_sismico']),                  # onda 20/25 (so infinito)
+    (range(6, 7), ['muralha']),                                         # tier 6 (onda 30)
+    (range(7, 10_000), ['muralha', 'ankh']),                            # tier 7+ (onda 35+)
 ]
 BOSS_FINAL = 'primordial'   # is_final always this one -- the run's fixed climax,
                            # not part of the roll (matches Isaac's true-final-boss)
@@ -245,6 +275,121 @@ class Nest:
                             -math.pi / 2, -math.pi / 2 + f * C.TAU, max(2, int(3 * cam.zoom)))
 
 
+# --------------------------------------------------------------------------- #
+#  Per-wave difficulty curve (issue #23)                                       #
+# --------------------------------------------------------------------------- #
+# Every wave-based dial lives here so the SHAPE of the curve is in one place
+# instead of inline at each use site. The knee constants are in config.py.
+# Below its knee each curve is byte-identical to the old linear one, so the
+# early game is untouched -- the ramp only bites where the snowball started.
+
+def wave_hp_bonus(wave):
+    """HP added on top of an enemy's base HP, by wave.
+
+    Pre-knee: the old linear ``WAVE_HP_BASE * wave``. Post-knee: plus a
+    super-linear term, so late waves threaten a player who has stacked might.
+    """
+    bonus = wave * C.WAVE_HP_BASE
+    if wave > C.WAVE_HP_KNEE:
+        bonus += ((wave - C.WAVE_HP_KNEE) ** C.WAVE_HP_POST_KNEE_EXP
+                  * C.WAVE_HP_POST_KNEE_MULT)
+    return int(bonus)
+
+
+def wave_speed_mul(wave):
+    """Enemy speed multiplier by wave (1.0 = base). Caps at +75% late."""
+    base = min(C.WAVE_SPEED_MAX, wave * C.WAVE_SPEED_PER_WAVE)
+    post = 0.0
+    if wave > C.WAVE_SPEED_KNEE:
+        post = min(C.WAVE_SPEED_POST_KNEE_MAX,
+                   (wave - C.WAVE_SPEED_KNEE) * C.WAVE_SPEED_POST_KNEE_PER_WAVE)
+    return 1.0 + base + post
+
+
+def wave_budget(wave, theme_budget):
+    """Total enemies the wave may spawn, before the boss-round halving."""
+    base = (3 + wave * 1.1) * theme_budget
+    if wave > C.WAVE_BUDGET_KNEE:
+        base += (wave - C.WAVE_BUDGET_KNEE) * C.WAVE_BUDGET_POST_KNEE_MULT * theme_budget
+    return int(base)
+
+
+def wave_cap(wave, theme_cap):
+    """How many enemies may be alive at once, before the boss-round halving."""
+    bonus = 0
+    if wave > C.WAVE_CAP_KNEE:
+        bonus = min(C.WAVE_CAP_POST_KNEE_MAX,
+                    (wave - C.WAVE_CAP_KNEE) // C.WAVE_CAP_POST_KNEE_PER_WAVES)
+    return theme_cap + bonus
+
+
+def make_boss(game, boss_id, tier, pos, is_final=False):
+    """Build one boss at ``pos``, scaled to ``tier``, and return it (unspawned).
+
+    ``boss_id`` is either a ``BOSS_POOL`` key -- an authored fight with its own
+    phase kit + personality + emblem -- or a bare species key, which yields the
+    original random-themed-giant fallback (no pool entry). This is the reusable
+    core of a boss spawn: boss-scale body, hp/xp/score by tier, boss-grade
+    damping, ``behavior='boss'``, and the ``BossAI``. Who/where/the spawn juice
+    stay with the caller: ``_spawn_boss`` for a round, the sandbox for a
+    deterministic one-off.
+    """
+    named = BOSS_POOL.get(boss_id)
+    key = named['species'] if named else boss_id
+
+    boss = species.make(key, pos)
+    gen = boss.genome
+    gen.size *= 2.3                      # rebuild the body at boss scale
+    gen.sat = min(1.0, gen.sat + 0.15)
+    if named:
+        for k, v in named['overrides'].items():
+            setattr(gen, k, v)
+    # boss-scale weight/inertia (plans/01, table row "Chefe"): never lighter
+    # than the underlying species already was (octopus is already 3.0)
+    gen.angular_damping = max(gen.angular_damping, 0.5)
+    gen.linear_damping = max(gen.linear_damping, 0.4)
+    gen.weight = max(gen.weight, 3.0)
+    # feedback: player shots were shoving bosses around mid-approach/attack,
+    # which is a de-facto free interrupt on top of the damage -- a boss
+    # commits to its own movement, it doesn't get knocked off it
+    gen.knockback = 0.0
+    # Fase 5: the FSM drives the fight now, not the species' own chase/
+    # ranged/etc behavior -- 'boss' is a distinct dispatch (creatures/ai/).
+    gen.behavior = 'boss'
+    boss.__init__(pos, 'enemy', genome=gen)
+    boss.species = key
+    if is_final:
+        gen.size *= 1.35                 # the final boss towers over the rest
+        boss.__init__(pos, 'enemy', genome=gen)
+        boss.species = key
+    boss.hp = int((90 + 200 * tier) * (2.0 if is_final else 1.0))
+    boss.max_hp = boss.hp
+    boss.is_boss = True
+    boss.glow_body = True                # bosses get the player-grade glow
+    boss.xp_value = 40 + 15 * tier
+    boss.score_value = 500 + 200 * tier
+    boss.grants = species.SPECIES[key]['grants']
+    boss.max_speed *= 0.82               # big and heavy
+    if named:
+        boss.boss_name = named['name']
+        boss.emblem = named.get('emblem')
+        boss.boss_ai = bossai.BossAI(boss, phases=named['phases'](),
+                                     personality=named['personality'](),
+                                     name=named['name'],
+                                     on_phase=named.get('on_phase'))
+        if named.get('scar'):
+            boss.boss_ai.scar_thresholds = list(named['scar'])
+        for k, v in named.get('boss_attrs', {}).items():
+            setattr(boss, k, v)
+        if named.get('setup'):        # per-boss wiring (Olho-Sismico's blink tick)
+            named['setup'](boss)
+    else:
+        name, _ = species.info(key)
+        boss.boss_name = f"{name} PRIMORDIAL" if is_final else f"{name} ALFA"
+        boss.boss_ai = bossai.BossAI(boss, phases=bossai.default_phases())
+    return boss
+
+
 class RoundManager:
     def __init__(self, game):
         self.game = game
@@ -260,6 +405,17 @@ class RoundManager:
         self.boss = None
         self.is_boss_round = False
         self.is_final = False
+        self._boss_bag = {}     # pool -> shuffled bag; sample bosses without replacement
+
+    def _draw_boss_id(self, pool_ids):
+        """Sorteia sem reposição: esvazia o saco antes de repetir qualquer chefe."""
+        key = tuple(pool_ids)
+        bag = self._boss_bag.get(key)
+        if not bag:
+            bag = list(pool_ids)
+            random.shuffle(bag)
+            self._boss_bag[key] = bag
+        return bag.pop()
 
     # ---- lifecycle ------------------------------------------------------ #
     def start_round(self, theme=None):
@@ -271,12 +427,14 @@ class RoundManager:
         for p in g.players:
             p.rerolls = p.rerolls_per_round
         self.boss = None
+        g.arena = None              # issue #26: last round's arena bounds/tint
+        g.arena_bounds = None
         self.is_final = (self.game.mode == 'normal' and self.wave >= C.RUN_FINAL_WAVE)
         self.is_boss_round = self.is_final or (self.wave % BOSS_EVERY == 0)
         self.theme = theme or self._next_theme or self._pick_theme()
         self._next_theme = None
         spec = THEMES[self.theme]
-        self.budget = int((3 + self.wave * 1.1) * spec['budget'])
+        self.budget = wave_budget(self.wave, spec['budget'])
         if self.is_boss_round:
             self.budget = max(3, self.budget // 2)     # fewer mobs, one huge threat
         self.state = 'combat'
@@ -303,75 +461,33 @@ class RoundManager:
         ONE authored fight at random from its pool (own phase kit + personality
         + mechanic) -- so the same wave can be a different boss run to run.
         Tiers with no pool yet fall back to the original random-themed-giant.
+
+        Who/where and the spawn juice live here; the body itself is built by
+        ``make_boss`` so the sandbox can spawn the exact same boss on demand.
         """
         g = self.game
         tier = self.wave // BOSS_EVERY
         if self.is_final:
-            named = BOSS_POOL[BOSS_FINAL]
+            boss_id = BOSS_FINAL
         else:
             pool_ids = _boss_pool_for_tier(tier)
-            named = BOSS_POOL[random.choice(pool_ids)] if pool_ids else None
-        if named:
-            key = named['species']
-        else:
-            pool = THEMES[self.theme]['pool']
-            key = random.choice(pool)
+            boss_id = (self._draw_boss_id(pool_ids) if pool_ids
+                       else random.choice(THEMES[self.theme]['pool']))
         center = g.alive_players()[0].pos if g.alive_players() \
             else Vector2(C.WORLD_W / 2, C.WORLD_H / 2)
         pos = center + random_dir(620)
         pos.x = clamp(pos.x, 100, C.WORLD_W - 100)
         pos.y = clamp(pos.y, 100, C.WORLD_H - 100)
 
-        boss = species.make(key, pos)
-        gen = boss.genome
-        gen.size *= 2.3                      # rebuild the body at boss scale
-        gen.sat = min(1.0, gen.sat + 0.15)
-        if named:
-            for k, v in named['overrides'].items():
-                setattr(gen, k, v)
-        # boss-scale weight/inertia (plans/01, table row "Chefe"): never lighter
-        # than the underlying species already was (octopus is already 3.0)
-        gen.angular_damping = max(gen.angular_damping, 0.5)
-        gen.linear_damping = max(gen.linear_damping, 0.4)
-        gen.weight = max(gen.weight, 3.0)
-        # feedback: player shots were shoving bosses around mid-approach/attack,
-        # which is a de-facto free interrupt on top of the damage -- a boss
-        # commits to its own movement, it doesn't get knocked off it
-        gen.knockback = 0.0
-        # Fase 5: the FSM drives the fight now, not the species' own chase/
-        # ranged/etc behavior -- 'boss' is a distinct dispatch (creatures/ai/).
-        gen.behavior = 'boss'
-        boss.__init__(pos, 'enemy', genome=gen)
-        boss.species = key
-        if self.is_final:
-            gen.size *= 1.35                 # the final boss towers over the rest
-            boss.__init__(pos, 'enemy', genome=gen)
-            boss.species = key
-        boss.hp = int((90 + 200 * tier) * (2.0 if self.is_final else 1.0))
-        boss.max_hp = boss.hp
-        boss.is_boss = True
-        boss.glow_body = True                # bosses get the player-grade glow
-        boss.xp_value = 40 + 15 * tier
-        boss.score_value = 500 + 200 * tier
-        boss.grants = species.SPECIES[key]['grants']
-        boss.max_speed *= 0.82               # big and heavy
-        if named:
-            boss.boss_name = named['name']
-            boss.emblem = named.get('emblem')
-            boss.boss_ai = bossai.BossAI(boss, phases=named['phases'](),
-                                         personality=named['personality'](),
-                                         name=named['name'],
-                                         on_phase=named.get('on_phase'))
-            if named.get('scar'):
-                boss.boss_ai.scar_thresholds = list(named['scar'])
-            for k, v in named.get('boss_attrs', {}).items():
-                setattr(boss, k, v)
-        else:
-            name, _ = species.info(key)
-            boss.boss_name = f"{name} PRIMORDIAL" if self.is_final else f"{name} ALFA"
-            boss.boss_ai = bossai.BossAI(boss, phases=bossai.default_phases())
+        boss = make_boss(g, boss_id, tier, pos, is_final=self.is_final)
         g.enemies.append(boss)
         self.boss = boss
+        # Issue #26: per-boss arena (tighter bounds + screen tint) for the
+        # duration of the fight. Cleared in start_round / reset.
+        from .boss.arena import for_boss
+        arena = for_boss(boss_id)
+        if arena is not None:
+            arena.apply(g, pos)
         g.fx.ring(pos, (255, 90, 90))
         g.fx.burst(pos, (255, 120, 90), 34, 320)
         g.shake(12)
@@ -416,15 +532,17 @@ class RoundManager:
                 m.update(dt, g)
             self.marks = [m for m in self.marks if not m.done]
             # emit from nests up to the alive cap and remaining budget
-            if self.budget > 0 and self._alive_enemies() + len(self.marks) < spec['cap']:
+            cap = wave_cap(self.wave, spec['cap'])
+            if self.budget > 0 and self._alive_enemies() + len(self.marks) < cap:
                 live = [n for n in self.nests if not n.dead]
                 for n in live:
                     if n.update(dt) and self.budget > 0 and \
-                            self._alive_enemies() + len(self.marks) < spec['cap']:
+                            self._alive_enemies() + len(self.marks) < cap:
                         key = random.choice(spec['pool'])
                         pos = n.pos + random_dir(random.uniform(20, 70))
-                        self.marks.append(SpawnMark(pos, key, int(self.wave * 0.7),
-                                                    1.0 + min(self.wave * 0.02, 0.4)))
+                        self.marks.append(SpawnMark(pos, key,
+                                                    wave_hp_bonus(self.wave),
+                                                    wave_speed_mul(self.wave)))
                         self.budget -= 1
                         n.reset_emit(self.wave > 4)
             else:

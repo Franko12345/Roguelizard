@@ -4,7 +4,7 @@ A large enemy with an FSM, phase transitions, and a personality. Bosses
 gate rounds — the round only `cleared`s when the boss dies. Not to be
 confused with a [Champion](./champion.md), which lives inside a round.
 
-Defined in `lagarto/boss.py`. Selection rules in
+Defined in `lagarto/flow/boss/`. Selection rules in
 [ADR-0004](../adr/0004-boss-pool-per-tier.md).
 
 ## FSM
@@ -66,6 +66,32 @@ Named bosses live in `BOSS_POOL` with overrides (patterns per phase,
 back to the generic "themed species scaled up" boss. This is not a
 regression — it's "no authored content yet at this tier".
 
+## Arena
+
+A boss may carry a `BossArena` (`lagarto/flow/boss/arena.py`): a `size`
+`(w, h)` play box **centred on the boss** for the length of the fight, plus a
+screen `tint`. The box is what makes an arena felt — one anchored to the world
+origin would only shave the far corners off a 3200x3200 map, which the player
+never reaches. A boss with no entry in `ARENAS` fights in the open world.
+
+A Muralha has the tightest box in the game (900x640, a corridor); the
+Primordial and the Terror Alado have none, because both fights are about space.
+
+## Body plan vs re-skin
+
+Two ways to give a boss its look, and the choice is not cosmetic:
+
+- **Re-skin** — reuse a species and push `overrides` (ANKH is a golden
+  `horned`). Right when the fight's identity is its behaviour.
+- **Own species with its own `plan`** — right when the creature is not a
+  lizard. A Muralha is `plan='fixed'` with `speed=0`; it was briefly built as
+  an overridden `horned` instead, and the result was a wall that walked at the
+  player.
+
+A boss-only species must use `role='boss'`, not `role='enemy'`: the `invasao`
+theme pool is `list(ENEMY_SPECIES)` and the `summon` pattern falls back to it,
+so `role='enemy'` lets a normal wave roll a boss body as a mook.
+
 ## Related
 
 - [ADR-0004](../adr/0004-boss-pool-per-tier.md) — how a tier picks a boss.
@@ -73,3 +99,4 @@ regression — it's "no authored content yet at this tier".
 - [Round](./round.md) — the wave a boss gates.
 - [Species](./species.md) — the body a boss is scaled up from.
 - [Champion](./champion.md) — sibling big-enemy concept.
+- [Sandbox](./sandbox.md) — spawns any boss on demand via `make_boss`.

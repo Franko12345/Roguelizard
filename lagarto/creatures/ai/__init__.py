@@ -19,7 +19,7 @@ from ...core import palette
 from ...render import ui
 from ...core.mathutil import clamp, safe_norm, vfrom_angle, decay, pulse, random_dir
 from ..base import Lizard, TAIL_SPRING_STIFFNESS
-from . import burrow, chase, fly, grapple, ranged
+from . import burrow, chase, fly, grapple, posing, ranged
 
 # Personality via animation (plans/01 #11): a boss's mood (already computed by
 # BossAI for pattern/speed choice) also tightens its own secondary-motion
@@ -188,6 +188,7 @@ class AILizard(Lizard):
         if self.kind == 'prey':
             # flee the nearest threat: a player or a predator (living ecosystem)
             threat = game.nearest_threat(self.pos, 230)
+            posing.apply_state_pose(self, self._pose_now('flee' if threat else 'idle'), dt)
             if threat:
                 d = safe_norm(self.pos - threat.pos); speed = 1.2
             elif self.genome.behavior == 'hop':
@@ -204,11 +205,18 @@ class AILizard(Lizard):
                     # only it feeds the mood back into the tail spring
                     d, speed = self.boss_ai.tick(dt, game)
                     self._apply_mood_pose()
+                    self.boss_ai.apply_body_tell(dt)   # #13 windup body telegraph
                 else:
+                    # posture BEFORE the tick, so a wind-up telegraph (lunge/spit
+                    # crouch) still overrides the resting pose during its window
+                    posing.apply_state_pose(
+                        self, self._pose_now(self._engaged_state(
+                            target.pos.distance_to(self.pos))), dt)
                     tick = BEHAVIORS.get(beh, chase.melee_tick)
                     d, speed = tick(self, game, dt, target)
             elif 'prey' in self.genome.diet:
                 prey = game.nearest_prey(self.pos, 480)
+                posing.apply_state_pose(self, self._pose_now('hunt' if prey else 'idle'), dt)
                 if prey:
                     d = safe_norm(prey.pos - self.pos); speed = 0.9
                     if prey.pos.distance_to(self.pos) < (self.max_r + prey.max_r) and self.attack_cd <= 0:
@@ -218,6 +226,7 @@ class AILizard(Lizard):
                 else:
                     d = self.wander_dir(dt); speed = 0.45
             else:
+                posing.apply_state_pose(self, self._pose_now('idle'), dt)
                 d = self.wander_dir(dt); speed = 0.45
         elif self.kind == 'friend':
             leader = game.nearest_player(self.pos)
@@ -240,8 +249,21 @@ class AILizard(Lizard):
         if self.rally_t > 0:               # roused by an ALFA's call
             speed *= C.CHAMP_ALFA_SPEED
         self.steer(d, dt, speed)
-        self.integrate(dt, on_plant=game.fx.dust if self.on_screen else None)
+        self.integrate(dt, on_plant=game.fx.dust if self.on_screen else None,
+                       bounds=game.arena_bounds)
 
+
+    def _pose_now(self, base):
+        """A fresh hit flinches the creature no matter what it was doing, so a
+        recent ``hit_flash`` overrides the derived posture (see posing.py)."""
+        return 'hurt' if self.hit_flash > 0.5 else base
+
+    def _engaged_state(self, dist):
+        """Posture name while a target is in range: winding up / just hit reads
+        as 'attack', closing distance as 'hunt', still-far awareness as 'alert'."""
+        if self.lunge_t != 0 or self.attack_cd > 0.5 or self.shoot_charge > 0:
+            return 'attack'
+        return 'hunt' if dist < 260 else 'alert'
 
     def _apply_mood_pose(self):
         """Personality via animation (plans/01 #11): bias the SAME tail spring
@@ -472,6 +494,9 @@ class AILizard(Lizard):
                 e.apply_poison(self.poison_dps, 2.6)
 
     def take_hit(self, game, direction, dmg):
+        # Olho-Sismico: 75% off while the eye is blinking (default 1.0 = everyone
+        # else unchanged). hit_test already denies the crit during the blink.
+        dmg *= getattr(self, 'dmg_taken_mult', 1.0)
         if self.marked:                  # Presa Marcada, consumed on use
             self.marked = False
             dmg *= C.CRIT_MULT

@@ -17,7 +17,7 @@ where a PNG exists, it wins. This makes the "add a memorable icon" workflow
 
 **Consequences.**
 
-- `lagarto/assets.py` handles PyInstaller's `_MEIPASS` and lazy loading; the
+- `lagarto/render/assets.py` handles PyInstaller's `_MEIPASS` and lazy loading; the
   cache is keyed on `(id, diameter)` with a 300-entry cap.
 - `build.py --add-data` packages `assets/` inside the executable.
 - If a PNG id is missing (typo, forgotten copy), the drawer silently draws

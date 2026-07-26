@@ -12,7 +12,7 @@ from ..core.registry import Registry
 
 
 class Charm:
-    def __init__(self, cid, slot, name, desc, hue, cost, apply, unapply):
+    def __init__(self, cid, slot, name, desc, hue, cost, apply, unapply, icon=None):
         self.id = cid
         self.slot = slot            # 'head' | 'back' | 'tail'
         self.name = name
@@ -22,10 +22,17 @@ class Charm:
         self.color = palette.vibrant(hue, 0.82, 1.0)
         self.apply = apply
         self.unapply = unapply
+        # Issue #25: charms can override the icon key so they don't
+        # collide with weapons that share an id. The 'ferrao' charm
+        # (rabada envenena) and the 'ferrao' weapon (Ferrão Teleguiado)
+        # both default to icon key 'ferrao' -- the charm now overrides
+        # to 'ferrao_charm' so each can have its own art. Falls back
+        # to the cid if no override is set (preserves existing behavior).
+        self.icon = icon or cid
 
 
-def _c(cid, slot, name, desc, hue, cost, ap, un):
-    return Charm(cid, slot, name, desc, hue, cost, ap, un)
+def _c(cid, slot, name, desc, hue, cost, ap, un, icon=None):
+    return Charm(cid, slot, name, desc, hue, cost, ap, un, icon=icon)
 
 
 # ---- head ----------------------------------------------------------------- #
@@ -47,7 +54,12 @@ def _glandula_ap(p, g): p.gain_weapon('esporos'); p.genome.spore_sacs = True
 def _glandula_un(p, g): p.genome.spore_sacs = False       # weapon stays; sacs hidden
 
 # ---- tail ----------------------------------------------------------------- #
-def _tail_restore(p): return 'club' if 'club' in p.mutations else 'normal'
+# The club tail used to be a level-up mutation, so unequipping a tail charm
+# used to peek at `player.mutations` to restore it. Issue #22 made the club
+# charm-only, so 'club' can never be in player.mutations -- the only tail
+# state to restore to is 'normal' (character-default tails come from the
+# Genome, which a charm unequip should not erase).
+def _tail_restore(p): return 'normal'
 def _ferrao_ap(p, g): p.genome.tail = 'sting'
 def _ferrao_un(p, g): p.genome.tail = _tail_restore(p)
 def _clava_ap(p, g): p.genome.tail = 'club'
@@ -64,7 +76,8 @@ CHARMS_LIST = [
     _c('espinhos', 'back', 'Espinhos',           'dano de contato',          330, 32, _espinhos_ap, _espinhos_un),
     _c('asas',     'back', 'Asas de Besouro',    '+velocidade e dash',       175, 38, _asas_ap, _asas_un),
     _c('glandula', 'back', 'Glandula de Esporos', 'libera a arma de esporos', 135, 46, _glandula_ap, _glandula_un),
-    _c('ferrao',   'tail', 'Ferrao',             'rabada envenena',           18, 34, _ferrao_ap, _ferrao_un),
+    _c('ferrao',   'tail', 'Ferrao',             'rabada envenena',           18, 34, _ferrao_ap, _ferrao_un,
+       icon='ferrao_charm'),    # issue #25: distinct from the 'ferrao' weapon's icon
     _c('clava',    'tail', 'Cauda-Clava',        'rabada: +dano e empurrao',  15, 34, _clava_ap, _clava_un),
     _c('nectar',   'tail', 'Glandula de Nectar', 'regeneracao de vida',       45, 36, _nectar_ap, _nectar_un),
 ]

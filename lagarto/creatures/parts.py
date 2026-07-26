@@ -13,14 +13,73 @@ import pygame
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, lerp
+from ..anim.anim import PhaseOscillator
 
 
 def _poly(surf, cam, pts, fill, edge_w=1):
-    sp = [cam.w2s(p) for p in pts]
+    sp = cam.w2s_many(pts)
     if len(sp) >= 3:
         pygame.draw.polygon(surf, fill, sp)
         pygame.draw.polygon(surf, C.COL_INK, sp, max(1, int(edge_w * cam.zoom)))
     return sp
+
+
+# --------------------------------------------------------------------------- #
+# Per-part oscillator presets (issue #4 -- PhaseOscillator instances)          #
+# --------------------------------------------------------------------------- #
+# Every oscillating body part used to inline its own
+# ``math.sin(creature.wobble * k + i * gap) * amp``. Each now reads from a
+# PhaseOscillator on the creature, so per-species tuning is editing this table
+# instead of hunting sin() calls through the draw code.
+#
+# The oscillators are driven by ``creature.wobble``, NOT by their own dt
+# accumulator, which buys two things for free: the rate stays exactly what the
+# inline sines had (wobble advances at dt*6, so a preset speed of 1.3 really is
+# the old ``wobble * 1.3``), and creatures stay desynchronised, because wobble
+# is seeded per creature at random. An oscillator ticking its own time from
+# zero would put every creature's fins in lockstep.
+OSC_PRESETS = {
+    'spikes':     dict(speed=1.3, amplitude=0.18, phase_gap=0.5),
+    'fins':       dict(speed=2.0, amplitude=0.30, phase_gap=1.0),
+    'antennae':   dict(speed=3.0, amplitude=0.30, phase_gap=1.0),
+    'wings':      dict(speed=7.0, amplitude=1.00, phase_gap=0.0),   # abs(sin) flap
+    'spore_sacs': dict(speed=3.0, amplitude=0.16, phase_gap=1.0),
+    'tail_ripple': dict(speed=2.2, amplitude=1.00, phase_gap=-0.9),  # wave runs tip->base
+    'arms':       dict(speed=2.4, amplitude=1.00, phase_gap=-0.9),
+}
+
+
+def init_oscillators(creature):
+    """Build the per-creature PhaseOscillator set.
+
+    Called from ``Lizard.__init__`` and again from ``rebuild_body``, so a
+    creature that mutates fins mid-run animates them. Idempotent: existing
+    oscillators are kept so a rebuild does not reset a wave mid-swing.
+    """
+    existing = getattr(creature, 'osc', None) or {}
+    creature.osc = {k: existing.get(k) or PhaseOscillator(**p)
+                    for k, p in OSC_PRESETS.items()}
+
+
+def update_oscillators(creature):
+    """Point every oscillator at the creature's wobble clock.
+
+    Called from ``Lizard.integrate`` after wobble advances. Sharing wobble is
+    what keeps these byte-identical to the inline sines they replaced.
+    """
+    osc = getattr(creature, 'osc', None)
+    if not osc:
+        return
+    for o in osc.values():
+        o.time = creature.wobble
+
+
+def _osc_offset(creature, key, i):
+    """Read oscillator ``key`` at segment ``i``; 0.0 if the creature has none."""
+    osc = getattr(creature, 'osc', None)
+    if not osc or key not in osc:
+        return 0.0
+    return osc[key].offset(i)
 
 
 def draw_spikes(surf, cam, creature):
@@ -40,7 +99,7 @@ def draw_spikes(surf, cam, creature):
         fwd = safe_norm(js[i] - js[i + 1])
         back = -fwd
         perp = Vector2(-fwd.y, fwd.x) * side
-        sway = math.sin(creature.wobble * 1.3 + i * 0.5) * 0.18
+        sway = _osc_offset(creature, 'spikes', i)
         base = js[i]
         base_a = base + fwd * (rad[i] * 0.42)
         base_b = base + back * (rad[i] * 0.42)
@@ -62,8 +121,10 @@ def draw_plates(surf, cam, creature):
     rad = creature.spine.radii
     edge = palette.lighten(creature.color, 0.28)
     w = max(1, int((1 + g.plates) * cam.zoom))
+    ps = getattr(creature, 'plate_spring', None)     # A3 (#6): lean into accel
+    tilt = ps.value if ps is not None else 0.0
     for i in range(1, len(js) - 1):
-        fwd = safe_norm(js[i] - js[i + 1])
+        fwd = safe_norm(js[i] - js[i + 1]).rotate(tilt)
         perp = Vector2(-fwd.y, fwd.x)
         c = js[i]
         left = c + perp * rad[i] * 0.72
@@ -76,14 +137,16 @@ def draw_plates(surf, cam, creature):
 def draw_horns(surf, cam, creature):
     """Smooth, curved, tapered horns sweeping forward from the head.
 
-    Rigid on purpose (bone, not hair): no sway, no lag -- they move only
-    because the head they're attached to moves.
+    Bone-stiff, not hair: they sway a few degrees against a sharp turn (A3, #6)
+    via ``horn_spring`` and settle fast -- momentum of a rigid mass, not a
+    floppy lag.
     """
     g = creature.genome
     if g.horns <= 0:
         return
     head = creature.spine.joints[0]
-    d = creature.spine.head_dir()
+    hs = getattr(creature, 'horn_spring', None)
+    d = creature.spine.head_dir().rotate(hs.value if hs is not None else 0.0)
     perp = Vector2(-d.y, d.x)
     r = creature.max_r
     fill = palette.lighten(creature.color, 0.25)
@@ -151,7 +214,7 @@ def draw_fins(surf, cam, creature):
             continue
         fwd = safe_norm(js[i] - js[i + 1])
         perp = Vector2(-fwd.y, fwd.x)
-        wob = math.sin(creature.wobble * 2 + i) * 0.3
+        wob = _osc_offset(creature, 'fins', i)
         for s in (-1, 1):
             b1 = js[i] + perp * (s * rad[i])
             b2 = js[i + 1] + perp * (s * rad[i + 1])
@@ -171,7 +234,7 @@ def draw_antennae(surf, cam, creature):
     col = palette.darken(creature.color, 0.3)
     for s in (-1, 1):
         base = head + d * (r * 0.2) + perp * (s * r * 0.35)
-        wig = math.sin(creature.wobble * 3 + s) * 0.3
+        wig = _osc_offset(creature, 'antennae', s)
         mid = base + d * (r * 0.9) + perp * (s * r * (0.5 + wig))
         tip = mid + d * (r * 0.5) + perp * (s * r * (0.8 + wig))
         pygame.draw.line(surf, col, cam.w2s(base), cam.w2s(mid), max(1, int(2 * cam.zoom)))
@@ -187,7 +250,7 @@ def draw_wings(surf, cam, creature):
         return
     fwd = safe_norm(js[i] - js[i + 1])
     perp = Vector2(-fwd.y, fwd.x)
-    flap = 0.5 + 0.5 * abs(math.sin(creature.wobble * 7))
+    flap = 0.5 + 0.5 * abs(_osc_offset(creature, 'wings', 0))
     col = palette.lighten(creature.color, 0.4)
     for s in (-1, 1):
         b1 = js[i] + perp * (s * rad[i] * 0.9)
@@ -202,7 +265,7 @@ def draw_extra_eyes(surf, cam, creature):
     d = creature.spine.head_dir()
     perp = Vector2(-d.y, d.x)
     r = creature.max_r
-    look = creature._look_dir()
+    look = creature._pupil_offset()
     for k in range(n):
         s = -1 if k % 2 == 0 else 1
         row = k // 2
@@ -216,7 +279,7 @@ def draw_spore_sacs(surf, cam, creature):
     js, rad = creature.spine.joints, creature.spine.radii
     col = palette.vibrant(135, 0.7, 0.92)
     for i in range(2, len(js) - 2, 3):
-        pu = 1 + 0.16 * math.sin(creature.wobble * 3 + i)
+        pu = 1 + _osc_offset(creature, 'spore_sacs', i)
         p = cam.w2s(js[i])
         rr = max(2, int(rad[i] * 0.5 * cam.zoom * pu))
         palette.glow(surf, p, rr * 2, col, 0.4)
