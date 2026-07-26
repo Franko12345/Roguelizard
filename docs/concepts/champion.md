@@ -4,7 +4,7 @@ A named variant of a [Species](./species.md) whose visual trait _explains_
 its ability, plus an orthogonal **modifier** that can stack on top. Model
 comes from Rain World's lizard subraces.
 
-Defined in `lagarto/champions.py`.
+Defined in `lagarto/creatures/champions/`.
 
 ## Variants: name earns the trait
 

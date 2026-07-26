@@ -131,6 +131,17 @@ BOSS_POOL = {
                      personality=lambda: bossai.wall_personality(),
                      scar=None,
                      overrides=dict(hue=0, sat=0.3, val=0.45)),
+    # ANKH (B11, tier 7): "A Eterna". A re-skin of the horned lizard is the
+    # RIGHT body here -- the design calls for a translucent golden lizard, and
+    # the fight's identity is the 4-phase memory structure, not a new anatomy.
+    # (Contrast A Muralha, which needed plan='fixed' because a wall is not a
+    # lizard.) NOT the run's climax: the Primordial still closes NORMAL mode.
+    'ankh': dict(species='horned', name='ANKH',
+                 emblem='boss_ankh',
+                 phases=lambda: bossai.ankh_phases(),
+                 personality=lambda: bossai.ankh_personality(),
+                 scar=None,
+                 overrides=dict(hue=45, sat=0.35, val=1.0, spikes=0, plates=2)),
 }
 
 # tier (wave // BOSS_EVERY) -> which pool ids can be rolled there. Ranges,
@@ -140,7 +151,8 @@ BOSS_TIER_POOLS = [
     (range(1, 4), ['rei_lagarto', 'centopeiadeira', 'kraken_mor']),   # onda 5/10/15
     (range(4, 6), ['mae_escaravelho', 'aranha_rei', 'serpente_cristal',
                    'terror_alado', 'olho_sismico']),                  # onda 20/25 (so infinito)
-    (range(6, 10_000), ['muralha']),                                    # tier 6+ (onda 30+)
+    (range(6, 7), ['muralha']),                                         # tier 6 (onda 30)
+    (range(7, 10_000), ['muralha', 'ankh']),                            # tier 7+ (onda 35+)
 ]
 BOSS_FINAL = 'primordial'   # is_final always this one -- the run's fixed climax,
                            # not part of the roll (matches Isaac's true-final-boss)
@@ -263,6 +275,54 @@ class Nest:
                             -math.pi / 2, -math.pi / 2 + f * C.TAU, max(2, int(3 * cam.zoom)))
 
 
+# --------------------------------------------------------------------------- #
+#  Per-wave difficulty curve (issue #23)                                       #
+# --------------------------------------------------------------------------- #
+# Every wave-based dial lives here so the SHAPE of the curve is in one place
+# instead of inline at each use site. The knee constants are in config.py.
+# Below its knee each curve is byte-identical to the old linear one, so the
+# early game is untouched -- the ramp only bites where the snowball started.
+
+def wave_hp_bonus(wave):
+    """HP added on top of an enemy's base HP, by wave.
+
+    Pre-knee: the old linear ``WAVE_HP_BASE * wave``. Post-knee: plus a
+    super-linear term, so late waves threaten a player who has stacked might.
+    """
+    bonus = wave * C.WAVE_HP_BASE
+    if wave > C.WAVE_HP_KNEE:
+        bonus += ((wave - C.WAVE_HP_KNEE) ** C.WAVE_HP_POST_KNEE_EXP
+                  * C.WAVE_HP_POST_KNEE_MULT)
+    return int(bonus)
+
+
+def wave_speed_mul(wave):
+    """Enemy speed multiplier by wave (1.0 = base). Caps at +75% late."""
+    base = min(C.WAVE_SPEED_MAX, wave * C.WAVE_SPEED_PER_WAVE)
+    post = 0.0
+    if wave > C.WAVE_SPEED_KNEE:
+        post = min(C.WAVE_SPEED_POST_KNEE_MAX,
+                   (wave - C.WAVE_SPEED_KNEE) * C.WAVE_SPEED_POST_KNEE_PER_WAVE)
+    return 1.0 + base + post
+
+
+def wave_budget(wave, theme_budget):
+    """Total enemies the wave may spawn, before the boss-round halving."""
+    base = (3 + wave * 1.1) * theme_budget
+    if wave > C.WAVE_BUDGET_KNEE:
+        base += (wave - C.WAVE_BUDGET_KNEE) * C.WAVE_BUDGET_POST_KNEE_MULT * theme_budget
+    return int(base)
+
+
+def wave_cap(wave, theme_cap):
+    """How many enemies may be alive at once, before the boss-round halving."""
+    bonus = 0
+    if wave > C.WAVE_CAP_KNEE:
+        bonus = min(C.WAVE_CAP_POST_KNEE_MAX,
+                    (wave - C.WAVE_CAP_KNEE) // C.WAVE_CAP_POST_KNEE_PER_WAVES)
+    return theme_cap + bonus
+
+
 def make_boss(game, boss_id, tier, pos, is_final=False):
     """Build one boss at ``pos``, scaled to ``tier``, and return it (unspawned).
 
@@ -374,7 +434,7 @@ class RoundManager:
         self.theme = theme or self._next_theme or self._pick_theme()
         self._next_theme = None
         spec = THEMES[self.theme]
-        self.budget = int((3 + self.wave * 1.1) * spec['budget'])
+        self.budget = wave_budget(self.wave, spec['budget'])
         if self.is_boss_round:
             self.budget = max(3, self.budget // 2)     # fewer mobs, one huge threat
         self.state = 'combat'
@@ -472,15 +532,17 @@ class RoundManager:
                 m.update(dt, g)
             self.marks = [m for m in self.marks if not m.done]
             # emit from nests up to the alive cap and remaining budget
-            if self.budget > 0 and self._alive_enemies() + len(self.marks) < spec['cap']:
+            cap = wave_cap(self.wave, spec['cap'])
+            if self.budget > 0 and self._alive_enemies() + len(self.marks) < cap:
                 live = [n for n in self.nests if not n.dead]
                 for n in live:
                     if n.update(dt) and self.budget > 0 and \
-                            self._alive_enemies() + len(self.marks) < spec['cap']:
+                            self._alive_enemies() + len(self.marks) < cap:
                         key = random.choice(spec['pool'])
                         pos = n.pos + random_dir(random.uniform(20, 70))
-                        self.marks.append(SpawnMark(pos, key, int(self.wave * 0.7),
-                                                    1.0 + min(self.wave * 0.02, 0.4)))
+                        self.marks.append(SpawnMark(pos, key,
+                                                    wave_hp_bonus(self.wave),
+                                                    wave_speed_mul(self.wave)))
                         self.budget -= 1
                         n.reset_emit(self.wave > 4)
             else:

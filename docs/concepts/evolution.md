@@ -3,7 +3,7 @@
 The level-up flow: XP → 3 cards → apply mutation. Cards can be stats,
 parts, or [Weapons](./weapon.md). Sinergies fire on `apply_mutation`.
 
-Defined in `lagarto/evolution.py`.
+Defined in `lagarto/combat/evolution/`.
 
 ## Sources of evolution
 
@@ -30,7 +30,7 @@ The card pool mixes:
   equipped ([VIBORA](./character.md) caps at 2).
 - **Passive cards** (`MUTATIONS`) — stats (health, speed, dash, energy,
   regen, XP, tongue, thorns, venom, wings) and parts (spikes/plates/
-  horns/legs/club).
+  horns/legs). The club tail is **charm-only** — see [Charm](./charm.md).
 
 Input handled in `app.py` (1/2/3, arrows + ENTER, click).
 

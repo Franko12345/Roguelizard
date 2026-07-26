@@ -5,7 +5,7 @@ An automatic attack the player owns at a level. Fires every frame via
 6 equipped ([VIBORA](./character.md) caps at 2 — its exclusive
 mechanic).
 
-Defined in `lagarto/weapons.py`. Damage scaling constrained by
+Defined in `lagarto/combat/weapons/`. Damage scaling constrained by
 [ADR-0008](../adr/0008-might-scales-all-damage.md).
 
 ## Global stats

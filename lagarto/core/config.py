@@ -160,8 +160,34 @@ CHAR_LARVA_MAX_SLOTS = 6
 # campeoes fica MODESTA de proposito: campeao e ameaca pelo que FAZ; um que so
 # tem mais vida nao ensina nada e vira pedagio.
 CHAMP_CHANCE_BASE = 0.05
-CHAMP_CHANCE_PER_WAVE = 0.012
-CHAMP_CHANCE_MAX = 0.22
+# Issue #23: rampa mais ingreme a partir da onda 7 (antes 0.012/onda ate 0.22).
+# Mid-game tinha pouquissimo campeao; agora ondas 7+ tem pressao elite real.
+CHAMP_CHANCE_PER_WAVE = 0.018
+CHAMP_CHANCE_MAX = 0.30
+
+# --- dificuldade por onda (rounds.py) --------------------------------------- #
+# Issue #23: antes o HP subia +0.7/onda linear e a velocidade capava em +40%.
+# O jogador entrava em snowball no meio da run porque os inimigos morriam antes
+# de chegar nele. Os "joelhos" sao propositais: ondas 1-6 ficam EXATAMENTE como
+# eram, para nao punir quem esta aprendendo; a rampa engata onde o snowball
+# comecava. Toda a curva vive em rounds.wave_* -- estes sao so os numeros.
+WAVE_HP_KNEE = 10               # onda a partir da qual o HP escala super-linear
+WAVE_HP_BASE = 0.7              # bonus de HP por onda antes do joelho (linear)
+WAVE_HP_POST_KNEE_EXP = 1.4     # expoente do termo pos-joelho
+WAVE_HP_POST_KNEE_MULT = 1.2    # multiplicador do termo pos-joelho
+
+WAVE_SPEED_KNEE = 10
+WAVE_SPEED_PER_WAVE = 0.025     # antes 0.02/onda
+WAVE_SPEED_MAX = 0.60           # antes 0.40 (cap em +60%)
+WAVE_SPEED_POST_KNEE_PER_WAVE = 0.015
+WAVE_SPEED_POST_KNEE_MAX = 0.15  # +15% extra no fim, somando +75%
+
+WAVE_BUDGET_KNEE = 10
+WAVE_BUDGET_POST_KNEE_MULT = 0.6   # orcamento extra por onda pos-joelho
+
+WAVE_CAP_KNEE = 8               # onda a partir da qual o teto de vivos cresce
+WAVE_CAP_POST_KNEE_PER_WAVES = 2   # +1 inimigo a cada 2 ondas pos-joelho
+WAVE_CAP_POST_KNEE_MAX = 4      # teto do bonus, em cima do cap do tema
 CHAMP_MODIFIER_CHANCE = 0.28   # variante que ainda ganha um modificador em cima
 
 # Velocidade ABSOLUTA do filhote (jogador ~224, dash ~672): mais rapido que andar,

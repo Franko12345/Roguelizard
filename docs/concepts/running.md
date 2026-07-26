@@ -28,7 +28,7 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python lizard_game.py --smoke 90
 
 ## Assets — the invariant is broken on purpose
 
-Phase 7 introduced `assets/` + `lagarto/assets.py`: weapon / mutation /
+Phase 7 introduced `assets/` + `lagarto/render/assets.py`: weapon / mutation /
 charm icons prefer a pixel-art PNG when it exists, and fall back to the
 procedural drawing (`icons.draw`). A build without the `assets/`
 directory (or an ID without a PNG) runs identically. Sound and music

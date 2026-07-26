@@ -4,7 +4,7 @@ A two-bone IK limb with foot planting. Every `plan='normal'` creature has
 `Genome.legs` of them. The gait is diagonal by default; the spider
 (`Genome.radial=True`) uses angular rest positions instead.
 
-Defined in `lagarto/leg.py`.
+Defined in `lagarto/anim/leg.py`.
 
 ## Foot planting
 

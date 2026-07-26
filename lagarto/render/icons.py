@@ -575,6 +575,22 @@ def _boss_crystal(s, c, r, col):
     pygame.draw.line(s, palette.lighten(col, 0.6), top, bot, 1)
 
 
+def _boss_ankh(s, c, r, col):
+    """ANKH: the loop-and-cross key of life -- the mark of the one that
+    keeps coming back wearing the shapes you already killed."""
+    w = max(1, r // 5)
+    lw = max(1, r // 8)
+    top = int(c[1] - r * 0.15)
+    # the loop
+    pygame.draw.circle(s, col, (int(c[0]), int(c[1] - r * 0.5)), int(r * 0.42), w)
+    pygame.draw.circle(s, INK, (int(c[0]), int(c[1] - r * 0.5)), int(r * 0.42), lw)
+    # the stem
+    pygame.draw.line(s, col, (c[0], top), (c[0], c[1] + r * 0.9), w)
+    # the crossbar
+    pygame.draw.line(s, col, (c[0] - r * 0.55, c[1] + r * 0.12),
+                     (c[0] + r * 0.55, c[1] + r * 0.12), w)
+
+
 def _boss_primordial_flame(s, c, r, col):
     """PRIMORDIAL: an ancient flame/rune -- the final boss's mark."""
     pts = [(c[0], c[1] - r), (c[0] + r * 0.55, c[1] - r * 0.1),
@@ -619,6 +635,7 @@ ICONS = {
     'boss_primordial': _boss_primordial_flame, 'boss_aranha_rei': _boss_web,
     'boss_serpente_cristal': _boss_crystal, 'boss_terror_alado': _boss_wing,
     'boss_olho_sismico': _boss_kraken_eye,   # an eye mark for the eye boss (reused)
+    'boss_ankh': _boss_ankh,
 }
 
 

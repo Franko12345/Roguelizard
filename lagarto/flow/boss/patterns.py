@@ -679,6 +679,35 @@ def muralha_phases():
     ]
 
 
+# --------------------------------------------------------------------------- #
+#  ANKH (B11, tier 7): "A Eterna" -- 4 phases, each the memory of a boss you    #
+#  already beat. It is the penultimate fight, NOT the climax: the Primordial    #
+#  is still the run's final boss.                                              #
+# --------------------------------------------------------------------------- #
+
+def ankh_phases():
+    """4 fases (75/50/25) -- a excecao a regra das 3, porque a estrutura E a
+    ideia: cada fase revive um chefe anterior, entao sao 3 memorias + a forma
+    propria dela.
+
+    Fase 1 = O Cacador (memoria do Rei Lagarto: investida e bote).
+    Fase 2 = O Tanque (memoria da Mae-Escaravelho: area e ninhada).
+    Fase 3 = O Tentaculo (memoria do Kraken-Mor: puxao e chuva de bracos).
+    Fase 4 = A Eterna: tudo junto, ritmo de bullet hell.
+
+    Todos os patterns ja existem -- e o ponto do chefe. ANKH nao traz ataque
+    novo nenhum: ela devolve os que voce ja aprendeu a ler, sobrepostos.
+    """
+    return [
+        dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0),
+        dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95),
+        dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85),
+        dict(hp_frac=0.25,
+             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral'],
+             cd_mul=0.6),
+    ]
+
+
 def wall_personality():
     """Implacavel: voce nao passa. A arena foi feita pra voce morrer aqui.
     Sem estado de frustracao: so calmo e enraivecido, sem meio-termo.
