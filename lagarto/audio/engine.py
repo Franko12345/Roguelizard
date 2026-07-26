@@ -149,6 +149,14 @@ def _recipe(name, pitch=1.0):
     if name == 'kill':
         return _mix(_tone(400 * p, 0.28, 'noise', decay=13, vol=0.45, sweep=-0.8),
                     _tone(190 * p, 0.3, 'saw', decay=10, vol=0.3, sweep=-0.6))
+    if name == 'tongue_out':
+        # the slingshot: a short rising thwip, elastic rather than percussive
+        return _mix(_tone(240 * p, 0.09, 'saw', decay=34, vol=0.24, sweep=1.7),
+                    _tone(900 * p, 0.05, 'noise', decay=60, vol=0.12, sweep=0.8))
+    if name == 'tongue_hit':
+        # wet slap: a noise transient over a short low thud
+        return _mix(_tone(190 * p, 0.06, 'noise', decay=52, vol=0.34),
+                    _tone(115 * p, 0.09, 'sine', decay=32, vol=0.3, sweep=-0.55))
     if name == 'eat':
         return _tone(430 * p, 0.13, 'sine', decay=20, vol=0.4, sweep=0.9)
     if name == 'levelup':
@@ -202,6 +210,7 @@ def _recipe(name, pitch=1.0):
 
 SFX_NAMES = ('dash', 'shoot', 'hit', 'kill', 'eat', 'levelup', 'buy',
              'hurt', 'nest', 'wave', 'ui', 'evolve', 'victory',
+             'tongue_out', 'tongue_hit',
              'w_spit', 'w_homing', 'w_web', 'w_aura', 'w_orbit', 'w_puddle')
 
 

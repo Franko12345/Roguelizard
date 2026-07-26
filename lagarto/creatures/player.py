@@ -5,6 +5,7 @@ here is the run state a human drives -- energy, charms, items, mutations, xp.
 """
 
 import math
+import random
 from pygame import Vector2
 import pygame
 
@@ -49,8 +50,19 @@ class Player(Lizard):
         self.whip_hits = set()    # one hit per enemy per swing (see dash_hits)
         self.whip_side = 1
         self.whip_dir = Vector2()
+        # Tongue. ``tongue_t`` is elapsed SECONDS since the launch, 0 = idle, and
+        # the three phase lengths in config carve it into out / stick / reel.
+        # Everything visual is derived from it, so there is no second clock to
+        # drift out of sync with the one the hit resolves against.
         self.tongue_t = 0.0
         self.tongue_target = None
+        self.tongue_grabbed = None      # what the tip is carrying home
+        self._tongue_anchor = Vector2()  # where the tip stuck; reel lerps from here
+        self._tongue_hit = False         # the connect beat fires exactly once
+        self._tongue_shaft = []          # interior shaft points (springs)
+        self._tongue_shaft_v = []
+        self._tongue_wave = 0.0          # travelling undulation phase
+        self._tongue_len = 0.0           # reach at the taut frame (see _tongue_bulge)
         # Issue #5: every offensive verb goes through an Anticipation gate, so
         # `update` returns the action exactly once per press and holding a
         # button can never repeat-fire. The durations are 0 by default (see
@@ -405,30 +417,9 @@ class Player(Lizard):
             self.squat_bias = C.TONGUE_ANTIC_SQUAT
         if self.tongue_antic.update(dt) == 'tongue' and self.tongue_t == 0 \
                 and self.energy >= C.TONGUE_COST:
-            self.tongue_t = 0.001
-            self.energy -= C.TONGUE_COST                       # tongue costs energy
-            self.tongue_target = self._pending_tongue_target
-            self._pending_tongue_target = None
+            self._launch_tongue(game)
         if self.tongue_t > 0:
-            self.tongue_t += dt / 0.22
-            if self.tongue_t >= 1:
-                self.tongue_t = 0.0
-                t = self.tongue_target
-                if t and not t.dead:
-                    if getattr(t, 'kind', None) == 'enemy':    # tongue: hurt + move
-                        t.take_hit(game, safe_norm(t.pos - self.pos), 2)
-                        if self.tongue_throw:      # Arremesso: fling OUT, not in
-                            t.vel += safe_norm(t.pos - self.pos) * C.ITEM_THROW_SPEED
-                        else:
-                            t.vel += safe_norm(self.pos - t.pos) * 200   # yank in
-                        if self.tongue_drain:      # Sanguessuga: steal life
-                            self.health = min(self.max_health,
-                                              self.health + C.ITEM_DRAIN)
-                            game.fx.popup(self.pos, "+vida", (120, 240, 140))
-                        game.fx.spark_burst(t.pos, C.COL_FX_SPARK, 7, 240)
-                    else:
-                        game.eat(self, t)
-                self.tongue_target = None
+            self._tongue_step(dt, game)
 
         # Iman de Polen: coletaveis (fruta/inseto/ovo) driftam ate voce. Pollen is
         # a counter, not a world pickup, so the magnet pulls the things you can
@@ -651,55 +642,271 @@ class Player(Lizard):
                     game.punch(0.05, 7)
                 break
 
+    # ---- tongue ---------------------------------------------------------- #
+    # A chameleon slingshot in three beats. OUT throws the tip at the target and
+    # decelerates into it, STICK is the frame it snaps taut (where the hit lands
+    # and all the impact juice fires), REEL drags whatever it caught home. The
+    # shaft is a spring chain pinned at both ends, so it whips and undulates
+    # without ever moving the tip -- the tip is kinematic, and the hit and the
+    # drawing read the same function for it.
+
+    def _mouth(self):
+        return self.spine.joints[0] + self.spine.head_dir() * self.max_r
+
+    def _tongue_aim(self):
+        """Where the tip is headed. Follows a live target, so the tongue tracks
+        something that moves while the tongue is in the air."""
+        t = self.tongue_target
+        if t is not None and not t.dead:
+            return Vector2(t.pos)
+        return self.pos + self.aim * C.TONGUE_REACH_MISS
+
+    def tongue_phase(self):
+        """``(name, u)`` -- which beat, and progress 0..1 through it."""
+        t = self.tongue_t
+        if t <= 0:
+            return None, 0.0
+        if t < C.TONGUE_OUT_T:
+            return 'out', t / C.TONGUE_OUT_T
+        t -= C.TONGUE_OUT_T
+        if t < C.TONGUE_STICK_T:
+            return 'stick', t / C.TONGUE_STICK_T
+        t -= C.TONGUE_STICK_T
+        if t < C.TONGUE_REEL_T:
+            return 'reel', t / C.TONGUE_REEL_T
+        return None, 1.0
+
     def tongue_tip(self):
         """(tip, mouth) -- THE tongue's position, for hits and for the drawing.
 
-        Both the hit resolution and the drawn curve read this one function, so
-        what you see on screen is where the tongue actually is. Anything that
-        wants to bend the tongue bends the MIDDLE of the curve (see
+        One function, read by both, so what you see is where the tongue is.
+        Anything that wants to bend the tongue bends the SHAFT (see
         ``tongue_path``), never this endpoint.
         """
         if self.tongue_t <= 0:
             return None
-        reach = math.sin(self.tongue_t * math.pi)
-        if self.tongue_target and not self.tongue_target.dead:
-            aim = Vector2(self.tongue_target.pos)
-        else:
-            aim = self.pos + self.aim * 210
-        mouth = self.spine.joints[0] + self.spine.head_dir() * self.max_r
-        return mouth.lerp(aim, reach), mouth
+        mouth = self._mouth()
+        ph, u = self.tongue_phase()
+        if ph == 'out':
+            # ease-out cubic: leaves the mouth explosively, decelerates in
+            return mouth.lerp(self._tongue_aim(), 1.0 - (1.0 - u) ** 3), mouth
+        if ph == 'stick':
+            # springs past the target and settles -- the slingshot snapping taut
+            aim = self._tongue_aim()
+            over = C.TONGUE_OVERSHOOT * math.sin(u * math.pi * 2.0) * (1.0 - u)
+            return aim + (aim - mouth) * over, mouth
+        # reel: from where it stuck back into the mouth, smoothstepped
+        e = u * u * (3.0 - 2.0 * u)
+        return self._tongue_anchor.lerp(mouth, e), mouth
 
     def tongue_path(self):
-        """(mouth, mid, tip) control points of the chameleon arc.
+        """The tongue as a list of world points, mouth first, tip last.
 
-        A quadratic Bezier: the ends are the mouth and the true tip, and only
-        the middle control point moves, so the curve always starts at the mouth
-        and ends exactly where ``tongue_tip`` says. ``mid`` is pure geometry off
-        ``tongue_t`` -- no spring, no stored state, so there is nothing that can
-        lag behind the kinematic tip and draw the tongue somewhere it isn't.
-
-        Two things bend it: a perpendicular sag toward world-down (the weight of
-        the tongue, zero at the mouth and maximal at full reach), and a lag
-        along the shaft that makes the mid lead on the way out and trail on the
-        way back -- which is what reads as the curl-back on retraction.
+        Interior points are springs (``_tongue_shaft``) chasing an ideal curve:
+        a gravity sag plus a wave travelling toward the tip, both scaled by
+        ``sin(s * pi)`` so they vanish at the pinned ends. The springs are what
+        make it whip on the launch and slacken on the way back; the pinning is
+        what keeps the tip honest.
         """
         t = self.tongue_tip()
-        if t is None:
+        if t is None or not self._tongue_shaft:
             return None
         tip, mouth = t
-        along = (tip - mouth) * 0.5
-        reach = math.sin(self.tongue_t * math.pi)
-        perp = Vector2(-along.y, along.x)
-        if perp.y < 0:                       # want the perpendicular pointing DOWN
-            perp = -perp
-        if perp.length_squared() > 1e-6:
-            # Sag scales with how much tongue is hanging out there, not with the
-            # lizard's size: a long reach droops, a short flick barely bends.
-            perp = perp.normalize() * (along.length() * 0.30)
+        return [mouth] + [Vector2(p) for p in self._tongue_shaft] + [tip]
+
+    def _tongue_bulge(self, length):
+        """Lateral amplitude in ABSOLUTE px -- how much tongue is spare.
+
+        A thrown tongue is ballistic and nearly straight. A retracting one
+        conserves material: the mouth and the tip close on each other but the
+        tongue is still as long as it was, so the excess bows out to the side.
+        Scaling the bow by the CURRENT length instead makes it disappear exactly
+        when the tongue is longest, which is what made it read as a stiff arc.
+        """
+        ph, _u = self.tongue_phase()
+        if ph != 'reel':
+            return length * C.TONGUE_TAUT_BOW
+        excess = self._tongue_len * C.TONGUE_COIL - length
+        return clamp(excess, 0.0, self._tongue_len * C.TONGUE_COIL_MAX)
+
+    def _tongue_ideal(self, i, mouth, tip, bulge):
+        """Rest position of interior shaft point ``i``."""
+        n = C.TONGUE_SEGMENTS
+        s = (i + 1) / (n - 1.0)
+        d = tip - mouth
+        length = d.length()
+        if length < 1e-4:
+            return Vector2(mouth)
+        d = d / length
+        env = math.sin(s * math.pi)          # 0 at both pinned ends
+        down = Vector2(-d.y, d.x)
+        if down.y < 0:                       # sag toward world down
+            down = -down
+        side = Vector2(-d.y, d.x)
+        sag = bulge * C.TONGUE_SAG_SHARE * env
+        wave = (bulge * C.TONGUE_WAVE_SHARE * env
+                * math.sin(s * C.TONGUE_WAVE_CYCLES * C.TAU - self._tongue_wave))
+        return mouth + d * (s * length) + down * sag + side * wave
+
+    def _launch_tongue(self, game):
+        """Fire the tongue: commit the target, seed the shaft, sell the launch."""
+        self.tongue_t = 1e-4
+        self.energy -= C.TONGUE_COST
+        self.tongue_target = self._pending_tongue_target
+        self._pending_tongue_target = None
+        self.tongue_grabbed = None
+        self._tongue_hit = False
+        self._tongue_wave = 0.0
+        self._tongue_len = 0.0
+        mouth = self._mouth()
+        # every shaft point starts AT the mouth, so the tongue visibly shoots
+        # out of the head instead of appearing along its full length
+        self._tongue_shaft = [Vector2(mouth) for _ in range(C.TONGUE_SEGMENTS - 2)]
+        self._tongue_shaft_v = [Vector2() for _ in range(C.TONGUE_SEGMENTS - 2)]
+        audio.play('tongue_out', 0.55)
+        game.fx.dust(mouth)
+        game.shake(1.5)
+
+    def _tongue_connect(self, game):
+        """The taut frame: resolve the hit and spend the impact juice."""
+        self._tongue_hit = True
+        tip, mouth = self.tongue_tip()
+        self._tongue_anchor = Vector2(tip)
+        # the material length, frozen here: the reel bulges by whatever of
+        # this the closing endpoints no longer account for
+        self._tongue_len = mouth.distance_to(tip)
+        t = self.tongue_target
+        if t is None or t.dead:
+            game.fx.dust(tip)                # whiffed: a puff, nothing more
+            return
+        audio.play('tongue_hit', 0.6)
+        game.punch(0.045, 5)
+        game.fx.spark_burst(tip, C.COL_FX_SPARK, 9, 260)
+        game.fx.ring(tip, getattr(t, 'color', C.COL_WHITE))
+        # the line snaps taut and tugs the LIZARD toward its catch -- small, but
+        # it is what makes the tongue feel attached to a body with mass
+        self.vel += safe_norm(tip - self.pos) * C.TONGUE_RECOIL
+        if getattr(t, 'kind', None) == 'enemy':
+            away = safe_norm(t.pos - self.pos)
+            t.take_hit(game, away, 2)
+            if self.tongue_throw:            # Arremesso: fling OUT, never carried
+                t.vel += away * C.ITEM_THROW_SPEED
+            else:
+                # A hit cannot knock away something on a leash. take_hit has
+                # just pushed it outward; cancel that component and replace it
+                # with a yank toward the mouth, or the knockback wins and the
+                # reel spends its whole 170 ms undoing it.
+                out = t.vel.dot(away)
+                if out > 0:
+                    t.vel -= away * out
+                t.vel -= away * C.TONGUE_YANK
+                self.tongue_grabbed = t
+            if self.tongue_drain:            # Sanguessuga: steal life
+                self.health = min(self.max_health, self.health + C.ITEM_DRAIN)
+                game.fx.popup(self.pos, "+vida", (120, 240, 140))
         else:
-            perp = Vector2()
-        lag = math.sin(clamp(self.tongue_t + 0.14, 0, 1) * math.pi) - reach
-        return mouth, mouth + along * (1.0 + lag) + perp, tip
+            self.tongue_grabbed = t          # food rides the tip home
+
+    def _tongue_step(self, dt, game):
+        """Advance the tongue one sim step: phase beats, shaft springs, drag."""
+        self.tongue_t += dt
+        ph, u = self.tongue_phase()
+        self._tongue_wave += dt * C.TONGUE_WAVE_SPEED
+
+        if ph in ('stick', 'reel') and not self._tongue_hit:
+            self._tongue_connect(game)       # crossed into STICK: land the hit
+        if ph is None:                        # arrived home
+            self._tongue_finish(game)
+            return
+
+        tip, mouth = self.tongue_tip()
+        # Shaft springs. Critically damped so it whips without jittering, and
+        # advanced with the sim step so the shape is timestep independent.
+        k = C.TONGUE_LAG
+        c = 2.0 * math.sqrt(k)
+        bulge = self._tongue_bulge(mouth.distance_to(tip))
+        for i, (p, v) in enumerate(zip(self._tongue_shaft, self._tongue_shaft_v)):
+            ideal = self._tongue_ideal(i, mouth, tip, bulge)
+            v.x += ((ideal.x - p.x) * k - v.x * c) * dt
+            v.y += ((ideal.y - p.y) * k - v.y * c) * dt
+            p.x += v.x * dt
+            p.y += v.y * dt
+
+        g = self.tongue_grabbed
+        if g is not None and g.dead:
+            self.tongue_grabbed = None       # it died mid-reel; drop it
+        elif g is not None and ph == 'reel':
+            # Only on the way back. During STICK the tip deliberately springs
+            # PAST the target, so hauling the target onto the tip there would
+            # drag it outward by the overshoot -- the wrong direction.
+            if getattr(g, 'kind', None) == 'enemy':
+                # heavy: pulled by force, so the world can still block it
+                g.vel += safe_norm(tip - g.pos) * C.TONGUE_DRAG * dt
+            else:
+                # light: STUCK to the pad, so it rides the tip exactly. A soft
+                # follow lags a tip moving ~900 px/s by tens of pixels, which
+                # reads as food trailing on a string instead of being caught.
+                # Its own velocity is cleared so fleeing cannot fight the glue.
+                g.pos = Vector2(tip)
+                if hasattr(g, 'vel'):
+                    g.vel *= 0.0
+                if random.random() < dt * 26:
+                    game.fx.trail(g.pos, getattr(g, 'color', C.COL_BUG))
+
+    def _draw_tongue(self, surf, cam):
+        """Stroke the shaft twice -- ink underneath, tongue on top.
+
+        Same ink boundary the body has, for ~2 * segments draw calls and no
+        surface allocation. Two things carry the feel:
+
+        - the shaft THINS as it extends, like something elastic under tension,
+          and thickens again as it slackens on the way back;
+        - the sticky tip swells when it is carrying something home.
+        """
+        path = self.tongue_path()
+        if path is None:
+            return
+        pts = cam.w2s_many(path)
+        n = len(pts) - 1
+        z = cam.zoom
+        ph, u = self.tongue_phase()
+        # 1.0 at the mouth, 0 fully retracted: how much tongue is out there
+        mouth, tip = path[0], path[-1]
+        ext = min(1.0, mouth.distance_to(tip) / max(1.0, C.TONGUE_REACH_MISS))
+        stretch = 1.0 - 0.35 * ext           # thin under tension
+        shaft = max(2, int(3.4 * z * stretch))
+        ink = max(1, int(2 * z))
+        carrying = self.tongue_grabbed is not None and not self.tongue_grabbed.dead
+        tip_r = max(3, int((6.5 if carrying else 5.0) * z))
+        body_col = (230, 60, 90)
+        for col, pad in ((C.COL_INK, ink), (body_col, 0)):
+            for i in range(n):
+                # taper toward the tip, where the sticky pad is
+                w = int(shaft * (1.5 + 0.85 * (i / n))) + 2 * pad
+                pygame.draw.line(surf, col, pts[i], pts[i + 1], max(1, w))
+            pygame.draw.circle(surf, col, pts[-1], tip_r + pad)
+        # wet highlight on the pad, offset toward the mouth so it reads as 3D
+        hl = (pts[-1][0] + (pts[-2][0] - pts[-1][0]) * 0.28,
+              pts[-1][1] + (pts[-2][1] - pts[-1][1]) * 0.28)
+        pygame.draw.circle(surf, (255, 180, 200), (int(hl[0]), int(hl[1])),
+                           max(2, int(2.6 * z)))
+        if ph == 'stick':
+            # the taut flash: a ring snapping outward at the moment of contact
+            r = int((6 + 26 * u) * z)
+            palette.glow(surf, pts[-1], r, (255, 210, 180), 0.5 * (1.0 - u))
+
+    def _tongue_finish(self, game):
+        """Back in the mouth: swallow whatever made it home, then reset."""
+        g = self.tongue_grabbed
+        if g is not None and not g.dead and getattr(g, 'kind', None) != 'enemy':
+            game.eat(self, g)                # eat() owns its own burst/popup
+            self.squat_bias = 0.88           # the gulp
+        self.tongue_t = 0.0
+        self.tongue_target = None
+        self.tongue_grabbed = None
+        self._tongue_hit = False
+        self._tongue_shaft = []
+        self._tongue_shaft_v = []
 
     def _draw_slow_mark(self, surf, cam):
         """Show WHY you are slow.
@@ -724,31 +931,7 @@ class Player(Lizard):
             w = weapons.WEAPONS[wid]
             if w.layer == 'under':
                 w.draw(surf, cam, self, self.weapon_state[wid], lvl)
-        path = self.tongue_path()
-        if path is not None:
-            # Sample the arc and stroke it twice: the ink boundary underneath at
-            # shaft width + 2*ink, then the tongue on top. That is the same look
-            # a mask outline gives on a lines+circles shape, for ~20 draw calls
-            # instead of a per-frame surface allocation plus a mask trace.
-            mouth, mid, tip = path
-            p0, p1, p2 = cam.w2s(mouth), cam.w2s(mid), cam.w2s(tip)
-            z = cam.zoom
-            shaft = max(2, int(3 * z))
-            ink = max(1, int(2 * z))
-            tip_r = max(3, int(5 * z))
-            pts = []
-            for i in range(11):
-                u = i / 10.0
-                mu = 1.0 - u
-                pts.append((mu * mu * p0[0] + 2 * mu * u * p1[0] + u * u * p2[0],
-                            mu * mu * p0[1] + 2 * mu * u * p1[1] + u * u * p2[1]))
-            for col, pad in ((C.COL_INK, ink), ((230, 60, 90), 0)):
-                for i in range(10):
-                    # taper: thicker toward the sticky tip
-                    w = int(shaft * (1.0 + 0.7 * (i / 10.0))) + 2 * pad
-                    pygame.draw.line(surf, col, pts[i], pts[i + 1], max(1, w))
-                pygame.draw.circle(surf, col, pts[-1], tip_r + pad)
-            pygame.draw.circle(surf, (255, 180, 200), pts[-1], max(2, int(2.5 * z)))
+        self._draw_tongue(surf, cam)
         super().draw(surf, cam)
         for wid, lvl in self.weapons.items():        # orbitals in front
             w = weapons.WEAPONS[wid]

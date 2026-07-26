@@ -274,6 +274,47 @@ INPUT_BUFFER = 0.15
 DASH_COST = 14
 TONGUE_COST = 8
 
+# --- tongue: a chameleon slingshot, not an arc ------------------------------- #
+# Three beats, and the split between them IS the feel. OUT is short and
+# ease-out so the tongue leaves the mouth explosively and decelerates into the
+# target; STICK is the moment it snaps taut, which is where the hit lands and
+# where all the impact juice fires; REEL is the longest, because dragging your
+# food home is the payoff and it should be watchable.
+TONGUE_OUT_T = 0.085
+TONGUE_STICK_T = 0.075
+TONGUE_REEL_T = 0.17
+TONGUE_REACH_MISS = 210          # how far it shoots with nothing to aim at
+TONGUE_OVERSHOOT = 0.07          # springs this fraction past the target on STICK
+# Shaft. Pinned at the mouth and at the tip; every point between is a spring, so
+# the tongue whips and undulates like a tentacle instead of being a stiff curve.
+TONGUE_SEGMENTS = 13
+TONGUE_LAG = 340.0               # shaft spring stiffness toward its ideal curve.
+                                 # Low values look like more lag but actually mean
+                                 # the shaft never reaches the coiled shape at all
+                                 # -- the reel is only ~10 frames long.
+TONGUE_SAG = 0.16                # gravity droop, as a fraction of tongue length
+TONGUE_WAVE_AMP = 0.17           # travelling undulation, same units
+TONGUE_WAVE_CYCLES = 1.7         # how many waves fit along the tongue
+TONGUE_WAVE_SPEED = 19.0         # rad/s the wave travels toward the tip
+# How far the shaft bows sideways, and it is NOT a fixed fraction of the current
+# length -- that made the bow vanish exactly when the tongue was longest.
+# Instead the tongue conserves MATERIAL: on the way back the ends close but the
+# tongue itself does not shrink, so the excess has to go sideways. That is what
+# coiling is, and it makes the retract bunch up into the mouth instead of
+# sliding into it like a tape measure.
+TONGUE_TAUT_BOW = 0.06           # bow while it is being thrown: nearly straight
+TONGUE_COIL = 1.0                # material length as a fraction of full reach: the
+                                 # tongue is exactly as long as it reached, so the
+                                 # bulge starts growing the instant the reel does
+TONGUE_COIL_MAX = 0.34           # cap on the bulge, fraction of material length
+TONGUE_SAG_SHARE = 0.34          # of the bulge that goes into the downward droop;
+                                 # kept below the wave share so the coil reads as
+                                 # gathering rather than as the tongue falling over
+TONGUE_WAVE_SHARE = 0.95         # ...and into the travelling wave
+TONGUE_RECOIL = 105.0            # px/s the lizard is tugged toward what it grabs
+TONGUE_DRAG = 1500.0             # px/s^2 pulling a grabbed enemy toward the mouth
+TONGUE_YANK = 240.0              # px/s inward impulse the moment the line goes taut
+
 # Wind-up before each player verb fires (issue #5), and the squat_bias the body
 # holds during it (issue #9).
 #
