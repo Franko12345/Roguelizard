@@ -346,7 +346,7 @@ class Player(Lizard):
             game.shake(5)
 
         self.steer(c.move, dt, speed_mul)
-        self.integrate(dt, on_plant=game.fx.dust)
+        self.integrate(dt, on_plant=game.fx.dust, bounds=game.arena_bounds)
         self._whip_arc(dt)
 
         if c.tongue_edge and self.tongue_t == 0 and self.energy >= C.TONGUE_COST:

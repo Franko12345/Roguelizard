@@ -121,13 +121,16 @@ BOSS_POOL = {
                          # setup: liga a piscada (mecanica do Olho) + o tick por frame
                          setup=bossai.eye_setup,
                          overrides=dict(hue=280, sat=0.75, val=0.8)),
-    'muralha': dict(species='horned', name='A MURALHA',
+    # Built from the dedicated 'muralha' species, not a re-skinned 'horned':
+    # that species is what carries plan='fixed', speed=0 and the wall-grade
+    # damping/weight. Overriding a mobile species into plan='fixed' left the
+    # wall walking at the player, which is not what a wall does.
+    'muralha': dict(species='muralha', name='A MURALHA',
                      emblem='boss_muralha',
                      phases=lambda: bossai.muralha_phases(),
                      personality=lambda: bossai.wall_personality(),
                      scar=None,
-                     overrides=dict(hue=0, sat=0.3, val=0.45, spikes=0,
-                                   horns=0, plates=0, tail=None, plan='fixed')),
+                     overrides=dict(hue=0, sat=0.3, val=0.45)),
 }
 
 # tier (wave // BOSS_EVERY) -> which pool ids can be rolled there. Ranges,
@@ -364,6 +367,8 @@ class RoundManager:
         for p in g.players:
             p.rerolls = p.rerolls_per_round
         self.boss = None
+        g.arena = None              # issue #26: last round's arena bounds/tint
+        g.arena_bounds = None
         self.is_final = (self.game.mode == 'normal' and self.wave >= C.RUN_FINAL_WAVE)
         self.is_boss_round = self.is_final or (self.wave % BOSS_EVERY == 0)
         self.theme = theme or self._next_theme or self._pick_theme()
@@ -417,6 +422,12 @@ class RoundManager:
         boss = make_boss(g, boss_id, tier, pos, is_final=self.is_final)
         g.enemies.append(boss)
         self.boss = boss
+        # Issue #26: per-boss arena (tighter bounds + screen tint) for the
+        # duration of the fight. Cleared in start_round / reset.
+        from .boss.arena import for_boss
+        arena = for_boss(boss_id)
+        if arena is not None:
+            arena.apply(g, pos)
         g.fx.ring(pos, (255, 90, 90))
         g.fx.burst(pos, (255, 120, 90), 34, 320)
         g.shake(12)

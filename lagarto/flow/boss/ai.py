@@ -4,7 +4,9 @@ phase transition -> ... -> death.
 Consumes ``patterns`` and ``personality``; neither may import this module.
 """
 
+import math
 import random
+import pygame
 from pygame import Vector2
 
 from ...core import config as C
@@ -14,6 +16,7 @@ from ...creatures.ai import grapple as grapple_ai
 from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir
 from ...creatures.base import TAIL_SPRING_STIFFNESS
 from .patterns import PATTERNS, _tick_barrage, _tick_spiral, _tick_fire_breath, default_phases
+from .telegraph import TELEGRAPHS
 from .personality import default_personality
 
 # --- #13 body telegraph: spring-driven tells fired DURING the windup. Each
@@ -276,53 +279,25 @@ class BossAI:
             sp = cam.w2s(b.spine.joints[0])
             aim = b.spine.joints[0] + getattr(b, '_charge_dir', Vector2(1, 0)) * 260
             col = palette.lighten(base_color, 0.4)
-            import pygame
             pygame.draw.line(surf, col, sp, cam.w2s(aim), max(1, int(3 * cam.zoom)))
             return
         if self.state != 'windup' or not self.pattern_id:
             return
         kind = PATTERNS[self.pattern_id]['telegraph']
-        mouth = b.spine.joints[0]
-        sp = cam.w2s(mouth)
+        # None telegraph kind (burrow, grapple) -> the boss's own body already
+        # shows the windup via its own tick (dig state, arms converging). No
+        # on-screen telegraph to draw here.
+        if kind is None:
+            return
         windup_dur = PATTERNS[self.pattern_id]['windup'] * self.personality.windup_mult(self.mood)
         prog = 1.0 - clamp(self.t / max(1e-4, windup_dur), 0, 1)   # 0 -> 1
-        blink = 0.5 + 0.5 * __import__('math').sin(prog * prog * 40)
+        # blink pulses faster as prog approaches 1 -- the "any moment now" cue
+        blink = 0.5 + 0.5 * math.sin(prog * prog * 40)
         col = palette.lighten(base_color, 0.35)
-        import pygame
-        if kind == 'radial':
-            r = int(C.BOSS_RADIAL_SPEED * 0.9 * cam.zoom)
-            pygame.draw.circle(surf, col, sp, r, max(1, int((1 + 2 * prog) * cam.zoom)))
-            palette.glow(surf, sp, r, col, (0.12 + 0.2 * prog) * (0.5 + 0.5 * blink))
-        elif kind == 'fan':
-            spread = PATTERNS[self.pattern_id].get('spread', C.BOSS_FAN_SPREAD)
-            base = safe_norm(self._windup_target - mouth) if hasattr(self, '_windup_target') else Vector2(1, 0)
-            for s in (-0.5, 0.5):
-                edge = base.rotate(s * spread)
-                far = mouth + edge * 340
-                pygame.draw.line(surf, col, sp, cam.w2s(far), max(1, int((1 + 2 * prog) * cam.zoom)))
-        elif kind == 'line':
-            aim = getattr(self, '_windup_target', mouth + Vector2(100, 0))
-            pygame.draw.line(surf, col, sp, cam.w2s(aim), max(1, int((1 + 3 * prog) * cam.zoom)))
-            palette.glow(surf, cam.w2s(aim), int(14 * cam.zoom), col, 0.2 + 0.3 * prog)
-        elif kind == 'horn':
-            r = int(b.max_r * (1.3 + 0.6 * prog) * cam.zoom)
-            palette.glow(surf, sp, r, (255, 226, 90), (0.2 + 0.3 * prog) * (0.5 + 0.5 * blink))
-            pygame.draw.circle(surf, (255, 226, 90), sp, r, max(1, int(2 * cam.zoom)))
-        elif kind == 'shockwave':
-            r = int(C.BOSS_SHOCKWAVE_RADIUS * cam.zoom * (0.3 + 0.7 * prog))
-            pygame.draw.circle(surf, col, sp, r, max(1, int((1 + 2 * prog) * cam.zoom)))
-            palette.glow(surf, sp, r, col, (0.14 + 0.22 * prog) * (0.5 + 0.5 * blink))
-        elif kind == 'spiral':
-            n_spokes = 8
-            rr = int(b.max_r * (1.5 + prog * 2) * cam.zoom)
-            for i in range(n_spokes):
-                ang = (360 / n_spokes) * i + prog * 300
-                end = mouth + vfrom_angle(ang, rr / max(cam.zoom, 1e-4))
-                pygame.draw.line(surf, col, sp, cam.w2s(end), max(1, int(2 * cam.zoom)))
-        elif kind == 'rain':
-            r = int(C.BOSS_ARMS_RAIN_RADIUS * cam.zoom * (0.3 + 0.7 * prog))
-            for pt in getattr(b, '_rain_points', []):
-                psp = cam.w2s(pt)
-                pygame.draw.circle(surf, col, psp, r, max(1, int((1 + 2 * prog) * cam.zoom)))
-                palette.glow(surf, psp, r, col, (0.12 + 0.2 * prog) * (0.5 + 0.5 * blink))
+        # Issue #27: dispatch to the per-kind drawer in telegraph.py. Adding a
+        # new telegraph kind = adding a function + a registry entry, not
+        # editing this method.
+        fn = TELEGRAPHS.get(kind)
+        if fn is not None:
+            fn(surf, cam, b, self, prog, col, blink)
 

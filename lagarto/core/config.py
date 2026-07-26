@@ -430,6 +430,7 @@ MURALHA_BREATH_SHOTS = 12       # shots per breath burst
 MURALHA_BREATH_GAP = 0.12       # gap between bursts
 MURALHA_BREATH_SPEED = 220
 MURALHA_BREATH_DMG = 12
+MURALHA_BREATH_SPREAD = 60      # degrees; the breath cone when a pattern omits it
 # Hand slam: stone hands from sides
 MURALHA_HAND_WINDUP = 0.5
 MURALHA_HAND_DMG = 22
@@ -442,12 +443,14 @@ MURALHA_EYE_BEAMS = 3
 MURALHA_EYE_SPEED = 400
 MURALHA_EYE_DMG = 10
 MURALHA_EYE_GAP = 0.08
+MURALHA_EYE_SPREAD = 45         # degrees between the outermost beams
 # Bouncing bullets (ricochete)
 MURALHA_BOUNCE_WINDUP = 0.5
 MURALHA_BOUNCE_COUNT = 5
 MURALHA_BOUNCE_SPEED = 280
 MURALHA_BOUNCE_DMG = 14
 MURALHA_BOUNCE_BOUNCES = 3
+MURALHA_BOUNCE_SPREAD = 70      # degrees the ricochet volley fans out over
 # Grid of fire (ground hazard)
 MURALHA_GRID_WINDUP = 0.8
 MURALHA_GRID_CELL = 80

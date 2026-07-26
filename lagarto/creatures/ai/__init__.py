@@ -249,7 +249,8 @@ class AILizard(Lizard):
         if self.rally_t > 0:               # roused by an ALFA's call
             speed *= C.CHAMP_ALFA_SPEED
         self.steer(d, dt, speed)
-        self.integrate(dt, on_plant=game.fx.dust if self.on_screen else None)
+        self.integrate(dt, on_plant=game.fx.dust if self.on_screen else None,
+                       bounds=game.arena_bounds)
 
 
     def _pose_now(self, base):

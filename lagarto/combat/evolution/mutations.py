@@ -42,11 +42,13 @@ def _haste(p, g): p.cooldown_mult *= 0.85
 def _amount(p, g): p.amount += 1
 
 # ---- part mutations (reuse Player.grant_part; body redraws itself) -------- #
+# NOTE: the club tail is charm-only (issue #22 -- see charms.py). It used to
+# live here as `_club`, but the design intent is a deliberate equipment choice,
+# not a random level-up card, so the clava charm is the sole source.
 def _legs(p, g): p.grant_part('legs', g)
 def _spikes(p, g): p.grant_part('spikes', g)
 def _horns(p, g): p.grant_part('horns', g)
 def _plates(p, g): p.grant_part('plates', g)
-def _club(p, g): p.genome.tail = 'club'
 
 
 MUTATIONS_LIST = [
@@ -62,7 +64,6 @@ MUTATIONS_LIST = [
     _m('plates',  'Carapaca',        'placas de armadura',          260, _plates),
     _m('horns',   'Chifres',         'chifres na cabeca',           20,  _horns, 0.9),
     _m('legs',    'Pernas Extras',   '+2 pernas (mais estavel)',    275, _legs, 0.9),
-    _m('club',    'Cauda-Clava',     'rabada: +dano e empurrao',    15,  _club, 0.7),
     _m('venom',   'Peconha',         'dash/bote envenena',          105, _venom, 0.8),
     _m('wings',   'Membranas',       'dash: +50% dano e mais rapido', 175, _wings, 0.7),
     _m('might',   'Vigor',           '+20% dano (armas, dash, rabo)', 0,   _might, 1.2),
@@ -71,4 +72,5 @@ MUTATIONS_LIST = [
     _m('amount',  'Fecundidade',     '+1 projetil/orbital',         55,  _amount, 0.9),
 ]
 MUTATIONS = Registry(MUTATIONS_LIST)
-_ONCE = ('venom', 'wings', 'club', 'thorns')     # don't offer twice once owned
+# 'club' used to be here -- removed in issue #22 (charm-only now).
+_ONCE = ('venom', 'wings', 'thorns')          # don't offer twice once owned

@@ -347,7 +347,7 @@ def eye_laser(boss, game, target):
     """Multiple eyes fire simultaneous beams. Telegrafo: eyes glow."""
     pat = PATTERNS[boss.boss_ai.pattern_id]
     mouth = boss.spine.joints[0]
-    n = pat.get('count', C.MURALHA_EYE_COUNT)
+    n = pat.get('count', C.MURALHA_EYE_BEAMS)
     spread = pat.get('spread', C.MURALHA_EYE_SPREAD)
     # Eyes are along the wall - fire leftward toward player
     base = Vector2(-1, 0)

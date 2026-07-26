@@ -6,4 +6,6 @@ dist/
 claude-agendado.log
 claude-agendado.sh
 .env
-*.env
+*.envooo/
+.claude/worktrees/
+*.zip

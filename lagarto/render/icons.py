@@ -600,13 +600,14 @@ ICONS = {
     'char_lagarto': _char_lagarto, 'char_vibora': _char_vibora,
     'char_couracado': _char_couracado, 'char_larva': _char_larva,
     # weapons
-    'cuspe': _drop, 'ferrao': _arrow, 'teia': _star, 'esporos': _bubbles,
+    'cuspe': _drop, 'ferrao': _arrow, 'ferrao_charm': _arrow,  # issue #25: charm vs weapon
+    'teia': _star, 'esporos': _bubbles,
     'feromonio': _rings, 'sopro': _fan, 'enxame': _orbit, 'acido': _puddle,
     # mutations / passives
     'health': _heart, 'speed': _bolt, 'dash': _arrow, 'energy': _bolt,
     'regen': _heart, 'xp': _star, 'tongue': _tongue, 'thorns': _spikes_icon,
     'spikes': _spikes_icon, 'plates': _plates_icon, 'horns': _horns_icon,
-    'legs': _legs_icon, 'club': _club, 'venom': _drop, 'wings': _wings_icon,
+    'legs': _legs_icon, 'venom': _drop, 'wings': _wings_icon,   # 'club' -> charm-only (#22)
     'might': _bolt, 'area': _expand, 'haste': _clock, 'amount': _plus_one,
     # charms
     'antenas': _antennae, 'olhos': _eyes, 'carapaca': _plates_icon,

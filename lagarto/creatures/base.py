@@ -333,17 +333,27 @@ class Lizard:
         else:
             target_v = Vector2()
         turn_resp = 1.0 - self.genome.angular_damping   # 1.0 = old behaviour unchanged
+        if self.max_speed <= 0:
+            return          # a creature that cannot move (A Muralha) never steers
         self.vel += (target_v - self.vel) * clamp(self.accel * dt * turn_resp / self.max_speed, 0, 1)
 
-    def integrate(self, dt, on_plant=None):
+    def integrate(self, dt, on_plant=None, bounds=None):
         self.pos += self.vel * dt
         m = self.max_r
-        for ax, lim in ((0, C.WORLD_W), (1, C.WORLD_H)):
-            if self.pos[ax] < m:
-                self.pos[ax] = m
+        # ``bounds`` is the per-boss arena box (issue #26) as
+        # (min_x, min_y, max_x, max_y); None = the full world. Same bounce
+        # either way, so an arena is just a tighter set of walls.
+        if bounds is None:
+            lo_x = lo_y = 0.0
+            hi_x, hi_y = C.WORLD_W, C.WORLD_H
+        else:
+            lo_x, lo_y, hi_x, hi_y = bounds
+        for ax, lo, hi in ((0, lo_x, hi_x), (1, lo_y, hi_y)):
+            if self.pos[ax] < lo + m:
+                self.pos[ax] = lo + m
                 self.vel[ax] = abs(self.vel[ax]) * 0.5
-            elif self.pos[ax] > lim - m:
-                self.pos[ax] = lim - m
+            elif self.pos[ax] > hi - m:
+                self.pos[ax] = hi - m
                 self.vel[ax] = -abs(self.vel[ax]) * 0.5
 
         self.spine.resolve(self.pos)
@@ -361,7 +371,10 @@ class Lizard:
 
         spd = self.vel.length()
         w = self.genome.weight
-        target_squash = (1.0 + clamp(spd / self.max_speed, 0, 1.6) * 0.16 / w) * self.squat_bias
+        # max_speed 0 = a creature that cannot move (A Muralha): no run-squash,
+        # just whatever squat_bias the animation layer is asking for.
+        run = clamp(spd / self.max_speed, 0, 1.6) if self.max_speed > 0 else 0.0
+        target_squash = (1.0 + run * 0.16 / w) * self.squat_bias
         self.squash = approach(self.squash, target_squash, 9 / math.sqrt(w), dt)
         self.squat_bias = approach(self.squat_bias, 1.0, 6, dt)  # decays if no one re-asserts it
         self.crest_bias = approach(self.crest_bias, 0.0, 6, dt)   # ditto (#13 telegraph)
@@ -725,7 +738,7 @@ class Lizard:
         pygame.draw.line(surf, rim_col,
                          (wall_rect.left, wall_rect.top),
                          (wall_rect.left, wall_rect.bottom),
-                         max(2), max(1, int(3 * cam.zoom)))
+                         max(2, int(3 * cam.zoom)))
 
         # Pulsing veins from mouth outward
         vein_col = palette.mix((180, 60, 60), (255, 20, 20), min(1.0, phase_i / 2 + (1 - hp_frac) * 0.5))

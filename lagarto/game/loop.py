@@ -89,6 +89,11 @@ class Game:
         self.state = 'play'
         self.combo = 0
         self.combo_timer = 0.0
+        # Issue #26: per-boss arena state. `arena` is the active BossArena
+        # descriptor (or None); `arena_bounds` is the (min_x, min_y, max_x,
+        # max_y) box to clamp movement to instead of the full world, or None.
+        self.arena = None
+        self.arena_bounds = None
         # Sandbox debug staples (SB6). Inert unless ``mode == 'sandbox'``: every
         # read of these is guarded on the mode first, so a normal run never sees
         # them change behaviour. The sandbox overlay flips them from its menu.
@@ -732,6 +737,12 @@ class Game:
         self.fx.draw(surf, self.cam, self.font)
         if self.flash > 0:
             ui._tint(surf, (255, 255, 255), int(150 * min(1.0, self.flash)))
+        # Issue #26: per-boss arena screen tint (atmosphere). After the flash so
+        # a hit-flash still reads; before the vignette so the corners darken the
+        # tint too, matching the existing mood-lighting layering.
+        if self.arena is not None and self.arena.tint is not None:
+            tint_col, tint_alpha = self.arena.tint
+            ui._tint(surf, tint_col, tint_alpha)
         hud.vignette(surf)
         if self.state == 'play':
             # offscreen arrows: play's own bit of the world pass, under the HUD
