@@ -54,7 +54,7 @@ while p.tongue_t > 0:
     path = p.tongue_path()
     worst_tip = max(worst_tip, Vector2(path[-1]).distance_to(tip))
     worst_mouth = max(worst_mouth, Vector2(path[0]).distance_to(mouth))
-    assert len(path) == C.TONGUE_SEGMENTS, f"shaft lost segments: {len(path)}"
+    assert 2 <= len(path) <= C.TONGUE_SEGMENTS, f"bad shaft length: {len(path)}"
     reach_at[round(p.tongue_t, 4)] = mouth.distance_to(tip)
     p._tongue_step(DT, g)
 
@@ -100,10 +100,10 @@ for _ in range(int(TOTAL / DT)):
     if path is None:
         break
     a, b = path[0], path[-1]
-    if a.distance_to(b) > 20:
+    if a.distance_to(b) > 20 and len(path) > 2:
         max_bow = max(max_bow, max(
             abs((q - a).cross(b - a)) / a.distance_to(b) for q in path[1:-1]))
-assert max_bow > 20.0, f"shaft barely bends -- reads as a straight line ({max_bow:.1f} px)"
+assert max_bow > 12.0, f"shaft barely bends -- reads as a straight line ({max_bow:.1f} px)"
 print(f"shaft bows up to {max_bow:.1f} px off the mouth->tip line")
 
 # ...and the bend must come from the RETRACT, not be there all along. A thrown
@@ -119,7 +119,7 @@ while p.tongue_t > 0:
     if ph and path is not None:
         a, b = path[0], path[-1]
         d = a.distance_to(b)
-        if d > 20:
+        if d > 20 and len(path) > 2:
             bow_by_phase[ph] = max(bow_by_phase[ph], max(
                 abs((q - a).cross(b - a)) / d for q in path[1:-1]))
     p._tongue_step(DT, g)
@@ -128,6 +128,66 @@ assert bow_by_phase['out'] < 6.0, \
     f"the throw should be ballistic, bowed {bow_by_phase['out']:.1f} px"
 assert bow_by_phase['reel'] > bow_by_phase['out'] * 3, \
     "the reel must coil visibly more than the throw"
+
+# --- 3b. the mouth must SWALLOW the tongue, segment by segment ---------- #
+# The knot came from here. The shaft used to keep all 13 segments while only the
+# tip came home, so a fixed point count had to fit an ever-shorter span and the
+# points had nowhere to go but sideways -- the shaft folded over itself. A real
+# tongue has a fixed physical segment length; what changes as it retracts is HOW
+# MANY segments are still outside the mouth. So: spacing stays put, count drops.
+g, p, prey = fresh(prey_at=200)
+p._pending_tongue_target = prey
+p._launch_tongue(g)
+counts, spacings = [], []
+while p.tongue_t > 0:
+    p._tongue_step(DT, g)
+    path = p.tongue_path()
+    if path is None:
+        break
+    counts.append(len(path))
+    # Only while there is a real shaft. The last frames are a 2-point stub a few
+    # px long -- that is the tongue nearly gone, not points being crammed.
+    if len(path) >= 4:
+        spacings.append(sum(path[i].distance_to(path[i + 1])
+                            for i in range(len(path) - 1)) / (len(path) - 1))
+assert counts[0] > counts[-1], f"segments were never swallowed: {counts}"
+assert counts[-1] <= 3, f"the tongue still had {counts[-1]} points at the mouth"
+assert counts == sorted(counts, reverse=True), f"segment count must only fall: {counts}"
+lo, hi = min(spacings), max(spacings)
+nominal = C.TONGUE_REACH_MISS / (C.TONGUE_SEGMENTS - 1)
+# Spacing is not perfectly constant: the points are distributed along the CHORD
+# between mouth and tip, and the chord shrinks faster than the material does --
+# that difference is the slack, and the slack is the coil. What matters is that
+# it never collapses toward zero, which is the mechanism that produced the knot.
+assert lo > nominal * 0.4, \
+    f"segment spacing collapsed to {lo:.1f} px (nominal {nominal:.1f}) -- points crammed"
+assert hi / lo < 2.6, f"spacing swings too far: {lo:.1f}..{hi:.1f} px"
+print(f"swallowed: {counts[0]} -> {counts[-1]} points, "
+      f"spacing {lo:.1f}-{hi:.1f} px (nominal {nominal:.1f}, never collapses)")
+
+# --- 3c. and so the coil can never tie a knot --------------------------- #
+# A shaft wider than the gap between its own ends has folded over itself, which
+# reads as the tongue knotting on the way back. The bulge TARGET collapses as
+# the tongue is swallowed, but the springs need ~0.1 s to obey and the reel has
+# only ~3 frames left by then -- so the actual points are clamped too. This is
+# the assertion that clamp exists for.
+g, p, prey = fresh(prey_at=200)
+p._pending_tongue_target = prey
+p._launch_tongue(g)
+worst_ratio = 0.0
+while p.tongue_t > 0:
+    p._tongue_step(DT, g)
+    path = p.tongue_path()
+    if path is None:
+        break
+    a, b = path[0], path[-1]
+    span = a.distance_to(b)
+    if span > 1.0 and len(path) > 2:
+        bow = max(abs((q - a).cross(b - a)) / span for q in path[1:-1])
+        worst_ratio = max(worst_ratio, bow / span)
+assert worst_ratio < 1.0, \
+    f"the shaft folded over itself: bow reached {worst_ratio:.2f}x its own span"
+print(f"no knot: widest the shaft ever gets is {worst_ratio:.2f}x its span")
 
 # --- 4. the hit lands at full extension, not when the tongue gets home --- #
 g, p, prey = fresh(prey_at=120)

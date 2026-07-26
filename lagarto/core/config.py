@@ -288,25 +288,29 @@ TONGUE_OVERSHOOT = 0.07          # springs this fraction past the target on STIC
 # Shaft. Pinned at the mouth and at the tip; every point between is a spring, so
 # the tongue whips and undulates like a tentacle instead of being a stiff curve.
 TONGUE_SEGMENTS = 13
-TONGUE_LAG = 340.0               # shaft spring stiffness toward its ideal curve.
-                                 # Low values look like more lag but actually mean
+TONGUE_LAG = 500.0               # shaft spring stiffness toward its ideal curve.
+                                 # Low values LOOK like more lag but actually mean
                                  # the shaft never reaches the coiled shape at all
-                                 # -- the reel is only ~10 frames long.
+                                 # -- the reel is only ~10 frames long. Raising it
+                                 # past ~700 lets the bow reach the span itself,
+                                 # which is where lobes start meeting each other.
 TONGUE_SAG = 0.16                # gravity droop, as a fraction of tongue length
 TONGUE_WAVE_AMP = 0.17           # travelling undulation, same units
-TONGUE_WAVE_CYCLES = 1.7         # how many waves fit along the tongue
+TONGUE_WAVE_CYCLES = 1.2         # how many waves fit along the tongue. More lobes
+                                 # means more chances for two of them to cross once
+                                 # the shaft is wide relative to its span.
 TONGUE_WAVE_SPEED = 19.0         # rad/s the wave travels toward the tip
 # How far the shaft bows sideways, and it is NOT a fixed fraction of the current
 # length -- that made the bow vanish exactly when the tongue was longest.
-# Instead the tongue conserves MATERIAL: on the way back the ends close but the
-# tongue itself does not shrink, so the excess has to go sideways. That is what
-# coiling is, and it makes the retract bunch up into the mouth instead of
-# sliding into it like a tape measure.
-TONGUE_TAUT_BOW = 0.06           # bow while it is being thrown: nearly straight
-TONGUE_COIL = 1.0                # material length as a fraction of full reach: the
-                                 # tongue is exactly as long as it reached, so the
-                                 # bulge starts growing the instant the reel does
-TONGUE_COIL_MAX = 0.34           # cap on the bulge, fraction of material length
+# Instead the tongue tracks MATERIAL: how much of it is still outside the mouth.
+# On the way back the mouth swallows the tongue, and it swallows more slowly
+# than the two ends close on each other -- that difference is the slack, and the
+# slack is the coil. Crucially the number of SEGMENTS still outside shrinks with
+# the material (see Player._tongue_active): keeping every segment while only the
+# tip came home crammed a fixed point count into a vanishing span, and the
+# points had nowhere to go but sideways, folding the shaft into a knot.
+TONGUE_TAUT_BOW = 0.03           # bow while it is being thrown: nearly straight
+TONGUE_COIL_MAX = 0.40           # cap on the bulge, fraction of material length
 TONGUE_SAG_SHARE = 0.34          # of the bulge that goes into the downward droop;
                                  # kept below the wave share so the coil reads as
                                  # gathering rather than as the tongue falling over

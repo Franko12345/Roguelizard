@@ -707,32 +707,69 @@ class Player(Lizard):
         ``sin(s * pi)`` so they vanish at the pinned ends. The springs are what
         make it whip on the launch and slacken on the way back; the pinning is
         what keeps the tip honest.
+
+        Only the segments still OUTSIDE the mouth are returned -- the rest have
+        been swallowed (see ``_tongue_active``).
         """
         t = self.tongue_tip()
         if t is None or not self._tongue_shaft:
             return None
         tip, mouth = t
-        return [mouth] + [Vector2(p) for p in self._tongue_shaft] + [tip]
+        n_in = self._tongue_active(self._tongue_material()) - 2
+        return [mouth] + [Vector2(p) for p in self._tongue_shaft[:max(0, n_in)]] + [tip]
 
-    def _tongue_bulge(self, length):
+    def _tongue_material(self):
+        """How much tongue is still OUTSIDE the mouth, in px.
+
+        The mouth swallows the tongue as it reels: this is the length of the
+        part that is still out. It runs out at the end of the reel, and it
+        shrinks more slowly than the ends close on each other -- that difference
+        is the slack, and the slack is the coil.
+        """
+        ph, u = self.tongue_phase()
+        if ph is None:
+            return 0.0
+        if ph != 'reel':
+            return self._tongue_len or C.TONGUE_REACH_MISS
+        return self._tongue_len * (1.0 - u * u)
+
+    def _tongue_active(self, material):
+        """How many path points are still out of the mouth, ends included.
+
+        THE fix for the knot. The shaft used to keep all its segments while only
+        the tip came home, so segment spacing collapsed toward zero and the same
+        number of points had to fit an ever-shorter span -- they had nowhere to
+        go but sideways, folding the shaft over itself. Real segment spacing is
+        fixed (it is a physical length of tongue); what changes is HOW MANY
+        segments are still outside. Swallow them.
+        """
+        if self._tongue_len <= 1e-4:
+            return C.TONGUE_SEGMENTS
+        frac = clamp(material / self._tongue_len, 0.0, 1.0)
+        return max(2, int(round(C.TONGUE_SEGMENTS * frac)))
+
+    def _tongue_bulge(self, span, material):
         """Lateral amplitude in ABSOLUTE px -- how much tongue is spare.
 
-        A thrown tongue is ballistic and nearly straight. A retracting one
-        conserves material: the mouth and the tip close on each other but the
-        tongue is still as long as it was, so the excess bows out to the side.
-        Scaling the bow by the CURRENT length instead makes it disappear exactly
-        when the tongue is longest, which is what made it read as a stiff arc.
+        A thrown tongue is ballistic and nearly straight. A retracting one has
+        more tongue out than the gap between its ends, and the excess bows to
+        the side: that is what coiling is. Scaling the bow by the CURRENT span
+        instead makes it vanish exactly when the tongue is longest, which reads
+        as a stiff arc.
         """
         ph, _u = self.tongue_phase()
         if ph != 'reel':
-            return length * C.TONGUE_TAUT_BOW
-        excess = self._tongue_len * C.TONGUE_COIL - length
-        return clamp(excess, 0.0, self._tongue_len * C.TONGUE_COIL_MAX)
+            return span * C.TONGUE_TAUT_BOW
+        return clamp(material - span, 0.0, self._tongue_len * C.TONGUE_COIL_MAX)
 
-    def _tongue_ideal(self, i, mouth, tip, bulge):
-        """Rest position of interior shaft point ``i``."""
-        n = C.TONGUE_SEGMENTS
-        s = (i + 1) / (n - 1.0)
+    def _tongue_ideal(self, i, mouth, tip, bulge, active):
+        """Rest position of interior shaft point ``i``.
+
+        ``active`` is how many points are still out of the mouth, so the ones
+        that remain spread over the CURRENT span instead of being crammed
+        together -- which is what stopped the shaft folding over itself.
+        """
+        s = (i + 1) / max(1.0, active - 1.0)
         d = tip - mouth
         length = d.length()
         if length < 1e-4:
@@ -824,9 +861,17 @@ class Player(Lizard):
         # advanced with the sim step so the shape is timestep independent.
         k = C.TONGUE_LAG
         c = 2.0 * math.sqrt(k)
-        bulge = self._tongue_bulge(mouth.distance_to(tip))
-        for i, (p, v) in enumerate(zip(self._tongue_shaft, self._tongue_shaft_v)):
-            ideal = self._tongue_ideal(i, mouth, tip, bulge)
+        span = mouth.distance_to(tip)
+        material = self._tongue_material()
+        active = self._tongue_active(material)
+        bulge = self._tongue_bulge(span, material)
+        # Only the segments still outside the mouth are simulated. The ones
+        # behind them have been swallowed, and a swallowed segment has no shape
+        # to hold -- it is what kept the shaft from having to fold up.
+        n_in = max(0, active - 2)
+        for i in range(n_in):
+            p, v = self._tongue_shaft[i], self._tongue_shaft_v[i]
+            ideal = self._tongue_ideal(i, mouth, tip, bulge, active)
             v.x += ((ideal.x - p.x) * k - v.x * c) * dt
             v.y += ((ideal.y - p.y) * k - v.y * c) * dt
             p.x += v.x * dt
