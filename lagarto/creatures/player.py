@@ -596,15 +596,54 @@ class Player(Lizard):
                 break
 
     def tongue_tip(self):
+        """(tip, mouth) -- THE tongue's position, for hits and for the drawing.
+
+        Both the hit resolution and the drawn curve read this one function, so
+        what you see on screen is where the tongue actually is. Anything that
+        wants to bend the tongue bends the MIDDLE of the curve (see
+        ``tongue_path``), never this endpoint.
+        """
         if self.tongue_t <= 0:
             return None
         reach = math.sin(self.tongue_t * math.pi)
         if self.tongue_target and not self.tongue_target.dead:
-            aim = self.tongue_target.pos
+            aim = Vector2(self.tongue_target.pos)
         else:
             aim = self.pos + self.aim * 210
         mouth = self.spine.joints[0] + self.spine.head_dir() * self.max_r
         return mouth.lerp(aim, reach), mouth
+
+    def tongue_path(self):
+        """(mouth, mid, tip) control points of the chameleon arc.
+
+        A quadratic Bezier: the ends are the mouth and the true tip, and only
+        the middle control point moves, so the curve always starts at the mouth
+        and ends exactly where ``tongue_tip`` says. ``mid`` is pure geometry off
+        ``tongue_t`` -- no spring, no stored state, so there is nothing that can
+        lag behind the kinematic tip and draw the tongue somewhere it isn't.
+
+        Two things bend it: a perpendicular sag toward world-down (the weight of
+        the tongue, zero at the mouth and maximal at full reach), and a lag
+        along the shaft that makes the mid lead on the way out and trail on the
+        way back -- which is what reads as the curl-back on retraction.
+        """
+        t = self.tongue_tip()
+        if t is None:
+            return None
+        tip, mouth = t
+        along = (tip - mouth) * 0.5
+        reach = math.sin(self.tongue_t * math.pi)
+        perp = Vector2(-along.y, along.x)
+        if perp.y < 0:                       # want the perpendicular pointing DOWN
+            perp = -perp
+        if perp.length_squared() > 1e-6:
+            # Sag scales with how much tongue is hanging out there, not with the
+            # lizard's size: a long reach droops, a short flick barely bends.
+            perp = perp.normalize() * (along.length() * 0.30)
+        else:
+            perp = Vector2()
+        lag = math.sin(clamp(self.tongue_t + 0.14, 0, 1) * math.pi) - reach
+        return mouth, mouth + along * (1.0 + lag) + perp, tip
 
     def _draw_slow_mark(self, surf, cam):
         """Show WHY you are slow.
@@ -629,12 +668,31 @@ class Player(Lizard):
             w = weapons.WEAPONS[wid]
             if w.layer == 'under':
                 w.draw(surf, cam, self, self.weapon_state[wid], lvl)
-        tip = self.tongue_tip()
-        if tip:
-            t, mouth = tip
-            pygame.draw.line(surf, (230, 60, 90), cam.w2s(mouth), cam.w2s(t),
-                             max(2, int(3 * cam.zoom)))
-            pygame.draw.circle(surf, (255, 90, 120), cam.w2s(t), max(2, int(4 * cam.zoom)))
+        path = self.tongue_path()
+        if path is not None:
+            # Sample the arc and stroke it twice: the ink boundary underneath at
+            # shaft width + 2*ink, then the tongue on top. That is the same look
+            # a mask outline gives on a lines+circles shape, for ~20 draw calls
+            # instead of a per-frame surface allocation plus a mask trace.
+            mouth, mid, tip = path
+            p0, p1, p2 = cam.w2s(mouth), cam.w2s(mid), cam.w2s(tip)
+            z = cam.zoom
+            shaft = max(2, int(3 * z))
+            ink = max(1, int(2 * z))
+            tip_r = max(3, int(5 * z))
+            pts = []
+            for i in range(11):
+                u = i / 10.0
+                mu = 1.0 - u
+                pts.append((mu * mu * p0[0] + 2 * mu * u * p1[0] + u * u * p2[0],
+                            mu * mu * p0[1] + 2 * mu * u * p1[1] + u * u * p2[1]))
+            for col, pad in ((C.COL_INK, ink), ((230, 60, 90), 0)):
+                for i in range(10):
+                    # taper: thicker toward the sticky tip
+                    w = int(shaft * (1.0 + 0.7 * (i / 10.0))) + 2 * pad
+                    pygame.draw.line(surf, col, pts[i], pts[i + 1], max(1, w))
+                pygame.draw.circle(surf, col, pts[-1], tip_r + pad)
+            pygame.draw.circle(surf, (255, 180, 200), pts[-1], max(2, int(2.5 * z)))
         super().draw(surf, cam)
         for wid, lvl in self.weapons.items():        # orbitals in front
             w = weapons.WEAPONS[wid]
