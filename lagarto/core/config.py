@@ -247,6 +247,17 @@ INPUT_BUFFER = 0.15
 
 DASH_COST = 14
 TONGUE_COST = 8
+
+# Wind-up before each player verb fires (issue #5), and the squat_bias the body
+# holds during it (issue #9). Kept short deliberately: these are the core verbs
+# and every millisecond here is input latency, so they buy just enough coil to
+# read as intent. < 1.0 crouches (dash/whip coil), > 1.0 stretches (jaw opens).
+DASH_ANTIC_T = 0.08
+DASH_ANTIC_SQUAT = 0.86
+TONGUE_ANTIC_T = 0.10
+TONGUE_ANTIC_SQUAT = 1.12
+WHIP_ANTIC_T = 0.06
+WHIP_ANTIC_SQUAT = 0.90
 KILL_ENERGY = 4      # energia devolvida ao abater (sustenta o combo agressivo)
 
 # rabada: golpe de cauda. A clava aumenta o dano e o empurrao; o ferrao envenena.

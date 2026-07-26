@@ -5,9 +5,11 @@ here is the run state a human drives -- energy, charms, items, mutations, xp.
 """
 
 import math
+import random
 from pygame import Vector2
 import pygame
 
+from ..anim.anim import Anticipation
 from ..core import config as C
 from ..audio import engine as audio
 from ..core import palette
@@ -50,6 +52,17 @@ class Player(Lizard):
         self.whip_dir = Vector2()
         self.tongue_t = 0.0
         self.tongue_target = None
+        # Issue #5: every offensive verb goes through a wind-up gate. The press
+        # triggers it, `update` returns the action exactly once when it expires,
+        # so holding a button can never repeat-fire. Durations are short on
+        # purpose -- long enough to read as a coil, short enough to stay
+        # responsive -- and the choice made at the press (tongue target, whip
+        # side) is parked here until the action actually fires.
+        self.dash_antic = Anticipation(duration=C.DASH_ANTIC_T)
+        self.tongue_antic = Anticipation(duration=C.TONGUE_ANTIC_T)
+        self.whip_antic = Anticipation(duration=C.WHIP_ANTIC_T)
+        self._pending_tongue_target = None
+        self._pending_whip_side = 1
         self.aim = Vector2(1, 0)
         self.down = False
         self.revive = 0.0
@@ -331,9 +344,26 @@ class Player(Lizard):
         speed_mul *= drag
         self.dash_cd = decay(self.dash_cd, dt)
 
+        # Issue #5: the press opens a short wind-up instead of firing instantly,
+        # and the Anticipation is what fires the action when it expires -- so
+        # holding the button never repeats. Issue #9: during that window the
+        # body coils (squat_bias, the existing anticipation hook) and the feet
+        # kick dust, so the launch is telegraphed rather than teleported.
         if c.dash_edge and self.can_dash and self.dash_cd <= 0 \
-                and self.energy >= C.DASH_COST:
+                and self.energy >= C.DASH_COST and not self.dash_antic.is_active \
+                and self.dash_antic.action is None:
             c.consume('dash')
+            self.dash_antic.trigger('dash')
+        if self.dash_antic.is_active:
+            self.squat_bias = C.DASH_ANTIC_SQUAT
+            if random.random() < dt * 30:
+                perp = Vector2(-self.facing.y, self.facing.x)
+                for s in (-1, 1):
+                    game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
+        # Energy is re-checked here, not just at the press: the wind-up is real
+        # time, and a weapon can spend the last of it while the coil is playing.
+        if self.dash_antic.update(dt) == 'dash' and self.dash_time <= 0 \
+                and self.energy >= C.DASH_COST:
             move = c.move if c.move.length_squared() > 0.1 else self.facing
             self.vel = safe_norm(move) * self.max_speed * (3.5 if self.wings else 3.0)
             self.dash_time = 0.2 if self.wings else 0.16
@@ -349,20 +379,34 @@ class Player(Lizard):
         self.integrate(dt, on_plant=game.fx.dust, bounds=game.arena_bounds)
         self._whip_arc(dt)
 
-        if c.tongue_edge and self.tongue_t == 0 and self.energy >= C.TONGUE_COST:
+        # Issue #5/#9: same wind-up contract as the dash. The target is picked at
+        # the PRESS so the aim is what the player saw, then held until the
+        # tongue actually shoots.
+        if c.tongue_edge and self.tongue_t == 0 and self.energy >= C.TONGUE_COST \
+                and not self.tongue_antic.is_active and self.tongue_antic.action is None:
             c.consume('tongue')
-            self.tongue_t = 0.001
-            self.energy -= C.TONGUE_COST                       # tongue costs energy
+            self.tongue_antic.trigger('tongue')
             # auto-aim at the nearest edible OR enemy, whichever is closer
             ed = game.nearest_edible(self.pos, self.tongue_range)
             en = game.nearest_enemy(self.pos, self.tongue_range)
             if ed and en:
-                self.tongue_target = ed if self.pos.distance_to(ed.pos) <= \
+                tgt = ed if self.pos.distance_to(ed.pos) <= \
                     self.pos.distance_to(en.pos) else en
             else:
-                self.tongue_target = ed or en
-            if self.tongue_target:
-                self.aim = safe_norm(self.tongue_target.pos - self.pos)
+                tgt = ed or en
+            if tgt:
+                self.aim = safe_norm(tgt.pos - self.pos)
+            self._pending_tongue_target = tgt
+        if self.tongue_antic.is_active:
+            # jaw-open: stretch UP rather than coil down, so it reads as the
+            # opposite gesture to the dash's crouch.
+            self.squat_bias = C.TONGUE_ANTIC_SQUAT
+        if self.tongue_antic.update(dt) == 'tongue' and self.tongue_t == 0 \
+                and self.energy >= C.TONGUE_COST:
+            self.tongue_t = 0.001
+            self.energy -= C.TONGUE_COST                       # tongue costs energy
+            self.tongue_target = self._pending_tongue_target
+            self._pending_tongue_target = None
         if self.tongue_t > 0:
             self.tongue_t += dt / 0.22
             if self.tongue_t >= 1:
@@ -408,18 +452,28 @@ class Player(Lizard):
 
         # --- tail whip ("rabada") ---------------------------------------- #
         self.whip_cd = decay(self.whip_cd, dt)
-        if c.whip_edge and self.whip_cd <= 0 and self.energy >= C.WHIP_COST:
+        # Issue #5/#9: the swing side is chosen at the PRESS so the wind-up can
+        # already lean into it, and the shortest coil of the three -- the whip is
+        # the panic button, so it stays the most responsive.
+        if c.whip_edge and self.whip_cd <= 0 and self.energy >= C.WHIP_COST \
+                and not self.whip_antic.is_active and self.whip_antic.action is None:
             c.consume('whip')
-            self.whip_t = 0.001
-            self.whip_cd = self.whip_cooldown
-            self.energy -= C.WHIP_COST
-            self.whip_hits.clear()          # fresh swing -> everyone hittable again
-            # swing toward the nearest enemy; with nobody around, alternate sides
+            self.whip_antic.trigger('whip')
             side = self.whip_side
             foe = game.nearest_enemy(self.pos, 280)
             if foe is not None:
                 d = foe.pos - self.pos
                 side = 1 if (self.facing.x * d.y - self.facing.y * d.x) > 0 else -1
+            self._pending_whip_side = side
+        if self.whip_antic.is_active:
+            self.squat_bias = C.WHIP_ANTIC_SQUAT
+        if self.whip_antic.update(dt) == 'whip' and self.whip_t == 0 \
+                and self.energy >= C.WHIP_COST:
+            self.whip_t = 0.001
+            self.whip_cd = self.whip_cooldown
+            self.energy -= C.WHIP_COST
+            self.whip_hits.clear()          # fresh swing -> everyone hittable again
+            side = self._pending_whip_side
             self.whip_side = -side
             # Sideways ARC, not a velocity impulse. An impulse got erased within a
             # few frames by steer() pulling velocity back to the input direction --
