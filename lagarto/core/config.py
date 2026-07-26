@@ -275,14 +275,24 @@ DASH_COST = 14
 TONGUE_COST = 8
 
 # Wind-up before each player verb fires (issue #5), and the squat_bias the body
-# holds during it (issue #9). Kept short deliberately: these are the core verbs
-# and every millisecond here is input latency, so they buy just enough coil to
-# read as intent. < 1.0 crouches (dash/whip coil), > 1.0 stretches (jaw opens).
-DASH_ANTIC_T = 0.08
+# holds during it (issue #9).
+#
+# ZERO ON PURPOSE. Wind-up is for things you fight, not for the thing you ARE:
+# a boss telegraphing is information, the player's own dash stalling is just
+# latency, and 60-100 ms on the core verbs read as the whole game being
+# sluggish. The Anticipation gate is still in place at 0 -- it fires on the
+# press frame but still exactly once per press, so holding a button cannot
+# repeat-fire, which is the half of issue #5 worth having.
+#
+# Raise any of these above 0 and the coil comes back with it: the *_SQUAT value
+# is what the body holds during the window (< 1.0 crouches, > 1.0 stretches).
+# Enemy and boss wind-ups are a separate system and untouched -- see
+# BossAI's 'windup' state and the shoot_charge / lunge_t / grapple_t timers.
+DASH_ANTIC_T = 0.0
 DASH_ANTIC_SQUAT = 0.86
-TONGUE_ANTIC_T = 0.10
+TONGUE_ANTIC_T = 0.0
 TONGUE_ANTIC_SQUAT = 1.12
-WHIP_ANTIC_T = 0.06
+WHIP_ANTIC_T = 0.0
 WHIP_ANTIC_SQUAT = 0.90
 KILL_ENERGY = 4      # energia devolvida ao abater (sustenta o combo agressivo)
 

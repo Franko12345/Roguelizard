@@ -5,7 +5,6 @@ here is the run state a human drives -- energy, charms, items, mutations, xp.
 """
 
 import math
-import random
 from pygame import Vector2
 import pygame
 
@@ -52,12 +51,13 @@ class Player(Lizard):
         self.whip_dir = Vector2()
         self.tongue_t = 0.0
         self.tongue_target = None
-        # Issue #5: every offensive verb goes through a wind-up gate. The press
-        # triggers it, `update` returns the action exactly once when it expires,
-        # so holding a button can never repeat-fire. Durations are short on
-        # purpose -- long enough to read as a coil, short enough to stay
-        # responsive -- and the choice made at the press (tongue target, whip
-        # side) is parked here until the action actually fires.
+        # Issue #5: every offensive verb goes through an Anticipation gate, so
+        # `update` returns the action exactly once per press and holding a
+        # button can never repeat-fire. The durations are 0 by default (see
+        # config): the player fires on the press frame, and wind-up is left to
+        # the things you fight. The choice made at the press (tongue target,
+        # whip side) is parked here so a non-zero duration still aims at what
+        # the player actually saw.
         self.dash_antic = Anticipation(duration=C.DASH_ANTIC_T)
         self.tongue_antic = Anticipation(duration=C.TONGUE_ANTIC_T)
         self.whip_antic = Anticipation(duration=C.WHIP_ANTIC_T)
@@ -344,11 +344,11 @@ class Player(Lizard):
         speed_mul *= drag
         self.dash_cd = decay(self.dash_cd, dt)
 
-        # Issue #5: the press opens a short wind-up instead of firing instantly,
-        # and the Anticipation is what fires the action when it expires -- so
-        # holding the button never repeats. Issue #9: during that window the
-        # body coils (squat_bias, the existing anticipation hook) and the feet
-        # kick dust, so the launch is telegraphed rather than teleported.
+        # Issue #5: the press goes through an Anticipation gate. At DASH_ANTIC_T
+        # = 0 (the default -- see config) it fires on this very frame, but still
+        # exactly once per press, so holding the button cannot repeat-fire.
+        # Raise the constant and the same code becomes a real wind-up with the
+        # coil below.
         if c.dash_edge and self.can_dash and self.dash_cd <= 0 \
                 and self.energy >= C.DASH_COST and not self.dash_antic.is_active \
                 and self.dash_antic.action is None:
@@ -356,12 +356,8 @@ class Player(Lizard):
             self.dash_antic.trigger('dash')
         if self.dash_antic.is_active:
             self.squat_bias = C.DASH_ANTIC_SQUAT
-            if random.random() < dt * 30:
-                perp = Vector2(-self.facing.y, self.facing.x)
-                for s in (-1, 1):
-                    game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
-        # Energy is re-checked here, not just at the press: the wind-up is real
-        # time, and a weapon can spend the last of it while the coil is playing.
+        # Energy is re-checked here, not just at the press: a wind-up is real
+        # time, and a weapon can spend the last of it while the coil plays.
         if self.dash_antic.update(dt) == 'dash' and self.dash_time <= 0 \
                 and self.energy >= C.DASH_COST:
             move = c.move if c.move.length_squared() > 0.1 else self.facing
@@ -373,6 +369,12 @@ class Player(Lizard):
             audio.play('dash')
             game.fx.burst(self.pos, self.color, 14, 200)
             game.fx.spark_burst(self.pos, palette.lighten(self.color, 0.3), 12, 340)
+            # Issue #9's kicked-up dust, moved off the wind-up and onto the
+            # launch: at zero wind-up there is no window to spawn it in, and
+            # dust leaving the feet as you go reads better than dust before.
+            perp = Vector2(-self.facing.y, self.facing.x)
+            for s in (-1, 1):
+                game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
             game.shake(5)
 
         self.steer(c.move, dt, speed_mul)
