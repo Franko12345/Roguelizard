@@ -325,13 +325,24 @@ def main():
             boss = getattr(game.rounds, 'boss', None)
             music_state = game.pause_prev if game.state == 'pause' else game.state
             if music_state == 'victory':
+                # Victory is a one-shot fanfare, not a mix -- the stems loop
+                # forever and would never "end" on the victory screen.
                 audio.set_music('victory')
-            elif music_state == 'camp':
-                audio.set_music('calm')
-            elif boss is not None and not boss.dead:
-                audio.set_music('boss')          # dynamic track for boss rounds
             else:
-                audio.set_music('combat')
+                # Adaptive stem mix (issue #24): one intensity dial drives which
+                # layers are audible, so boss-enters / boss-dies crossfade
+                # continuously instead of hard-swapping whole tracks.
+                if music_state == 'camp':
+                    target = 0.0
+                elif boss is not None and not boss.dead:
+                    target = 1.0
+                elif game.state == 'play' and game.rounds.state == 'combat':
+                    # scale with the wave so late combat reads tenser than early
+                    target = 0.4 + 0.4 * min(1.0, game.rounds.wave / 15.0)
+                else:
+                    target = 0.2   # intermission / level-up: calm, not silent
+                audio.set_music_intensity(target)
+                audio.update_music(frame_dt)
             if game.state != prev_state:
                 # play/level-up/camp animate themselves in and out (veil + dropdown +
                 # absorption), so a blackout there would hide the impact we just built
