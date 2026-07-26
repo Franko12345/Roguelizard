@@ -520,13 +520,22 @@ class Lizard:
         thin = (plan == 'segmented')      # many little legs read better skinny
         legw = max(1, int(self.max_r * (0.18 if thin else 0.42) * cam.zoom))
         footr = max(1, int(self.max_r * (0.14 if thin else 0.28) * cam.zoom))
+        # Issue #18: legs get the same dark ink boundary the body has, so they
+        # stop reading as floating shapes from a different art style. A leg is
+        # two lines and a circle, so the outline is those same primitives drawn
+        # fatter in ink underneath -- no mask trace, no per-leg surface, six
+        # extra draw calls. Solve each leg once and reuse for both passes.
+        ink_w = max(1, int(2 * cam.zoom))
+        solved = []
         for leg in self.legs:
             root = self.spine.joints[leg.idx]
             knee, foot = leg.solve(root)
-            r = cam.w2s(root); k = cam.w2s(knee); f = cam.w2s(foot)
-            pygame.draw.line(surf, leg_col, r, k, legw)
-            pygame.draw.line(surf, leg_col, k, f, legw)
-            pygame.draw.circle(surf, leg_col, f, footr)
+            solved.append((cam.w2s(root), cam.w2s(knee), cam.w2s(foot)))
+        for col, pad in ((C.COL_INK, ink_w), (leg_col, 0)):
+            for r, k, f in solved:
+                pygame.draw.line(surf, col, r, k, legw + 2 * pad)
+                pygame.draw.line(surf, col, k, f, legw + 2 * pad)
+                pygame.draw.circle(surf, col, f, footr + pad)
 
         if self.genome.radial:
             self._draw_spider(surf, cam)
