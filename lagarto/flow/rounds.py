@@ -260,6 +260,73 @@ class Nest:
                             -math.pi / 2, -math.pi / 2 + f * C.TAU, max(2, int(3 * cam.zoom)))
 
 
+def make_boss(game, boss_id, tier, pos, is_final=False):
+    """Build one boss at ``pos``, scaled to ``tier``, and return it (unspawned).
+
+    ``boss_id`` is either a ``BOSS_POOL`` key -- an authored fight with its own
+    phase kit + personality + emblem -- or a bare species key, which yields the
+    original random-themed-giant fallback (no pool entry). This is the reusable
+    core of a boss spawn: boss-scale body, hp/xp/score by tier, boss-grade
+    damping, ``behavior='boss'``, and the ``BossAI``. Who/where/the spawn juice
+    stay with the caller: ``_spawn_boss`` for a round, the sandbox for a
+    deterministic one-off.
+    """
+    named = BOSS_POOL.get(boss_id)
+    key = named['species'] if named else boss_id
+
+    boss = species.make(key, pos)
+    gen = boss.genome
+    gen.size *= 2.3                      # rebuild the body at boss scale
+    gen.sat = min(1.0, gen.sat + 0.15)
+    if named:
+        for k, v in named['overrides'].items():
+            setattr(gen, k, v)
+    # boss-scale weight/inertia (plans/01, table row "Chefe"): never lighter
+    # than the underlying species already was (octopus is already 3.0)
+    gen.angular_damping = max(gen.angular_damping, 0.5)
+    gen.linear_damping = max(gen.linear_damping, 0.4)
+    gen.weight = max(gen.weight, 3.0)
+    # feedback: player shots were shoving bosses around mid-approach/attack,
+    # which is a de-facto free interrupt on top of the damage -- a boss
+    # commits to its own movement, it doesn't get knocked off it
+    gen.knockback = 0.0
+    # Fase 5: the FSM drives the fight now, not the species' own chase/
+    # ranged/etc behavior -- 'boss' is a distinct dispatch (creatures/ai/).
+    gen.behavior = 'boss'
+    boss.__init__(pos, 'enemy', genome=gen)
+    boss.species = key
+    if is_final:
+        gen.size *= 1.35                 # the final boss towers over the rest
+        boss.__init__(pos, 'enemy', genome=gen)
+        boss.species = key
+    boss.hp = int((90 + 200 * tier) * (2.0 if is_final else 1.0))
+    boss.max_hp = boss.hp
+    boss.is_boss = True
+    boss.glow_body = True                # bosses get the player-grade glow
+    boss.xp_value = 40 + 15 * tier
+    boss.score_value = 500 + 200 * tier
+    boss.grants = species.SPECIES[key]['grants']
+    boss.max_speed *= 0.82               # big and heavy
+    if named:
+        boss.boss_name = named['name']
+        boss.emblem = named.get('emblem')
+        boss.boss_ai = bossai.BossAI(boss, phases=named['phases'](),
+                                     personality=named['personality'](),
+                                     name=named['name'],
+                                     on_phase=named.get('on_phase'))
+        if named.get('scar'):
+            boss.boss_ai.scar_thresholds = list(named['scar'])
+        for k, v in named.get('boss_attrs', {}).items():
+            setattr(boss, k, v)
+        if named.get('setup'):        # per-boss wiring (Olho-Sismico's blink tick)
+            named['setup'](boss)
+    else:
+        name, _ = species.info(key)
+        boss.boss_name = f"{name} PRIMORDIAL" if is_final else f"{name} ALFA"
+        boss.boss_ai = bossai.BossAI(boss, phases=bossai.default_phases())
+    return boss
+
+
 class RoundManager:
     def __init__(self, game):
         self.game = game
@@ -329,75 +396,25 @@ class RoundManager:
         ONE authored fight at random from its pool (own phase kit + personality
         + mechanic) -- so the same wave can be a different boss run to run.
         Tiers with no pool yet fall back to the original random-themed-giant.
+
+        Who/where and the spawn juice live here; the body itself is built by
+        ``make_boss`` so the sandbox can spawn the exact same boss on demand.
         """
         g = self.game
         tier = self.wave // BOSS_EVERY
         if self.is_final:
-            named = BOSS_POOL[BOSS_FINAL]
+            boss_id = BOSS_FINAL
         else:
             pool_ids = _boss_pool_for_tier(tier)
-            named = BOSS_POOL[self._draw_boss_id(pool_ids)] if pool_ids else None
-        if named:
-            key = named['species']
-        else:
-            pool = THEMES[self.theme]['pool']
-            key = random.choice(pool)
+            boss_id = (self._draw_boss_id(pool_ids) if pool_ids
+                       else random.choice(THEMES[self.theme]['pool']))
         center = g.alive_players()[0].pos if g.alive_players() \
             else Vector2(C.WORLD_W / 2, C.WORLD_H / 2)
         pos = center + random_dir(620)
         pos.x = clamp(pos.x, 100, C.WORLD_W - 100)
         pos.y = clamp(pos.y, 100, C.WORLD_H - 100)
 
-        boss = species.make(key, pos)
-        gen = boss.genome
-        gen.size *= 2.3                      # rebuild the body at boss scale
-        gen.sat = min(1.0, gen.sat + 0.15)
-        if named:
-            for k, v in named['overrides'].items():
-                setattr(gen, k, v)
-        # boss-scale weight/inertia (plans/01, table row "Chefe"): never lighter
-        # than the underlying species already was (octopus is already 3.0)
-        gen.angular_damping = max(gen.angular_damping, 0.5)
-        gen.linear_damping = max(gen.linear_damping, 0.4)
-        gen.weight = max(gen.weight, 3.0)
-        # feedback: player shots were shoving bosses around mid-approach/attack,
-        # which is a de-facto free interrupt on top of the damage -- a boss
-        # commits to its own movement, it doesn't get knocked off it
-        gen.knockback = 0.0
-        # Fase 5: the FSM drives the fight now, not the species' own chase/
-        # ranged/etc behavior -- 'boss' is a distinct dispatch (creatures/ai/).
-        gen.behavior = 'boss'
-        boss.__init__(pos, 'enemy', genome=gen)
-        boss.species = key
-        if self.is_final:
-            gen.size *= 1.35                 # the final boss towers over the rest
-            boss.__init__(pos, 'enemy', genome=gen)
-            boss.species = key
-        boss.hp = int((90 + 200 * tier) * (2.0 if self.is_final else 1.0))
-        boss.max_hp = boss.hp
-        boss.is_boss = True
-        boss.glow_body = True                # bosses get the player-grade glow
-        boss.xp_value = 40 + 15 * tier
-        boss.score_value = 500 + 200 * tier
-        boss.grants = species.SPECIES[key]['grants']
-        boss.max_speed *= 0.82               # big and heavy
-        if named:
-            boss.boss_name = named['name']
-            boss.emblem = named.get('emblem')
-            boss.boss_ai = bossai.BossAI(boss, phases=named['phases'](),
-                                         personality=named['personality'](),
-                                         name=named['name'],
-                                         on_phase=named.get('on_phase'))
-            if named.get('scar'):
-                boss.boss_ai.scar_thresholds = list(named['scar'])
-            for k, v in named.get('boss_attrs', {}).items():
-                setattr(boss, k, v)
-            if named.get('setup'):        # per-boss wiring (Olho-Sismico's blink tick)
-                named['setup'](boss)
-        else:
-            name, _ = species.info(key)
-            boss.boss_name = f"{name} PRIMORDIAL" if self.is_final else f"{name} ALFA"
-            boss.boss_ai = bossai.BossAI(boss, phases=bossai.default_phases())
+        boss = make_boss(g, boss_id, tier, pos, is_final=self.is_final)
         g.enemies.append(boss)
         self.boss = boss
         g.fx.ring(pos, (255, 90, 90))

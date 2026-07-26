@@ -3,6 +3,7 @@
 ```bash
 python lizard_game.py             # play (opens the menu)
 python lizard_game.py --smoke 90  # headless self-test: N frames and exit
+python lizard_game.py --sandbox   # dev-only debug overlay (skips the menu)
 python build.py                   # single-file binary in dist/ (needs pyinstaller)
 ```
 
@@ -47,3 +48,4 @@ Blit to `Surface(..., 0, 24)` and save BMP → PNG.
 - [Architecture](./architecture.md) — where `lizard_game.py`,
   `lagarto/app.py`, and the CLI flag land.
 - [Performance](./performance.md) — the timestep and render decoupling.
+- [Sandbox](./sandbox.md) — what `--sandbox` opens.

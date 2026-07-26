@@ -46,13 +46,23 @@ def load():
     return data
 
 
+def _atomic_write(p, obj):
+    """Write ``obj`` as JSON to ``p`` atomically (tmp -> rename), creating its dir.
+
+    The shared write primitive for everything under ``~/.lagarto`` -- ``save``
+    below and the sandbox preset (``sandbox.py``) both funnel through it so there
+    is one tmp->rename pattern, never a half-written file on disk.
+    """
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, p)
+
+
 def save(data):
     try:
-        os.makedirs(_dir(), exist_ok=True)
-        tmp = path() + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump({k: data.get(k, v) for k, v in DEFAULTS.items()}, f, indent=1)
-        os.replace(tmp, path())     # atomic-ish: never leave a half-written file
+        _atomic_write(path(), {k: data.get(k, v) for k, v in DEFAULTS.items()})
         return True
     except Exception:
         return False

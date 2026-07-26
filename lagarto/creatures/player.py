@@ -247,6 +247,15 @@ class Player(Lizard):
         scorpion's slow) must not fire when the hit bounced off i-frames --
         otherwise you get a debuff with no damage number to explain it.
         """
+        # Sandbox god mode (SB6): the player under test ignores all damage
+        # application -- energy, movement and dash stay real. ``hurt`` is THE
+        # single choke point every damage source funnels through (projectiles,
+        # body contact, boss AoEs), so guarding it here covers them all with one
+        # early-out. No-op on the normal path: the check short-circuits on
+        # ``game.mode == 'sandbox'`` before ``god_mode`` is ever read, and only a
+        # player (never an enemy) is in ``game.players``.
+        if game.mode == 'sandbox' and game.god_mode and self in game.players:
+            return False
         if self.dashing or self.hit_flash > 0.45 or self.down or self.shed_t > 0:
             return False
         dmg *= (1.0 - self.armor)                       # carapaca charm blocks a %

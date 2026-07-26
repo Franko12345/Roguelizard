@@ -21,6 +21,8 @@ from .input.controllers import (make_controllers, describe_joysticks, Pad, MenuN
                           KeyboardMouseController, GamepadController)
 from .game.loop import Game
 from .game.menu import run_menu
+from .sandbox import (Sandbox, preset_exists as sandbox_preset_exists,
+                      load_preset as load_sandbox_preset)
 
 
 def _init_joysticks():
@@ -114,6 +116,7 @@ def main():
     if '--smoke' in sys.argv:
         i = sys.argv.index('--smoke')
         smoke = int(sys.argv[i + 1]) if i + 1 < len(sys.argv) else 120
+    sandbox = '--sandbox' in sys.argv       # dev-only debug overlay; skips the menu
     profile = '--profile' in sys.argv       # also writes ~/.lagarto/perf.csv
 
     pygame.init()
@@ -140,7 +143,9 @@ def main():
     fade = ui.Fade()
 
     while True:
-        if smoke:
+        if sandbox:
+            num, mode, chars = 1, 'sandbox', None      # no menu, 1 player, no waves
+        elif smoke:
             num, mode, chars = 1, 'normal', None
         else:
             chosen = run_menu(screen, font, bigfont, titlefont, joysticks)
@@ -153,6 +158,11 @@ def main():
 
         controllers = make_controllers(num, joysticks)
         game = Game(num, controllers, font, bigfont, mode=mode, chars=chars)
+        sb = Sandbox(game, font, bigfont) if sandbox else None
+        if sb is not None and sandbox_preset_exists():
+            # A saved preset rebuilds the exact scene through the same spawn/grant
+            # path the overlay uses; no preset -> the sandbox opens idle (SB7).
+            sb.apply_preset(load_sandbox_preset())
         fade.start(0.35)                     # fade in from the menu
         prev_state = game.state
         acc = 0.0
@@ -179,6 +189,8 @@ def main():
                     _reattach(controllers, joysticks)
                 if ev.type == pygame.VIDEORESIZE:
                     display.handle_resize()
+                if sb is not None and sb.handle_event(ev):
+                    continue                 # overlay ate it (toggle / panel click)
                 if ev.type == pygame.KEYDOWN:
                     if ev.key == pygame.K_ESCAPE:
                         # ESC used to drop the whole run with no confirmation
@@ -334,6 +346,8 @@ def main():
                 game._draw_pause(screen, joysticks)
             fade.draw(screen)
             meter.draw(screen, font)
+            if sb is not None:
+                sb.draw(screen)              # debug overlay on top of everything
             draw_ms = (time.perf_counter() - _t) * 1000.0
             _t = time.perf_counter()
             display.present()

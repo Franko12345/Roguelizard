@@ -89,6 +89,12 @@ class Game:
         self.state = 'play'
         self.combo = 0
         self.combo_timer = 0.0
+        # Sandbox debug staples (SB6). Inert unless ``mode == 'sandbox'``: every
+        # read of these is guarded on the mode first, so a normal run never sees
+        # them change behaviour. The sandbox overlay flips them from its menu.
+        self.god_mode = False        # player ignores damage application (hurt early-out)
+        self.pause_ai = False        # freeze enemy/boss/prey/friend update; player still walks
+        self.step_once = False       # one-shot: advance the frozen AI exactly one tick
         self.combo_flash = 0.0
         self.pollen = 0
         self.hitstop = 0.0        # freeze frames on heavy impacts
