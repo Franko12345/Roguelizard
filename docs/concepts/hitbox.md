@@ -34,9 +34,27 @@ around the silhouette without covering the eyes.
 It was once a reticle / crosshair: read as UI stuck on the creature.
 Keep it organic — colour and glow, never aim marks.
 
+## Denying the crit, and softening a hit
+
+Two attributes on the creature, both unset by default, so every creature
+that does not use them behaves exactly as before:
+
+| | |
+|---|---|
+| `eye_shielded` | `hit_test` returns `'body'` for what would be a head hit, so the caller never sees the weak point. |
+| `dmg_taken_mult` | Multiplies incoming damage in `take_hit`. |
+
+They exist for the Olho-Sísmico's blink (see
+[Body plan](./body-plan.md)): while the eye is shut the crit is off the
+table and a hit that lands anyway does 25%. Written as generic dials rather
+than a boss-specific branch in `hit_test`, because `hit_test` is the single
+choke point every damage source funnels through and one boss does not get to
+put an `if` in it.
+
 ## Related
 
 - [Combat](./combat.md) — dash / whip hit rules that use this.
 - [Weapon](./weapon.md) — auras and puddles that use this.
 - [Health HUD](./health-hud.md) — where the resulting damage shows up.
 - [Spine](./spine.md) — the sample source.
+- [Body plan](./body-plan.md) — the Olho-Sísmico blink that uses both dials.

@@ -47,8 +47,34 @@ Two ways parts enter the player [Genome](./genome.md):
 Also entered via [Mutation](../../CONTEXT.md) cards, which write directly
 to the field.
 
+## `OSC_PRESETS` — one table for every waving part
+
+Each oscillating part reads a `PhaseOscillator` off the creature
+(`creature.osc[key]`, built by `init_oscillators`, read by `_osc_offset`)
+instead of inlining its own `math.sin`. Tuning how a species' fins move is
+editing this table; the draw code never touches animation maths.
+
+| key | speed | amplitude | phase gap |
+|---|---|---|---|
+| `spikes` | 1.3 | 0.18 | 0.5 |
+| `fins` | 2.0 | 0.30 | 1.0 |
+| `antennae` | 3.0 | 0.30 | 1.0 |
+| `wings` | 7.0 | 1.00 | 0.0 |
+| `spore_sacs` | 3.0 | 0.16 | 1.0 |
+| `tail_ripple` | 2.2 | 1.00 | −0.9 |
+| `arms` | 2.4 | 1.00 | −0.9 |
+
+`update_oscillators` points every oscillator's clock at `creature.wobble`
+rather than accumulating its own `dt` — see
+[Procedural animation](./procedural-animation.md) for why that matters
+(it is the difference between the old rate and 1/6 of it, and between
+creatures being out of phase and in lockstep).
+
+A negative `phase_gap` runs the wave tip-to-base instead of base-to-tip.
+
 ## Related
 
 - [Genome](./genome.md) — the numbers each part draws from.
 - [Spine](./spine.md) / [Leg](./leg.md) — the anatomy parts hang off.
 - [Charm](./charm.md) — the tail-club charm sets `tail='club'` for a run.
+- [Procedural animation](./procedural-animation.md) — the oscillator rule.

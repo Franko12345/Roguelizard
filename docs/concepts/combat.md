@@ -11,6 +11,27 @@ manual verbs on top:
 
 Combo streak (`game.combo`) climbs on kills and decays if you break off.
 
+## All three verbs go through a gate, at zero duration
+
+Each verb owns an `Anticipation` (`dash_antic` / `tongue_antic` /
+`whip_antic`), and all three durations are **0** in config. That looks
+pointless until you know what it buys: the action fires exactly once per
+press, so holding the button cannot repeat-fire. That was the actual bug the
+gate was added for.
+
+Wind-up itself is deliberately not the player's. A boss telegraphing is
+information you act on; your own dash stalling is latency, and 60–100 ms on
+the three core verbs read as the whole game being sluggish. Raise any
+`*_ANTIC_T` above 0 and the coil comes back with it — the code path and the
+`*_ANTIC_SQUAT` values are still there. Enemy and boss wind-ups are a
+separate system and untouched.
+
+One trap, worth knowing before touching this: `Anticipation.update` returns
+its action on the first call **after** the timer reaches zero, so there is one
+frame where `is_active` is already False and the action is still pending. A
+trigger guarded only on `not is_active` re-arms in that frame and the action
+then never fires at all. Every trigger also checks `antic.action is None`.
+
 ## Tongue
 
 A chameleon slingshot in three beats, all driven off one clock

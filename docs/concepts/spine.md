@@ -40,15 +40,32 @@ The last `TAIL_SPRING_JOINTS` joints are _also_ available through
 and the travelling wave. Draw reads cosmetic, sim reads
 `spine.joints`. See [ADR-0007](../adr/0007-cosmetic-skeleton-for-tail.md).
 
-## `plan='segmented'` and `plan='tentacle'` do not use `Spine`
+## The tail overshoot is a chain of 5
 
-Centipede uses a chain of circle segments with metachronal legs.
-Kraken uses a mantle with arm sub-chains. Both live in `Lizard`
-alongside the spine path, chosen by [`Genome.plan`](./genome.md).
+`tail_chain`, built in `rebuild_body` for `plan='normal'` only, advanced in
+`update_secondary_springs`, read by `_cosmetic_joints`. Stiffness rises
+toward the base and damping falls toward the tip, so a dead stop settles at
+the base first and rings on at the tip.
+
+`tail_spring` is still the public handle and **is** the tip link, so the
+handful of places that write `tail_spring.stiffness` (boss body telegraph, AI
+mood pose, per-state posing) keep writing one object — the chain's stiffness
+is re-derived from the tip's as a set of ratios, so one write scales the whole
+tail. See [Procedural animation](./procedural-animation.md).
+
+## Other body plans do not use `Spine` the same way
+
+Centipede (`segmented`) uses a chain of circle segments with metachronal
+legs. Kraken (`tentacle`) uses a mantle with arm sub-chains. Olho-Sísmico
+(`orbital`) collapses the joints into a ball with a tiny `link`. A Muralha
+(`fixed`) is a short wide chain that never moves. All live in `Lizard`
+alongside the spine path, chosen by [`Genome.plan`](./genome.md); none of
+them gets a `tail_chain`.
 
 ## Related
 
 - [Genome](./genome.md) — the `size` / `length` / `bend` inputs.
 - [Leg](./leg.md) — reads spine joints for foot planting.
 - [Parts](./parts.md) — draws spikes/plates/fins along joint indices.
+- [Body plan](./body-plan.md) — the five plans and what each builds.
 - [ADR-0007](../adr/0007-cosmetic-skeleton-for-tail.md) — the sim / draw split.

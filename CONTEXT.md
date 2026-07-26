@@ -79,6 +79,21 @@ Distinct from the physical `Spine` — sim reads spine, draw reads cosmetic.
 `_cosmetic_joints()` is the single choke point that returns them.
 _Avoid_: display bones, render skeleton.
 
+**Body Plan**:
+`Genome.plan`: which anatomy `rebuild_body` and `draw` build. One of
+`normal`, `segmented` (centipede), `tentacle` (kraken), `orbital` (the eye),
+`fixed` (the wall). A plan changes the DRAWING; the species carries the speed
+and the damping, which is why re-skinning a mobile species into `fixed` gives
+you a wall that walks.
+_Avoid_: body type, morph, shape.
+
+**Oscillator**:
+A `PhaseOscillator` on the creature driving one waving part, read via
+`parts._osc_offset`. Tuned from the `OSC_PRESETS` table, and clocked from
+`creature.wobble` rather than its own accumulator so parts keep the rate they
+had and creatures stay out of phase with each other.
+_Avoid_: wave, sine, wobbler.
+
 ### Combat
 
 **Weapon**:
@@ -173,6 +188,19 @@ _Avoid_: chapter, floor.
 `normal` ends at the PRIMORDIAL fight on wave `RUN_FINAL_WAVE`. `endless`
 unlocks after the first `normal` win and scales forever.
 _Avoid_: difficulty (unrelated).
+
+**Arena**:
+A `BossArena` on a boss: a `size` play box **centred on the boss** for the
+length of the fight, plus a screen `tint`. Centred is the point — a box
+anchored to the world origin only shaves the far corners off a 3200x3200 map,
+which the player never reaches. A boss with no entry fights in the open world.
+_Avoid_: room, chamber, bounds.
+
+**Sandbox**:
+The dev-only mode behind `--sandbox`: a real `Game` with the wave machine
+frozen, driven by hand through a left-docked overlay to spawn any entity and
+watch it in the actual world. Not a player-facing `Mode`.
+_Avoid_: debug mode, test level, editor.
 
 ### Economy
 

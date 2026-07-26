@@ -67,7 +67,8 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 ### Run e progressão
 
 - [Gameloop](docs/concepts/gameloop.md) · [Game modes](docs/concepts/game-modes.md)
-  (NORMAL / INFINITO).
+  (NORMAL / INFINITO) · [Sandbox](docs/concepts/sandbox.md) (`--sandbox`, dev,
+  não é um modo).
 - [Round](docs/concepts/round.md) · [Camp](docs/concepts/camp.md) ·
   [Evolution](docs/concepts/evolution.md) · [Progression](docs/concepts/progression.md).
 - [ADR-0005](docs/adr/0005-camp-is-a-physical-clearing.md) — camp é
@@ -90,10 +91,13 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 - [Controls](docs/concepts/controls.md) · [Input buffer](docs/concepts/input-buffer.md) ·
   [Pause](docs/concepts/pause.md).
 - [Performance](docs/concepts/performance.md) — timestep fixo, glow
-  cache, texto cacheado, `RENDER_FPS = SIM_HZ`.
+  cache, texto cacheado, transformada de câmera cacheada,
+  `RENDER_FPS = SIM_HZ`. Como medir sem se enganar está lá também.
 - [ADR-0002](docs/adr/0002-fixed-timestep-decoupled-render.md) — o loop
   determinístico. [ADR-0009](docs/adr/0009-glow-cache-quantized-keys.md)
   — chave de brilho quantizada.
+  [ADR-0011](docs/adr/0011-camera-transform-cached-on-property-writes.md)
+  — `w2s` cacheada; nunca mutar vetor de câmera in-place.
 - [Networking](docs/concepts/networking.md) — coop local hoje; costuras
   prontas para online.
 

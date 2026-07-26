@@ -80,6 +80,54 @@ garbage.
 `_TEXT_MAX = 700` with `clear()` on overflow — same pattern. See
 [UI legibility](./ui-legibility.md).
 
+## The camera transform is the hottest thing in the frame
+
+`Camera.w2s` runs ~5,500 times per frame with 30 creatures on screen —
+around 4.7 ms of a ~13 ms draw, more than any drawing primitive. It was
+doing ten attribute lookups per call to recompute a transform that only
+changes when the camera does.
+
+It is now three cached floats and one multiply-add per axis:
+
+```
+sx = wx * _z + _ox
+sy = wy * _z + _oy
+```
+
+`_z / _ox / _oy` fold zoom, camera position, screen centre and shake
+offset together. They are refreshed by the **setters** of the four things
+they depend on — `pos`, `zoom`, `center`, `shake_off` are properties for
+exactly that reason — so callers keep assigning `cam.pos` as before and
+cannot leave the cache stale.
+
+The one thing that would break it is mutating a camera vector **in place**
+(`cam.pos.x = 5`) instead of assigning a new one. Nothing does; assign a
+new `Vector2` if you ever need to.
+
+Two follow-ons from the same profile:
+
+- `w2s_many(points)` binds the transform once per **list** instead of per
+  point, for the body quads / fans / outline ring / part polygons.
+- `visible()` skips `w2s` entirely — it needs neither the `int()` rounding
+  nor the tuple, and runs ~800 times a frame.
+
+`tools/check_camera.py` pins correctness rather than trusting the speedup:
+`w2s` must match the naive formula exactly after every mutation path,
+`w2s_many` must agree with `w2s` pointwise, `visible()` must agree with the
+bounds test it replaced, and `s2w` must still invert `w2s`.
+
+### Measuring this is easy to get wrong
+
+Two traps, both hit while doing it:
+
+1. **Seed the scene.** Creature genomes are randomised per spawn, so two
+   runs build different bodies and the numbers swing 30% for no reason.
+2. **Interleave the trees and take a best-of-N.** Machine load moves the
+   absolute numbers by 2x, which is enough to invert a comparison — an
+   early "+31% regression" here was pure noise, and the real regression
+   (a mask-based outline at 3.3x on the draw path) only showed up in a
+   benchmark that actually exercised it.
+
 ## Related
 
 - [ADR-0002](../adr/0002-fixed-timestep-decoupled-render.md) — the loop.

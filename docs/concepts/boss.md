@@ -62,9 +62,27 @@ tense. Zero draw code new.
 ## Boss vs generic
 
 Named bosses live in `BOSS_POOL` with overrides (patterns per phase,
-`on_phase`, `emblem`, `boss_attrs`). Tiers without an authored entry fall
-back to the generic "themed species scaled up" boss. This is not a
+`on_phase`, `emblem`, `boss_attrs`, `setup`). Tiers without an authored entry
+fall back to the generic "themed species scaled up" boss. This is not a
 regression — it's "no authored content yet at this tier".
+
+## The roster
+
+Eleven authored fights. `BOSS_TIER_POOLS` decides who is eligible where; a
+tier rolls one at random from its pool, **without replacement** (see
+[Round](./round.md)), so a tier with five shows you all five before repeating.
+
+| tier | wave | pool |
+|---|---|---|
+| 1–3 | 5 / 10 / 15 | Rei Lagarto · Centopeiadeira · Kraken-Mor |
+| 4–5 | 20 / 25 | Mãe-Escaravelho · Aranha-Rei · Serpente de Cristal · Terror Alado · Olho-Sísmico |
+| 6 | 30 | A Muralha |
+| 7+ | 35+ | A Muralha · ANKH |
+
+PRIMORDIAL is not in a tier pool: `is_final` picks it directly, so wave 20 in
+NORMAL is always that fight. Tiers 6 and 7 are INFINITO-only in practice —
+which is why `tools/check_bosses.py` exists, because reaching them by playing
+takes half an hour and `--smoke` never reaches a boss round at all.
 
 ## Arena
 

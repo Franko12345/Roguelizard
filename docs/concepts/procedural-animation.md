@@ -27,10 +27,55 @@ Drawn by two-bone IK. See [Leg](./leg.md).
 
 Derived from velocity — the body flexes without any authored animation.
 
+## Oscillators
+
+Every part that waves used to inline its own
+`math.sin(creature.wobble * k + i * gap) * amp`. Each now reads a
+`PhaseOscillator` from the `OSC_PRESETS` table in
+[Parts](./parts.md) — per-species tuning is editing one table instead of
+hunting sines through the draw code.
+
+The oscillators are driven **by `creature.wobble`**, not by their own `dt`
+accumulator. That is not a detail: `wobble` advances at `dt * 6`, so a
+preset speed of 1.3 really is the old `wobble * 1.3`; and `wobble` is seeded
+per creature at random, so creatures stay out of phase with each other. An
+oscillator ticking its own clock from zero animates at 1/6 speed **and** puts
+every creature's fins in lockstep — both were shipped once and both were
+caught by `tools/check_oscillators.py`, which asserts each oscillator
+reproduces the exact expression it replaced.
+
+The octopus arm wave deliberately stays an inline sine: each arm carries its
+own phase offset *inside* the sine, and `PhaseOscillator(time, segment)` has
+nowhere to put it. `sin(a) + sin(b)` is not `sin(a + b)`.
+
+## Follow-through is a chain, not a spring
+
+The tail was one `Vector2Spring`, so it lagged as one rigid unit. It is now
+5, stiffness rising toward the base and damping falling toward the tip, so a
+dead stop **cascades outward**: measured 6, 3, 42, 45, 51 frames to settle
+from base to tip.
+
+Stiffness is stored as a **ratio** of the tip spring's and re-derived each
+step, which keeps the tip behaving exactly as the old single spring did and
+means the existing writers — the boss body telegraph, the AI mood pose,
+per-state [posing](./ai.md) — keep writing one object (`tail_spring` *is* the
+tip link) and now scale the whole tail instead of just its end.
+
+## The lesson both of those taught
+
+Spring stiffness is not a "how much lag" dial. A **low** stiffness looks like
+it should mean more lag and more whip, but if the motion you are chasing is
+shorter than the spring's settle time, the spring simply never arrives at the
+shape at all and you get a stiff straight thing instead. The tongue's retract
+is ~10 frames long and needed its stiffness **raised** to look loose. Measure
+the shape, not the constant.
+
 ## Related
 
 - [Spine](./spine.md) — the follow-the-leader chain.
 - [Leg](./leg.md) — 2-bone IK + foot planting.
-- [Parts](./parts.md) — decorations that ride the spine.
+- [Parts](./parts.md) — decorations that ride the spine, and `OSC_PRESETS`.
+- [AI](./ai.md) — per-state posing, the body-language layer.
+- [Combat](./combat.md) — the tongue, a pinned spring chain.
 - [ADR-0007](../adr/0007-cosmetic-skeleton-for-tail.md) — the sim vs
   draw split for tail.

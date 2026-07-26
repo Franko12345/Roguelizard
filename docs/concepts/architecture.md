@@ -74,6 +74,7 @@ Springs, oscillators and the body chains built from them.
 | `creatures/ai/fly.py` | Airborne behaviours (flyer, bomber). |
 | `creatures/ai/burrow.py` | Centipede dive-and-ambush FSM. |
 | `creatures/ai/grapple.py` | Octopus anti-kite grappler. |
+| `creatures/ai/posing.py` | Per-state resting posture (the body-language layer). |
 | `creatures/champions/base.py` | [Champions](./champion.md): template + `maybe_promote`. |
 | `creatures/champions/variants.py` | Named variants (FILHOTE, ALFA, ESPECTRO, …). |
 | `creatures/champions/modifiers.py` | Stackable modifiers (BLINDADO, GIGANTE, EXPLOSIVO, DIVISOR). |
@@ -133,13 +134,15 @@ each `state_*` module is one entry in the dispatch table.
 | `world/collision.py` | Body separation via spatial hash. See [Combat](./combat.md). |
 | `world/pickups.py` | `Bug`, `Fruit`, `Egg`. |
 
-## `lagarto/app.py` — launcher
+## `lagarto/` top level
 
 | Module | Responsibility |
 |---|---|
 | `app.py` | Window setup + main loop with fixed timestep. |
+| `sandbox.py` | The `--sandbox` dev overlay. Top level on purpose: it reaches across every package (creatures, combat, flow, world, render) and belongs to none of them. |
 
 ## Related
 
 - [ADR-0010](../adr/0010-single-file-per-module.md) — why the split.
 - [Performance](./performance.md) — the fixed-timestep / render decoupling.
+- [Sandbox](./sandbox.md) — what `sandbox.py` opens.

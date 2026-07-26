@@ -21,6 +21,7 @@ docs/
 └── agents/           ← operational conventions for AFK agents
     ├── issue-tracker.md
     ├── triage-labels.md
+    ├── verification.md   ← an issue closes when a CHECK says so
     └── domain.md
 ```
 
