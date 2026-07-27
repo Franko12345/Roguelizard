@@ -73,6 +73,36 @@ VENOM_PUDDLE_TICK = 0.55
 # e exatamente o bug do Acido, ja documentado e ja corrigido uma vez.
 VENOM_PUDDLE_LIFE = 2.8
 
+# --- inimigos da issue #104: os dois habitos que o ROLAMENTO criou ---------- #
+# ANTECIPADOR: atira LIDERANDO, onde voce VAI estar. Ataca o habito de rolar por
+# reflexo -- o rolamento e barato (5 de energia, 0.2s de recarga), entao o
+# jogador aprende a apertar sem olhar; este mira o ponto de chegada. O telegrafo
+# e o proprio ponto no chao, redesenhado a cada quadro do windup: ficar parado e
+# uma resposta valida, rolar sem ler nao e.
+SNIPER_WINDUP = 0.55     # >27 quadros de aviso, com a marca visivel o tempo todo
+SNIPER_CD = 2.6
+SNIPER_RANGE = 470
+SNIPER_LEAD = 0.5        # segundos de velocidade do alvo somados a mira
+SNIPER_SHOTS = 2         # rajada curta: a decisao e o ponto, nao a cadencia
+SNIPER_GAP = 0.16
+SNIPER_SPEED = 340
+SNIPER_DMG = 8
+SNIPER_MARK_R = 30       # raio da marca no chao (o tamanho do erro que ela pune)
+# MORTEIRO: negacao de area que ARMA COM ATRASO. Ataca o habito de investir na
+# cara -- a poca nasce onde voce ia pousar, entao a investida sem plano de saida
+# termina dentro dela. A pegada aparece ANTES de armar (regra do telegrafo).
+MORTAR_ARM = 1.0         # tempo de pegada no chao antes da poca existir
+MORTAR_CD = 4.0
+MORTAR_RANGE = 440
+MORTAR_SPREAD = 46       # ruido no ponto: mira o pouso, nao a cabeca
+MORTAR_R = 58
+MORTAR_DMG = 6           # dano POR TICK (poca hostil tem cadencia propria)
+MORTAR_TICK = 0.6
+# Tem que ser MENOR que MORTAR_CD, senao as pocas de UM mesmo morteiro se
+# sobrepoem e o dano empilha -- Acido, poca de veneno e slow do ferrao ja
+# cairam nisso; ver docs/concepts/enemy-behaviors.md.
+MORTAR_LIFE = 3.0
+
 # --- inimigos da fase B4 (corpos procedurais novos) ------------------------- #
 # CENTOPEIA (corpo 'segmented'): cavadora. Ataca o habito de ACAMPAR/andar reto --
 # mergulha (intangivel), viaja por baixo ate um ponto que voce ve marcado no chao
@@ -276,6 +306,11 @@ INPUT_BUFFER = 0.15
 
 DASH_COST = 14
 TONGUE_COST = 8
+# Lingua-Dardo (amuleto, issue #104): a lingua tambem dispara. O unico tiro
+# MIRADO do jogador -- as armas continuam automaticas. Dano baixo de proposito:
+# o valor esta em ter um tiro no botao que voce ja aperta, nao em dano.
+TONGUE_DART_DMG = 5
+TONGUE_DART_SPEED = 420
 
 # --- rolamento: a segunda esquiva, barata e sem dano (issue #103) ------------- #
 # A investida (o dash) e invulneravel mas PONTUAL: 0,16 s de i-frames num cd de
@@ -449,6 +484,7 @@ BOSS_BARRAGE_SHOTS = 4
 BOSS_BARRAGE_GAP = 0.12
 BOSS_BARRAGE_SPEED = 300
 BOSS_BARRAGE_DMG = 14
+BOSS_BARRAGE_LEAD = 0.35     # segundos de lead -- uma formula so (emitter.lead_point)
 BOSS_SUMMON_WINDUP = 0.9
 BOSS_SUMMON_COUNT = 2
 BOSS_SUMMON_CD = 6.0         # separado do cd normal -- nao pode invocar toda vez
