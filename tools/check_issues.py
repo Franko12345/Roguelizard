@@ -30,6 +30,13 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.creatures.ai import BEHAVIORS as _beh
+chk(104, "conteudo bullet hell", {'lead', 'mortar'} <= set(_beh)
+    and species.SPECIES['spitter']['genome'].shot is not None
+    and 'dardo' in charms.CHARMS and _ct.returncode == 0,
+    "" if _ct.returncode == 0 else _ct.stderr.decode()[-90:])
 _roll = subprocess.run([sys.executable, 'tools/check_roll.py'], capture_output=True,
                        env={**os.environ, 'PYTHONPATH': '.'})
 chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
