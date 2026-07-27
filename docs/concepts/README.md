@@ -37,6 +37,8 @@ wrong.
 ### Combat
 
 - [Combat](./combat.md) — dash, whip, tongue, soft contact
+- [Dodge](./dodge.md) — the two dodge verbs and the fake roll
+- [Projectile](./projectile.md) — the one shot class and its three hooks
 - [Weapon](./weapon.md) — the 8 automatic attacks
 - [Item](./item.md) — actives + mechanic-changing passives
 - [Charm](./charm.md) — permanent camp slot

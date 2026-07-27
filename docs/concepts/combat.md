@@ -1,20 +1,24 @@
 # Combat
 
-The core is automatic ([Weapons](./weapon.md)). The player has three
+The core is automatic ([Weapons](./weapon.md)). The player has four
 manual verbs on top:
 
-- **Dash** — contact damage + i-frames + **chain** (dash-kill recharges
-  dash and refunds energy).
+- **Investida** (dash) — contact damage + i-frames + **chain** (dash-kill
+  recharges dash and refunds energy).
+- **Rolamento** — the other dodge: same i-frames, no damage, a quarter of the
+  energy, and steerable. See [Dodge](./dodge.md).
 - **Tongue** — auto-aims the nearest edible / enemy; enemy takes damage
   and is pulled; costs energy.
 - **Whip (Rabada)** — tail sweep on a dedicated button.
 
 Combo streak (`game.combo`) climbs on kills and decays if you break off.
 
-## All three verbs go through a gate, at zero duration
+## The three offensive verbs go through a gate, at zero duration
 
-Each verb owns an `Anticipation` (`dash_antic` / `tongue_antic` /
-`whip_antic`), and all three durations are **0** in config. That looks
+Each owns an `Anticipation` (`dash_antic` / `tongue_antic` /
+`whip_antic`), and all three durations are **0** in config. The Rolamento has
+no gate: it hits nothing, and the rising-edge buffer plus its own cooldown
+already stop a held button from repeat-firing. That looks
 pointless until you know what it buys: the action fires exactly once per
 press, so holding the button cannot repeat-fire. That was the actual bug the
 gate was added for.
@@ -75,6 +79,21 @@ Spring stiffness is a trap worth naming: a *low* `C.TONGUE_LAG` looks like it
 should mean more lag and more whip, but the reel is only ~10 frames long, so a
 soft spring simply never arrives at the coiled shape and the tongue stays
 straight.
+
+### Lingua-Dardo — the one aimed shot
+
+The `dardo` [Charm](./charm.md) makes the launch also fire a projectile down
+the same aim the tongue grabs on (`Player._fire_tongue_dart`, at launch, not at
+stick). It is the **only** attack the player aims: every
+[Weapon](./weapon.md) stays automatic (`nearest_enemy`) and stays that way —
+a modifier here is a build, not a skill check.
+
+It is a charm and not a level-up card for the same reason as the clava
+(issue #22): it rewrites a **verb**, and rewriting a verb is a choice made at
+the camp, not a card the hand happened to roll. Charms are also reversible; a
+mutation is not, and this one changes how a button you already press behaves.
+The dart goes through `spawn_projectile` like everything else, so the player's
+stacked shot modifiers ride it too.
 
 ### What it catches
 
@@ -239,6 +258,7 @@ that reapplies it" — Ácido, venom puddle, sting. See
 ## Related
 
 - [Weapon](./weapon.md) — the automatic core.
+- [Projectile](./projectile.md) — every shot, and its three hooks.
 - [Hitbox](./hitbox.md) — body sampling + head crit.
 - [Damage model](./damage.md) — player HP flow.
 - [ADR-0006](../adr/0006-soft-player-contact.md) — soft contact.

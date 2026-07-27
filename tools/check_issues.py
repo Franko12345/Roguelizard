@@ -21,7 +21,8 @@ from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
-from lagarto.game import menu
+from lagarto.game import menu, state_camp, loop as gameloop
+from lagarto.input.controllers import _ACTIONS
 import lagarto
 
 src = lambda m: inspect.getsource(m)
@@ -29,6 +30,37 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.creatures.ai import BEHAVIORS as _beh
+chk(104, "conteudo bullet hell", {'lead', 'mortar'} <= set(_beh)
+    and species.SPECIES['spitter']['genome'].shot is not None
+    and 'dardo' in charms.CHARMS and _ct.returncode == 0,
+    "" if _ct.returncode == 0 else _ct.stderr.decode()[-90:])
+_roll = subprocess.run([sys.executable, 'tools/check_roll.py'], capture_output=True,
+                       env={**os.environ, 'PYTHONPATH': '.'})
+chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
+    and _roll.returncode == 0,
+    "" if _roll.returncode == 0 else _roll.stderr.decode()[-90:])
+_pj = subprocess.run([sys.executable, 'tools/check_projectile.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.combat import projectile as projlib
+chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
+    and _pj.returncode == 0,
+    "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
+_sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
+    and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
+    "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
+from lagarto.combat import emitter as emi
+_fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
+       [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
+chk(101, "shared emitter", bool(_fns)
+    and all(f.__module__ == 'lagarto.combat.emitter' for f in _fns)
+    and all(list(inspect.signature(f).parameters) == ['shooter', 'game', 'target', 'dials']
+            for f in _fns)
+    and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4

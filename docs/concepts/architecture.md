@@ -43,6 +43,7 @@ Springs, oscillators and the body chains built from them.
 | Module | Responsibility |
 |---|---|
 | `combat/projectile.py` | `Projectile` (spit, web, boss shots). Helpers `spit`/`web`. |
+| `combat/emitter.py` | Every attack pattern, `(shooter, game, target, dials)`. Shared by boss and common enemy — [ADR-0012](../adr/0012-shared-pattern-emitter.md). |
 | `combat/charms.py` | [Charms](./charm.md). |
 | `combat/items.py` | [Items](./item.md): actives + mechanic-changing passives. |
 | `combat/evolution/cards.py` | Level-up hand roller. See [Evolution](./evolution.md). |
@@ -86,7 +87,7 @@ Springs, oscillators and the body chains built from them.
 | `flow/rounds.py` | [Round](./round.md) manager: themed waves from nests. |
 | `flow/progression.py` | [Meta-progression](./progression.md): DNA save file. |
 | `flow/boss/ai.py` | [Boss](./boss.md) FSM: intro → approach → windup → attack → recover → phase. |
-| `flow/boss/patterns.py` | Attack patterns and per-boss phase kits. |
+| `flow/boss/patterns.py` | `PATTERNS`: the boss-side dial table over `combat/emitter.py`, plus per-boss phase kits. |
 | `flow/boss/personality.py` | `BossPersonality`: mood → speed / pattern weight / glow / tell length. |
 | `flow/boss/telegraph.py` | Per-kind telegraph drawing. |
 | `flow/boss/arena.py` | Per-boss arena modifiers (bounds-shrink, screen-tint). |

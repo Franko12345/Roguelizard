@@ -19,11 +19,11 @@ from ..creatures.ai import AILizard
 from ..creatures.player import Player
 from ..creatures import species
 from ..combat import evolution
+from ..combat import projectile
 from ..audio import engine as audio
 from ..render import ui
 from ..flow import progression
 from ..core import palette
-from ..combat import weapons
 from ..creatures import characters
 from ..combat import charms as charmlib
 from ..world.pickups import Bug, Fruit, Egg
@@ -102,6 +102,9 @@ class Game:
         self.step_once = False       # one-shot: advance the frozen AI exactly one tick
         self.combo_flash = 0.0
         self.pollen = 0
+        # per-RUN shop prices, keyed by item name: a purchase raises the price
+        # and it stays raised in every later camp (see state_camp._roll_shop)
+        self.shop_prices = {}
         self.hitstop = 0.0        # freeze frames on heavy impacts
         self.flash = 0.0          # brief white screen flash
         self.dt_last = C.DT       # boss.py's per-frame barrage tick reads this
@@ -417,7 +420,7 @@ class Game:
             return
         it = self.camp['shop'][i]
         it['fn'](self)
-        it['cost'] = int(it['cost'] * 1.6)
+        it['cost'] = self.shop_prices[it['name']] = int(it['cost'] * C.SHOP_PRICE_MULT)
         self.camp['msg'] = it['name']
         self.camp['msg_t'] = 1.4
 
@@ -474,7 +477,31 @@ class Game:
         ``self.enemies`` (a dying DIVISOR splitting inside _collisions)."""
         self.pending_enemies.append(e)
 
+    def _stack_shot_mods(self, proj):
+        """The player's stackable shot modifiers (#104), applied once per shot.
+
+        Same reason Retaguarda lives in ``spawn_projectile``: this is the one
+        choke point every friendly bullet already passes, and a per-weapon copy
+        of the rule is how the dash ended up with two of them. Stacking is the
+        point -- an enemy shot wears one modifier, the player's wears every one
+        they own (docs/concepts/projectile.md).
+        """
+        alive = [p for p in self.players if not p.dead]
+        if not alive:
+            return
+        bounces = max(getattr(p, 'shot_bounces', 0) for p in alive)
+        homing = max(getattr(p, 'shot_homing', 0) for p in alive)
+        if bounces:
+            proj.bounces_left = bounces
+            proj.bounce_damp = 1.0        # a player ricochet that limps is a dud
+            proj.on_update.append(projectile.bounce)
+        if homing:
+            proj.home_mult = homing
+            proj.on_update.append(projectile.homing)
+
     def spawn_projectile(self, proj, mirror=True):
+        if mirror and not proj.hostile:   # mirror=False is the Retaguarda copy,
+            self._stack_shot_mods(proj)   # which already carries the modifiers
         self.projectiles.append(proj)
         # Retaguarda mirrors every friendly shot backwards. It lives HERE because
         # this is the single choke point every weapon already goes through --
@@ -495,13 +522,7 @@ class Game:
 
     def _update_projectiles(self, dt):
         for pr in self.projectiles:
-            if pr.homing and not pr.hostile:      # seek the nearest enemy
-                tgt = self.nearest_enemy(pr.pos, 520)
-                if tgt:
-                    speed = pr.vel.length()
-                    desired = safe_norm(tgt.pos - pr.pos)
-                    pr.vel = safe_norm(safe_norm(pr.vel).lerp(desired, min(1, 7 * dt))) * speed
-            pr.update(dt)
+            pr.update(dt, self)               # on_update hooks: homing, bounce, ...
             if pr.dead:
                 continue
             if pr.hostile:
@@ -515,6 +536,8 @@ class Game:
                             p.hurt(self, safe_norm(pr.vel), pr.dmg)
                         self.fx.burst(pr.pos, pr.color, 8, 160)
                         self.fx.spark_burst(pr.pos, palette.lighten(pr.color, 0.3), 6, 200)
+                        for fn in pr.on_hit:
+                            fn(pr, p, self)
                         pr.dead = True
                         break
             else:
@@ -534,6 +557,8 @@ class Game:
                             e.apply_poison(3.0, 3.0)
                         elif pr.effect == 'slow':
                             e.apply_slow(0.5, 1.6)
+                        for fn in pr.on_hit:
+                            fn(pr, e, self)
                         if pr.pierce:           # pass through, remember this enemy
                             if pr._pierced is None:
                                 pr._pierced = set()
@@ -545,16 +570,18 @@ class Game:
                     for n in self.rounds.nests:
                         if not n.dead and n.pos.distance_to(pr.pos) < n.max_r + pr.radius:
                             n.take_hit(self, pr.dmg)
+                            for fn in pr.on_hit:
+                                fn(pr, n, self)
                             pr.dead = True
                             break
-        # Payload projectiles leave their puddle wherever they ended, and a shot
-        # can die on four different paths above (expiry, out of bounds, hitting a
-        # player, hitting a nest). Doing this in one sweep instead of at each
-        # `pr.dead = True` means a new death path can never silently skip it.
+        # on_death fires in one sweep, because a shot can die on four different
+        # paths above (expiry, out of bounds, hitting a player, hitting a nest)
+        # and doing it at each `pr.dead = True` means a new death path can
+        # silently skip it. The dead are dropped right after, so it fires once.
         for pr in self.projectiles:
-            if pr.dead and pr.puddle:
-                self.spawn_puddle(weapons.Puddle(pr.pos, hostile=True, **pr.puddle))
-                pr.puddle = None
+            if pr.dead:
+                for fn in pr.on_death:
+                    fn(pr, self)
         self.projectiles = [p for p in self.projectiles if not p.dead]
 
     # ---- eating / growth ------------------------------------------------ #

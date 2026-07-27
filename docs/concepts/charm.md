@@ -15,6 +15,10 @@ card slot.
 - **`clava`** — sets `tail='club'`. See [Parts](./parts.md) for the
   damage/knockback multipliers. Explicitly moved to charms because it
   should not appear on the level-up card tree.
+- **`dardo`** (Lingua-Dardo) — the tongue also fires a projectile, the player's
+  only aimed shot. Charm and not a card for the same reason as the clava: it
+  rewrites a verb, and that has to be a decision. See
+  [Combat](./combat.md#lingua-dardo--the-one-aimed-shot).
 - **`antenas`, `presas`, `olhos`, `carapaca`, `espinhos`, `asas`,
   `glandula`, `nectar`, `ferrao`** — see `charms.CHARMS`. Each has a
   distinct icon (`icons.draw` — the ferrão charm shares the id with the

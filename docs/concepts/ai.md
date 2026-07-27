@@ -12,8 +12,19 @@ steer/attack loop — no state machine class hierarchy.
 - **`fly`** — [VESPA](./enemy-behaviors.md); skipped by collision samples.
 - **`bomber`, `gunner`, `venom`** — phase-2 behaviors. See
   [Enemy behaviors](./enemy-behaviors.md).
+- **`lead`** — the ANTECIPADOR: winds up, keeps a lead point marked on the
+  ground, then fires a short burst at it (`emitter.aimed_barrage`).
+- **`mortar`** — the MORTEIRO: marks a patch at wind-up start
+  (`emitter._select_arms_rain`) and only spawns the hostile puddle when the
+  timer runs out.
 - **`burrow`, `grapple`** — body-plan behaviors. See
   [Body plan](./body-plan.md).
+
+The five shooters (`ranged`, `gunner`, `venom`, `lead`, `mortar`) never build a
+projectile: they call `genome.shot['fn']` with the genome's own dials. A
+species changes its whole shot arrangement from `species.py`, with no branch
+here — see [Enemy behaviors](./enemy-behaviors.md) and
+[ADR-0012](../adr/0012-shared-pattern-emitter.md).
 
 ## Ecosystem
 

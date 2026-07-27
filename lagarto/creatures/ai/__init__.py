@@ -36,6 +36,8 @@ BEHAVIORS = {
     'ranged': ranged.ranged_tick,
     'gunner': ranged.gunner_tick,
     'venom': ranged.venom_tick,
+    'lead': ranged.lead_tick,
+    'mortar': ranged.mortar_tick,
     'fly': fly.fly_tick,
     'bomber': fly.bomber_tick,
     'burrow': burrow.burrow_tick,
@@ -83,6 +85,11 @@ class AILizard(Lizard):
         self.fuse = 0.0               # bomber: >0 = lit, counts down to the blast
         self._blown = False           # bomber: already detonated (recursion guard)
         self.burst_left = 0           # gunner: shots left in the current burst
+        # A marked attack (ANTECIPADOR's lead point, MORTEIRO's patch) draws its
+        # footprint from `_rain_points` while `shoot_charge` runs down; these two
+        # are the size of the mark and the full wind-up it fills over.
+        self.mark_r = 0.0
+        self.mark_total = 0.0
         # --- phase B4 behaviours (new procedural bodies) ---
         self.burrowed = False         # centipede: intangible while underground
         self.burrow_state = 'surface'
@@ -335,6 +342,8 @@ class AILizard(Lizard):
             return
         if self.fuse > 0:
             self._draw_fuse(surf, cam)
+        if self.shoot_charge > 0 and getattr(self, '_rain_points', None):
+            self._draw_mark(surf, cam)       # on the ground, before the body
         if self.burrow_state == 'digging':
             self._draw_dig_hole(surf, cam)   # behind the body: a growing pit
         if self.champion is not None:
@@ -397,6 +406,20 @@ class AILizard(Lizard):
         palette.glow(surf, cam.w2s(self.spine.joints[0]),
                      int(self.max_r * (1.6 + 1.4 * f) * cam.zoom), col,
                      0.35 + 0.4 * blink)
+
+    def _draw_mark(self, surf, cam):
+        """The footprint of a marked attack, filling in as it arms.
+
+        Reuses the boss's own 'rain' telegraph drawer: a common enemy's area
+        tell and a boss's say the same thing in the same shape, and the ring on
+        the ground answers the only question a telegraph has to answer -- am I
+        standing in it? (see docs/concepts/enemy-behaviors.md).
+        """
+        from ...flow.boss import telegraph
+        prog = 1.0 - clamp(self.shoot_charge / max(1e-4, self.mark_total), 0, 1)
+        telegraph.telegraph_rain(surf, cam, self, None, prog,
+                                 palette.lighten(self.color, 0.4),
+                                 pulse(prog * prog, 40))
 
     def _draw_champion_aura(self, surf, cam):
         """Behind the body, breathing: says 'elite' before you are in its range."""

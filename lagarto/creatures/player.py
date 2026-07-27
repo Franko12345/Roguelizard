@@ -41,6 +41,15 @@ class Player(Lizard):
         # everything this dash already hit -- collisions run every frame, so
         # without this one dash lands ~10 hits on whatever it overlaps
         self.dash_hits = set()
+        # rolamento (issue #103): the OTHER dodge -- cheap, frequent, no damage.
+        # No hit set, on purpose: nothing about it touches an enemy.
+        self.roll_time = 0.0
+        self.roll_cd = 0.0
+        self.roll_f = 0.0         # 0..1 eased envelope of the squash/release
+        # Pristine colour to tint away from while the i-frames are up, same
+        # idiom AILizard uses for a friend fading out. `color` is what the body,
+        # the glow and the trail all read, so mutating it is the whole effect.
+        self.base_color = self.color
         self.clog = 0.0           # how buried in enemy bodies we are (collision.py)
         self.clog_f = 0.0         # smoothed, so the drag eases in/out
         # tail whip ("rabada"): a lateral lunge whose follow-through swings the tail
@@ -99,6 +108,12 @@ class Player(Lizard):
         self.area_mult = 1.0         # aura/range size
         self.cooldown_mult = 1.0     # <1 = faster
         self.amount = 0              # +projectiles / +orbitals
+        # Stackable SHOT modifiers (issue #104). Both are counters, not flags:
+        # the player stacks modifiers on one bullet, an enemy shot picks exactly
+        # one (docs/concepts/projectile.md). Read at one place only --
+        # Game.spawn_projectile, the choke point every friendly shot passes.
+        self.shot_bounces = 0        # ricochets off the walls before dying
+        self.shot_homing = 0         # how hard the shot curves toward a target
         self.pollen_mult = 1.0       # from meta-progression (Colheita)
         self.weapons = {}            # weapon id -> level
         self.weapon_state = {}       # weapon id -> per-weapon state
@@ -127,6 +142,7 @@ class Player(Lizard):
         self.dash_chain_bonus = False
         self.tongue_throw = False    # tongue throws instead of pulling
         self.tongue_drain = False
+        self.tongue_shot = False     # Lingua-Dardo charm: the tongue also SHOOTS
         self.whip_darts = False      # whip fires darts from the arc tips
         self.whip_reflect = False    # whip bats enemy shots back
         self.whip_full = False       # whip sweeps the whole circle
@@ -152,6 +168,10 @@ class Player(Lizard):
     @property
     def dashing(self):
         return self.dash_time > 0
+
+    @property
+    def rolling(self):
+        return self.roll_time > 0
 
     def gain_charm(self, cid, game=None):
         from ..combat import charms
@@ -281,7 +301,10 @@ class Player(Lizard):
         # player (never an enemy) is in ``game.players``.
         if game.mode == 'sandbox' and game.god_mode and self in game.players:
             return False
-        if self.dashing or self.hit_flash > 0.45 or self.down or self.shed_t > 0:
+        # Both dodges are invulnerable and this is the ONE place that says so:
+        # the investida (dash) and the rolamento are two verbs, one i-frame rule.
+        if self.dashing or self.rolling or self.hit_flash > 0.45 or self.down \
+                or self.shed_t > 0:
             return False
         dmg *= (1.0 - self.armor)                       # carapaca charm blocks a %
         self.health -= dmg
@@ -393,6 +416,32 @@ class Player(Lizard):
                 game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
             game.shake(5)
 
+        # --- rolamento: the second dodge (issue #103) ---------------------- #
+        # Invulnerable like the investida, and it LAUNCHES like it too -- the
+        # point of the roll is escaping a bullet, and escaping means covering
+        # ground. It first shipped as a steer multiplier with no impulse; at
+        # 1.9x for 0.15 s that moved the lizard about a third of its own body
+        # and read as "tried to roll and did not dash".
+        # What is left of the asymmetry is the part that matters: the roll deals
+        # NO damage, hits nobody, costs a quarter of the energy and comes back
+        # roughly twice as often. The investida is the attack, the roll is the
+        # exit.
+        self.roll_cd = decay(self.roll_cd, dt)
+        self.roll_time = decay(self.roll_time, dt)
+        if c.roll_edge and self.roll_cd <= 0 and self.energy >= C.ROLL_COST:
+            c.consume('roll')
+            move = c.move if c.move.length_squared() > 0.1 else self.facing
+            self.vel = safe_norm(move) * self.max_speed * C.ROLL_SPEED
+            self.roll_time = C.ROLL_TIME
+            self.roll_cd = C.ROLL_TIME + C.ROLL_CD    # cd starts when the roll ends
+            self.energy -= C.ROLL_COST
+            audio.play('dash', 0.45)
+            game.fx.dust(self.pos)
+            game.fx.burst(self.pos, self.color, 8, 150)
+        if self.rolling:
+            game.fx.trail(self.pos, self.color)
+        self._roll_pose(dt)
+
         self.steer(c.move, dt, speed_mul)
         self.integrate(dt, on_plant=game.fx.dust, bounds=game.arena_bounds)
         self._whip_arc(dt)
@@ -499,6 +548,63 @@ class Player(Lizard):
         if self.regen > 0 and self.health < self.max_health:
             self.health = min(self.max_health, self.health + self.regen * dt)
 
+    def _roll_pose(self, dt):
+        """Squash on the launch, stretch on the release -- a spring, not a ball.
+
+        This started life as a *fake roll*: shrink ``spine.link`` so the joints
+        collapse into a disc, then spin that disc. It worked as an effect and
+        failed as a read -- the lizard curled up and the gesture disappeared
+        into a blob, which is exactly what a dodge must not do, since the whole
+        point is seeing which way you went.
+
+        Two beats instead:
+
+        * **compress** while the roll is live -- ``squat_bias`` down to
+          ``C.ROLL_SQUAT``, legs tucked out of the way.
+        * **relax** when it ends -- ``squat_bias`` releases *past* neutral to
+          ``C.ROLL_STRETCH`` and settles back. The overshoot is the difference
+          between a spring letting go and a value returning to 1.0.
+
+        ``roll_f`` is the same eased envelope as before (in AND out, never
+        snapped), so the same knob still governs how sharp the whole thing is.
+        The spine keeps its link, so the body stays a body.
+        """
+        # Fast in, slow out: the compression has to arrive inside a 0.15 s roll,
+        # but the release is the half anyone actually watches, and letting it
+        # decay at the same rate starves the overshoot (see ROLL_RELEASE_EASE).
+        self.roll_f = approach(self.roll_f, 1.0 if self.rolling else 0.0,
+                               C.ROLL_EASE if self.rolling else C.ROLL_RELEASE_EASE,
+                               dt)
+        if self.roll_f < 1e-3:
+            self.roll_f = 0.0
+            self.color = self.base_color
+            return
+        f = self.roll_f
+        # Colour says "you cannot be hit right now". It rides the same envelope
+        # as the pose, so it arrives and leaves with the squash instead of
+        # needing a timer of its own, and it tints toward a COOL pale rather
+        # than white -- `hit_flash` already whitens the body, and "I am
+        # untouchable" must not read like "I just got hit".
+        self.color = palette.mix(self.base_color, C.ROLL_IFRAME_COLOR,
+                                 f * C.ROLL_IFRAME_MIX)
+        if self.rolling:
+            self.squat_bias = 1.0 - f * (1.0 - C.ROLL_SQUAT)
+        else:
+            # releasing: f now decays 1 -> 0, so the stretch decays with it
+            self.squat_bias = 1.0 + f * (C.ROLL_STRETCH - 1.0)
+        self.leg_pull = 1.0 - f * (1.0 - C.ROLL_LEG_PULL)
+        # ``leg_pull`` alone is not enough: a foot is PLANTED and only takes a
+        # step once the body has dragged its rest spot ``step_len`` away, which
+        # over a 0.15 s roll never completes -- the legs trailed behind as four
+        # straight sticks. Reel the feet in on the same ease, and cancel any
+        # step in flight so the two don't fight.
+        gather = min(1.0, C.ROLL_EASE * dt * f)
+        for leg in self.legs:
+            leg.stepping = False
+            leg.lift = 0.0
+            leg.foot = leg.foot.lerp(
+                leg.rest_target(self.spine, self.vel, C.ROLL_LEG_PULL), gather)
+
     def _whip_span(self):
         """(pivot index, joint count) of the section that whips.
 
@@ -582,6 +688,7 @@ class Player(Lizard):
 
     def _whip_reflect(self, game):
         """Contragolpe: the swinging tail bats enemy shots back at their owners."""
+        from ..combat import projectile as proj
         js = self.spine.joints
         pv, _k = self._whip_span()
         tail = js[pv + 1:] if pv is not None else js[-3:]
@@ -592,7 +699,9 @@ class Player(Lizard):
             if any(pr.pos.distance_to(j) < reach for j in tail):
                 pr.hostile = False              # now it hits enemies
                 pr.vel = -pr.vel
-                pr.color = (255, 230, 150)
+                # the body repaints itself off `hostile`; the halo has to follow
+                # it, or a batted shot keeps glowing in the enemy's colour
+                pr.color = proj.FRIENDLY[1]
                 pr.dmg = max(pr.dmg, int(round(8 * self.damage_mult())))
                 game.fx.spark_burst(pr.pos, (255, 240, 180), 5, 240)
 
@@ -807,6 +916,26 @@ class Player(Lizard):
         audio.play('tongue_out', 0.55)
         game.fx.dust(mouth)
         game.shake(1.5)
+        if self.tongue_shot:            # Lingua-Dardo (#104): the ONE aimed shot
+            self._fire_tongue_dart(game)
+
+    def _fire_tongue_dart(self, game):
+        """Lingua-Dardo: the tongue spits a dart along the same aim it grabs on.
+
+        The only player attack the player themself aims -- every weapon stays
+        automatic (`nearest_enemy`), so this is a verb, not a second aiming
+        system. It goes through ``spawn_projectile`` like everything else, so
+        the stacked shot modifiers (#104) ride it too.
+        """
+        from ..combat.projectile import spit as mk_spit
+        mouth = self._mouth()
+        aim = self.tongue_target.pos if self.tongue_target is not None \
+            else mouth + self.aim * self.tongue_range
+        game.spawn_projectile(mk_spit(
+            mouth, aim, self.color, dmg=int(round(C.TONGUE_DART_DMG * self.damage_mult())),
+            effect='poison' if self.venom else None, speed=C.TONGUE_DART_SPEED,
+            radius=5, hostile=False))
+        game.fx.spark_burst(mouth, palette.lighten(self.color, 0.3), 5, 220)
 
     def _tongue_connect(self, game):
         """The taut frame: resolve the hit and spend the impact juice."""

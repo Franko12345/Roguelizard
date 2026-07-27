@@ -100,6 +100,46 @@ change them**:
   the last 5 s and vanish), hp 3 → 2, attack every 0.6 s → 1.1 s; world
   eggs 6 → 3; shop egg 24 → 40 pollen.
 
+## Where the two #104 shooters landed, measured
+
+A new enemy is a new decision, not a new damage number — so the number is
+what gets checked. 4 of each against an invulnerable-HP player, 30 s, headless:
+
+| Species | Player standing still | Player circling at 190 px/s |
+|---|---|---|
+| ANTECIPADOR ×4 | 11.8 dmg/s | 8.7 dmg/s |
+| MORTEIRO ×4 | 8.1 | 5.0 |
+| METRALHADOR ×4 | 8.7 | 7.1 |
+| ENVENENADOR ×4 | 9.0 | 14.8 |
+| CUSPIDOR ×4 | 10.5 | 6.7 |
+
+Both new ones sit inside the band the existing shooters already occupy, so
+neither is a stealth difficulty bump.
+
+> **Superseded — these two rows measured a bug, not a design.** The lead was a
+> fixed 0.35–0.5 *seconds* rather than the shot's flight time, so the aim was
+> only correct at the single distance where `dist / shot_speed` happened to
+> equal that constant. Measured against a 21 px body, the ANTECIPADOR missed a
+> straight-line runner by 44 px at 150 px of range and by 172 px at 450: the
+> error grew linearly with distance because the flight time did and the lead did
+> not. That is why "it hurts a still player most" showed up in the table, and
+> the design note written from it — that the counter is changing direction —
+> was reasoning from the artefact.
+>
+> The real counter is what the species was designed for: it shoots where you
+> *will be*, so holding any predictable path feeds it, and the answer is the
+> marker on the ground plus a rolamento. With the flight-time lead the miss is
+> 17/20/22/24 px across the same four ranges — flat, not growing.
+> `tools/check_content.py` now asserts both the size and the flatness.
+>
+> The MORTEIRO row is suspect for its own reason: `MORTAR_RANGE` was 440, barely
+> above the top of its own 230–380 kite band, and at genome speed 0.72 against a
+> 224 px/s player it simply got left behind — in range 13% of the time, one
+> puddle in 15 s against a moving target. Range is now 780.
+>
+> **Both rows need re-measuring.** Left here rather than deleted because the
+> method was sound and the numbers are the before-picture.
+
 ## Tracking — what this file asked for, and where it landed
 
 Issue #28 asked for tracking of the requests raised in this file.

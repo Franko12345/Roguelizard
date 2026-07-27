@@ -18,9 +18,18 @@ intro
 ```
 
 Bosses use a **catalogue of patterns** — each is a data-driven
-`(boss, game, target) -> None`. There is no "attack class" hierarchy.
+`(shooter, game, target, dials) -> None`. There is no "attack class"
+hierarchy.
 
 ## Patterns
+
+The functions live in the [Emitter](../../CONTEXT.md)
+(`lagarto/combat/emitter.py`), shared with common enemies
+([ADR-0012](../adr/0012-shared-pattern-emitter.md)). What is boss-specific is
+`PATTERNS` in `flow/boss/patterns.py`: id → the emitter function, its windup,
+its telegraph kind, and the dials that function reads. A variant of a pattern
+is one more row, not new code — `massive_fan` is `fan_shot` with a wider
+spread, `deathroll` is `spiral_pattern` with a denser one.
 
 `radial`, `fan`, `barrage`, `shockwave`, `spiral`, `charge`, `pincha`,
 `swipe`, `arms_rain`, `sky_slam`, `deathroll`, `summon`, `web_trap`,
@@ -113,6 +122,8 @@ so `role='enemy'` lets a normal wave roll a boss body as a mook.
 ## Related
 
 - [ADR-0004](../adr/0004-boss-pool-per-tier.md) — how a tier picks a boss.
+- [ADR-0012](../adr/0012-shared-pattern-emitter.md) — where the patterns live
+  and why they take `dials`.
 - [Tier](../../CONTEXT.md) — the slot bosses fill.
 - [Round](./round.md) — the wave a boss gates.
 - [Species](./species.md) — the body a boss is scaled up from.

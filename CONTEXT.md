@@ -33,8 +33,16 @@ _Avoid_: shape, form.
 
 **Behavior**:
 `Genome.behavior` — which AI dispatch the creature runs (`chase`, `ranged`,
-`lunge`, `hop`, `fly`, `bomber`, `gunner`, `venom`, `burrow`, `grapple`).
+`lunge`, `hop`, `fly`, `bomber`, `gunner`, `venom`, `lead`, `mortar`, `burrow`,
+`grapple`).
 _Avoid_: AI, mode.
+
+**Shot**:
+`Genome.shot` — how a creature attacks, as data: an **Emitter** Pattern plus
+that pattern's **Dials** (`dict(fn=emitter.fan_shot, count=1, …)`). The AI tick
+decides when to fire and where to walk; the shot decides what leaves the mouth,
+so a species' whole attack arrangement changes from `species.py`.
+_Avoid_: attack data, weapon (a Weapon is the player's automatic kind).
 
 **Champion**:
 A named variant of an enemy species with a visual trait that explains its
@@ -120,6 +128,22 @@ verb. Isaac's dividing line — "+10% damage" is a mutation, "shoot swords" is
 an item.
 _Avoid_: relic, artifact.
 
+**Investida**:
+The dash: the damaging dodge. Invulnerable while it runs (`Player.dashing`),
+deals `DASH_DAMAGE` on contact, costs 18 energy on a 0.45 s cooldown, and
+commits you forward with a velocity impulse. Prose says **Investida**; the code
+field is `dash_time`/`dash_cd` and the HUD dial reads DASH — the same
+prose/code split as Whip / `whip_t`.
+_Avoid_: lunge, charge.
+
+**Rolamento**:
+The other dodge (`Player.rolling`): cheap, frequent, **no damage**, and
+steerable instead of committed. Same i-frames, from the same guard in
+`Player.hurt`. Its animation is the **fake roll** — the joints collapse into a
+spinning disc, because a real coil cannot close against the spine's bend limit.
+Prose says **Rolamento**; the fields are `roll_time`/`roll_cd`/`roll_f`.
+_Avoid_: dodge-roll, esquiva (that word covers both verbs, not this one).
+
 **Charm**:
 A permanent slot the player fills at camp. Persists across level-ups within a
 run. Costs 150 pollen.
@@ -148,6 +172,45 @@ The single active-item slot on the player (`Player.ability`/`ability_cd`).
 Charged by kills, fired on E. Not the same as a Weapon (weapons are
 automatic).
 _Avoid_: active, ultimate.
+
+**Pattern**:
+One attack arrangement, as a plain function
+`(shooter, game, target, dials) -> None` — a ring of shots, a cone, a rotating
+spray, a contact bite. Named by its id (`fan`, `spiral`, `web_trap`). Not a
+class, not an "attack object".
+_Avoid_: attack, move, ability (all taken).
+
+**Emitter**:
+`lagarto/combat/emitter.py` — the one place every Pattern is implemented,
+shared by [Boss](docs/concepts/boss.md) and common enemy alike. It never looks
+its own tuning up: the caller passes **Dials**. See
+[ADR-0012](docs/adr/0012-shared-pattern-emitter.md).
+_Avoid_: pattern library, bullet factory, spawner.
+
+**Dials**:
+The plain dict of tuning a Pattern reads (`count`, `spread`, `lead`, `mod`, …).
+A boss passes its `PATTERNS` row; a common enemy passes its **Shot**. A "new"
+attack is usually a new dial set on a pattern that already exists — Massive
+Fan, deathroll, Web Dome, `radial_wall` are all dials and no code.
+_Avoid_: params, config, tuning dict (say **dials**).
+
+**Projectile**:
+Every shot in the game, from one class (`lagarto/combat/projectile.py`).
+`hostile=True` hits players, `False` hits creatures. Its body colour encodes
+that **side** and nothing else — the firing creature's colour survives only in
+the halo, bosses included (see
+[ADR-0014](docs/adr/0014-bullet-colour-encodes-side.md)).
+_Avoid_: bullet, shot, bala (fine in speech, but the field and the docs say
+projectile).
+
+**Hook**:
+A plain function appended to one of a Projectile's three lists — `on_update`
+(movement), `on_hit`, `on_death`. No base class, no registry: a modifier IS the
+function. The player stacks hooks (`Game._stack_shot_mods`, counters like
+`shot_bounces`); an enemy shot picks **one** movement and stops there
+(`emitter._launch`, `dials['mod']`). See
+[Projectile](docs/concepts/projectile.md).
+_Avoid_: modifier class, behaviour, component, plugin.
 
 ### Run structure
 
@@ -238,7 +301,10 @@ _Avoid_: emotion, state.
 **Telegraph**:
 The pre-attack tell the player reads. Rule of thumb: **draw the footprint,
 not just a warning** (the puddle before the shockwave, not a flashing icon).
-Time _and_ visibility are both required.
+Time _and_ visibility are both required. A common enemy draws its footprint
+through the same `rain` drawer a boss uses (`AILizard._draw_mark`), but at full
+radius from the first frame — a growing circle understates the danger zone
+while it grows.
 _Avoid_: warning, tell (informal — `tell` is fine in casual speech, but the
 noun is `telegraph` in prose and code comments).
 
