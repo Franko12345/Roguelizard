@@ -129,7 +129,7 @@ def lead_tick(creature, game, dt, target):
     if creature.shoot_charge > 0:
         creature.shoot_charge -= dt
         creature.squat_bias = 0.9
-        creature._rain_points = [emitter.lead_point(target, d)]
+        creature._rain_points = [emitter.lead_point(creature, target, d)]
         if creature.shoot_charge <= 0:
             emitter.aimed_barrage(creature, game, target, d)
             creature._rain_points = []
@@ -161,16 +161,23 @@ def mortar_tick(creature, game, dt, target):
     if creature.shoot_charge > 0:
         creature.shoot_charge -= dt
         if creature.shoot_charge <= 0:
-            for pt in getattr(creature, '_rain_points', []):
-                game.spawn_puddle(weapons.Puddle(pt, C.MORTAR_R, C.MORTAR_DMG,
-                                                 C.MORTAR_LIFE, 330, hostile=True,
-                                                 tick=C.MORTAR_TICK))
-                game.fx.ring(pt, creature.color)
-            creature._rain_points = []
+            creature._rain_points = []          # the shell owns the patch now
     elif creature.shoot_cd <= 0 and dist < C.MORTAR_RANGE:
         creature.shoot_cd = C.MORTAR_CD
         creature.shoot_charge = C.MORTAR_ARM
         creature.mark_total = C.MORTAR_ARM
         creature.mark_r = C.MORTAR_R
         emitter._select_arms_rain(creature, game, target, d)
+        # THROW the shell instead of conjuring the puddle at the end of a timer.
+        # The flight IS the wind-up: `flight=C.MORTAR_ARM` pins the travel time,
+        # so the shell lands exactly when the footprint's countdown runs out
+        # however far it was lobbed, and the puddle arrives from the shell's
+        # own `on_death` (see docs/concepts/projectile.md). One clock, one
+        # cause -- the patch on the ground is the shadow of a real object.
+        for pt in getattr(creature, '_rain_points', []):
+            emitter.lob_shot(creature, game, target, dict(
+                d, at=pt, flight=C.MORTAR_ARM, arc=C.MORTAR_ARC,
+                dmg=0, effect=None, radius=9,
+                puddle=dict(r=C.MORTAR_R, dmg=C.MORTAR_DMG, life=C.MORTAR_LIFE,
+                            hue=330, tick=C.MORTAR_TICK)))
     return _keep_range(creature, target, 230, 380), 0.7

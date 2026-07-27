@@ -15,6 +15,13 @@ WIDTH, HEIGHT = 1120, 720
 PIXEL_SCALE = 1
 WORLD_W, WORLD_H = 3200, 3200
 
+# --- como a bala se le (Gungeon: gorda e quente) --------------------------- #
+# Os dois botoes de aparencia de projetil. Sao DESENHO, nao regra: colisao e
+# sobreposicao de corpo contra a criatura, entao mexer aqui nao muda o alcance
+# de nada. Cada chamador continua passando `radius=` como peso relativo.
+BULLET_SCALE = 1.45      # tamanho do corpo. 1.0 era o tamanho antigo
+BULLET_GLOW = 1.0        # intensidade do halo aditivo (era 0.75, fixo no draw)
+
 # --- timing (fixed simulation step, render decoupled) ---------------------- #
 SIM_HZ = 60
 DT = 1.0 / SIM_HZ
@@ -82,7 +89,13 @@ VENOM_PUDDLE_LIFE = 2.8
 SNIPER_WINDUP = 0.55     # >27 quadros de aviso, com a marca visivel o tempo todo
 SNIPER_CD = 2.6
 SNIPER_RANGE = 470
-SNIPER_LEAD = 0.5        # segundos de velocidade do alvo somados a mira
+SNIPER_LEAD = 1.0        # QUALIDADE da previsao (0..1), nao segundos: 1.0 = mira
+                         # exatamente onde voce vai estar quando a bala chegar.
+                         # O tempo vem do voo (dist/velocidade) em emitter.lead_point.
+                         # Era 0.5 s fixo, o que so acertava na unica distancia em
+                         # que dist/SNIPER_SPEED batia com 0.5 -- medido, errava por
+                         # 44 px a 150 px de alcance e 172 px a 450, contra um corpo
+                         # de 21 px. Andar reto era imune; ficar parado, morte certa.
 SNIPER_SHOTS = 2         # rajada curta: a decisao e o ponto, nao a cadencia
 SNIPER_GAP = 0.16
 SNIPER_SPEED = 340
@@ -91,9 +104,21 @@ SNIPER_MARK_R = 30       # raio da marca no chao (o tamanho do erro que ela pune
 # MORTEIRO: negacao de area que ARMA COM ATRASO. Ataca o habito de investir na
 # cara -- a poca nasce onde voce ia pousar, entao a investida sem plano de saida
 # termina dentro dela. A pegada aparece ANTES de armar (regra do telegrafo).
-MORTAR_ARM = 1.0         # tempo de pegada no chao antes da poca existir
-MORTAR_CD = 4.0
-MORTAR_RANGE = 440
+MORTAR_ARM = 0.9         # tempo de VOO da bomba: a pegada aparece no lance e a
+                         # poca nasce quando o projetil cai nela. E o mesmo relogio
+                         # -- lob_shot recebe flight=MORTAR_ARM, entao a bomba pousa
+                         # quando a contagem da pegada zera, seja qual for a distancia
+MORTAR_ARC = 130         # altura falsa do arco em pixels de tela (Projectile.lift).
+                         # So desenho: a posicao no mundo anda reto ate a marca
+MORTAR_CD = 2.4          # era 4.0 -- cadencia baixa demais para ele aparecer
+MORTAR_RANGE = 780       # artilharia tem que superar a propria lentidao. Era 440,
+                         # mal acima do topo (380) da sua propria banda de kite: com
+                         # genome speed 0.72 contra os 224 px/s do jogador, ele ficava
+                         # para tras e so estava em alcance 13% do tempo -- medido,
+                         # 1 poca em 15 s contra alvo andando, 4 contra alvo parado.
+                         # O alcance maior nao o torna injusto: MORTAR_ARM de 1 s e a
+                         # pegada no chao continuam sendo a saida, e de longe sobra
+                         # ainda mais tempo para andar para fora.
 MORTAR_SPREAD = 46       # ruido no ponto: mira o pouso, nao a cabeca
 MORTAR_R = 58
 MORTAR_DMG = 6           # dano POR TICK (poca hostil tem cadencia propria)
@@ -101,7 +126,8 @@ MORTAR_TICK = 0.6
 # Tem que ser MENOR que MORTAR_CD, senao as pocas de UM mesmo morteiro se
 # sobrepoem e o dano empilha -- Acido, poca de veneno e slow do ferrao ja
 # cairam nisso; ver docs/concepts/enemy-behaviors.md.
-MORTAR_LIFE = 3.0
+MORTAR_LIFE = 1.8        # desceu junto com o CD (2.4): a regra e LIFE < CD, entao
+                         # subir cadencia obriga a encurtar a poca, nao so o timer
 
 # --- inimigos da fase B4 (corpos procedurais novos) ------------------------- #
 # CENTOPEIA (corpo 'segmented'): cavadora. Ataca o habito de ACAMPAR/andar reto --
@@ -316,30 +342,53 @@ TONGUE_DART_SPEED = 420
 # A investida (o dash) e invulneravel mas PONTUAL: 0,16 s de i-frames num cd de
 # 0,45 s por 18 de energia = 36% do ciclo em rajada, 5% sustentado. Com 5% nao da
 # pra subir a densidade de bala sem ser injusto. O rolamento nao mexe em nada
-# disso: ele ganha na FREQUENCIA (custo 5, cd 0,2 s) e perde o dano, e nao te
-# joga pra frente -- a investida te lanca na direcao de quem atira, que em bullet
-# hell e geralmente o lugar errado.
+# disso: ele ganha na FREQUENCIA (custo 5, cd 0,2 s) e perde o dano. Lanca como a
+# investida, so que mais curto -- escapar de bala e cobrir chao, e a versao sem
+# impulso lia como "tentou rolar e nao deu dash".
 ROLL_COST = 5
 ROLL_CD = 0.2            # contado do FIM do rolamento: 0,15 rolando + 0,2 se
                          # recuperando = 43% do ciclo invulneravel em rajada, e
                          # a energia (6/s de regen) e o que limita de verdade
 ROLL_TIME = 0.15         # i-frames por rolamento
-ROLL_SPEED = 1.9         # multiplicador de velocidade; steer continua vivo, entao
-                         # o rolamento e DIRIGIVEL (a investida e um impulso comprometido)
-# Fake roll: as juntas desabam umas sobre as outras num disco do tamanho de ~uma
-# vertebra, e aquilo gira. Nao e um coil de verdade porque nao caberia: 11 juntas
-# x bend=26 graus = 286 graus de curvatura total, a bola nunca fecharia. Encolher
-# `spine.link` contorna a trava -- `resolve()` le o link fresco todo frame.
-ROLL_LINK = 0.2          # fracao do link de repouso no auge do colapso: as ~10
-                         # juntas caem dentro de ~40px, a espessura do proprio
-                         # corpo (2 * max_r). Nao aperte muito mais: abaixo de
-                         # ~0,15 a tira de quads e o contorno se cruzam e aparecem
-                         # lascas e riscos soltos por 2-3 frames.
-ROLL_SQUAT = 0.82        # squat_bias no auge (compressao)
-ROLL_LEG_PULL = 0.45     # leg_pull no auge (pernas recolhidas)
-ROLL_SPIN = 1440         # graus/s de giro do disco (~0,6 volta por rolamento)
-ROLL_EASE = 26           # taxa do approach que entra E sai do colapso. NUNCA
-                         # snapado: colapso instantaneo teleporta o corpo.
+ROLL_SPEED = 3.4         # multiplicador de IMPULSO (x max_speed). A investida usa
+                         # 3.0 (3.5 com asas) por 0.16 s; o rolamento usa mais por
+                         # menos tempo, entao anda parecido e volta o dobro mais
+                         # rapido -- ele e a SAIDA, e sair precisa cobrir chao.
+                         # Historico: nasceu como 1.9 multiplicando steer, sem
+                         # impulso nenhum (movia ~1/3 do corpo), passou por 2.6 e
+                         # ainda leu como "mal ganha distancia" no playtest.
+
+# --- a pose do rolamento: comprime e relaxa, nao enrola ---------------------- #
+# A primeira versao colapsava as juntas num disco girando (fake roll). Lia como
+# "te enrola todo": o corpo virava uma bola e o gesto sumia. O que se quer e
+# squash-and-stretch -- o bicho COMPRIME no lancamento e RELAXA na saida, como
+# mola. Sem giro, sem colapso de link: a espinha continua uma espinha.
+# ATENCAO aos dois numeros abaixo: eles parecem exagerados e nao sao. Nada
+# desenha `squat_bias` -- base.py o consome num `approach(squash, alvo,
+# 9/sqrt(weight))`, e num evento de 0,15 s esse filtro deixa passar so ~37% do
+# que voce pediu. Medido: 0.62 aqui vira 0.86 na tela. Entao estes sao valores
+# de ENTRADA de um filtro, nao a pose final. check_roll mede `p.squash`, que e
+# o que aparece, justamente para ninguem "corrigir" isto de volta.
+ROLL_SQUAT = 0.35        # -> ~0.75 desenhado: comprime de verdade
+ROLL_STRETCH = 1.42      # -> ~1.15 desenhado. Estica ALEM do neutro ao soltar --
+                         # e o "relaxa" da dupla. Sem passar de 1.0 a volta e um
+                         # retorno, nao uma mola
+ROLL_IFRAME_COLOR = (150, 225, 255)   # azul-gelo: le como "intocavel". NAO use
+                                      # branco -- hit_flash ja clareia o corpo, e
+                                      # "nao posso ser atingido" nao pode parecer
+                                      # "acabei de ser atingido"
+ROLL_IFRAME_MIX = 0.8    # quanto da cor de i-frame no auge (0..1)
+ROLL_LEG_PULL = 0.55     # pernas recolhidas no auge (menos que o antigo 0.45: sem
+                         # bola pra formar, elas so precisam sair do caminho)
+ROLL_EASE = 30           # taxa de entrada na compressao. NUNCA snapado --
+                         # compressao instantanea teleporta o corpo.
+ROLL_RELEASE_EASE = 8    # taxa de SAIDA, deliberadamente mais lenta: fast in,
+                         # slow out. Com a mesma taxa dos dois lados o alvo
+                         # esticado decaia tao rapido quanto `squash` conseguia
+                         # persegui-lo, saindo de 0.62 comprimido -- o overshoot
+                         # visivel morria em 1.05 por mais que se subisse
+                         # ROLL_STRETCH. Segurar o alvo e o que deixa a mola
+                         # chegar la.
 
 # --- tongue: a chameleon slingshot, not an arc ------------------------------- #
 # Three beats, and the split between them IS the feel. OUT is short and
@@ -484,7 +533,10 @@ BOSS_BARRAGE_SHOTS = 4
 BOSS_BARRAGE_GAP = 0.12
 BOSS_BARRAGE_SPEED = 300
 BOSS_BARRAGE_DMG = 14
-BOSS_BARRAGE_LEAD = 0.35     # segundos de lead -- uma formula so (emitter.lead_point)
+BOSS_BARRAGE_LEAD = 0.8      # QUALIDADE da previsao (0..1), nao segundos -- uma
+                             # formula so (emitter.lead_point), que tira o tempo do
+                             # voo. Chefe le bem mas nao perfeito: 0.8 deixa margem
+                             # para quem muda de ritmo. O ANTECIPADOR usa 1.0.
 BOSS_SUMMON_WINDUP = 0.9
 BOSS_SUMMON_COUNT = 2
 BOSS_SUMMON_CD = 6.0         # separado do cd normal -- nao pode invocar toda vez

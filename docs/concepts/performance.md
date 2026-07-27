@@ -90,6 +90,23 @@ Measured with 92 live bullets (`tools/check_projectile.py`, steady state):
 **draw 1.13 ms → 0.22 ms**, step 0.07 ms — 0.28 ms of the 16.6 ms frame. The
 check fails if it ever passes 4 ms.
 
+Bullets were then made bigger and brighter on purpose (`C.BULLET_SCALE` /
+`C.BULLET_GLOW`, see [Projectile](./projectile.md)), which bought back some of
+that: **0.87 ms** at the same 92 bullets, against 0.42 ms with a single glow
+pass. The second, tight glow pass is what makes the centre blow out, and 0.45 ms
+for it was judged worth paying at 5% of the frame.
+
+Two traps this surfaced, both worth remembering before optimising the glow
+again:
+
+- **Measure in steady state.** The first reading was 2.27 ms because it caught
+  the sprite cache building. The same run warm reports 0.87 ms.
+- **Sprite construction is free per frame.** `palette._glow_sprite` scales its
+  falloff steps with radius (10 / 18 / 26) and that costs nothing at 60 Hz,
+  because it only runs on a cache miss — measured at 14 misses per 4000 draws.
+  Ten steps banded into visible rings once bullets got large; more steps fixed
+  the look at no per-frame cost at all.
+
 Collision is not the bottleneck and was left alone: a hostile bullet only tests
 against 1-2 players.
 
