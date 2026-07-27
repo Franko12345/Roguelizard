@@ -98,8 +98,8 @@ converge on the same white pill — which undoes the whole rule at exactly the
 density it exists for. The dark rim is an *outline*, one pixel of ink to hold
 the shape against a bright floor; filled to the full radius it puts a dark ring
 between core and halo and the bullet reads as a bubble instead of a slug. The
-streak is drawn in the mid colour for the same reason: it is the longest part of
-the bullet on screen, so a white one throws the side away.
+backward sparks are emitted in the mid colour for the same reason: they are the
+longest thing the shot leaves on screen, so white ones throw the side away.
 
 ## Lobbed shots
 
@@ -121,8 +121,12 @@ the patch is drawn at the throw, `flight=C.MORTAR_ARM` makes the shell land as
 the countdown ends, and the puddle arrives from the shell's own `on_death`. One
 clock, one cause — instead of a timer conjuring a hazard out of nothing.
 
-The streak has to be lifted with the body, or a lobbed shot draws a rigid spike
-from its own height down to ground it has not reached yet.
+`lift` is now the *only* thing the draw offsets. It used to have to lift the
+trail line too, or a lobbed shot drew a rigid spike from its own height down to
+ground it had not reached yet; with the line gone that special case went with
+it. The sparks stay on the flat world position on purpose — they fall behind on
+the ground the shell is arcing over, which is the shadow reading the telegraph
+already gives.
 
 ## Size and glow
 
@@ -141,15 +145,60 @@ scales its step count with radius (10 / 18 / 26) — steps cost nothing per fram
 because they only run on a cache miss, and ten of them banded visibly into
 concentric rings once bullets got big enough to take the second pass.
 
+## The trail is sparks, not a line
+
+Nothing is drawn behind the bullet. What tells you where a shot is going is a
+thin stream of sparks it sheds along the way: `Projectile.update` calls
+`FX.spark_burst` with `direction=-vel`, so each spark flies *against* the
+motion inside a narrow cone, brakes, and dies in `BULLET_SPARK_LIFE` seconds.
+They are emitted a body-width behind the shot — emitted at `pos` they are
+swallowed by the bullet's own halo, and the shot grows a hair instead of
+shedding a spark.
+
+The reference is Enter the Gungeon: the bullet is a clean glowing ball and the
+heading comes from loose bits falling behind it. A solid tail is a flat-capped
+rectangle glued to the body, and the bigger the bullet the more it reads as a
+skewer — which is exactly what happened when `BULLET_SCALE` went to 1.45.
+
+`FX.spark_burst` is shared with the whole game, so the directional cone is an
+optional argument, not a second function: without `direction` the burst is
+omnidirectional, which is what an impact wants. See [Juice](./juice.md).
+
 ## Budget
 
 The body is a sprite cached on `(even radius, side)` — only affordable
 *because* the body stopped carrying the creature's colour, which collapses it to
-two colour variants. The trail is one line, not seven fading circles.
+two colour variants. Nothing else in the draw scales with the shot's history.
 
-Measured at 92 bullets on screen: **0.87 ms** of the 16.6 ms frame, of which the
-two glow passes are most of it (one pass alone measures 0.42 ms). The check
-asserts under 4 ms. See [Performance](./performance.md).
+**The sparks spend a pool, not a frame.** `FX.MAX_SPARKS` is 260 and
+`spark_burst` drops the oldest on overflow, so a bullet emitting one spark per
+frame is not a rendering cost — it is a hundred bullets evicting the tongue, the
+dash and every impact in the game. Live sparks per bullet are
+`BULLET_SPARK_LIFE * 0.75 / BULLET_SPARK_GAP`; the two dials are one budget and
+have to be read together.
+
+Measured with 100 live bullets for 2 s, peak pool occupancy:
+
+| gap | life | peak sparks |
+|---|---|---|
+| every frame (0.017 s) | 0.2 s | **260 — the cap, evicting** |
+| 0.05 s | 0.2 s | 252 |
+| 0.09 s | 0.2 s | **188** ← shipped |
+| 0.12 s | 0.2 s | 159 |
+| 0.09 s | 0.5 s (the generic life) | **260 — the cap, evicting** |
+| 0.16 s | 0.5 s | 257 |
+
+So the short life is the real lever, not the spacing: keeping the generic 0.5 s
+still fills the pool at a spacing so wide each bullet has barely one spark
+alive. Shipped at 0.09 s / 0.2 s — 188 of 260, leaving ~70. That is enough,
+because a 30-second instrumented run of the actual game peaks at **66** sparks
+for everything else put together. The pool was never given its own bullet half:
+spacing fits, and a second pool is a second update loop and a second draw loop
+for a problem two constants already solve.
+
+Frame cost at 92 bullets: **0.43-0.59 ms** of the 16.6 ms frame, down from
+0.87 ms with the line — and ~1.1 ms once the sparks' own update and draw are
+counted. The check asserts under 4 ms. See [Performance](./performance.md).
 
 ## Verification
 
@@ -157,6 +206,18 @@ asserts under 4 ms. See [Performance](./performance.md).
 shot does not curve and dies at the wall), bullets of five different species
 render byte-identical bodies within a side while the halo still varies, the
 sprite cache stays under its cap, and ~100 bullets are timed against the frame.
+
+Two of its assertions guard this page's trail rules:
+
+- **Nothing is drawn behind the bullet.** The draw is sampled in a band on each
+  side of the body along the travel axis and the two have to match; a streak
+  piles ink on one side only. Mirror about `cx - 0.5`, not `cx` — every sprite
+  is an even-sided square blitted at `sp - half`, and the half-pixel alone reads
+  as 7% of a streak.
+- **The sparks do not fill the pool.** A hundred bullets for two seconds, and
+  `len(fx.sparks)` must stay under `FX.MAX_SPARKS`. It also checks the sparks
+  still carry the side's `mid`, so ADR-0014 cannot quietly leak out of the body
+  into the trail.
 
 ## Related
 
