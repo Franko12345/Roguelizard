@@ -34,6 +34,14 @@ _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_out
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
+from lagarto.combat import emitter as emi
+_fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
+       [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
+chk(101, "shared emitter", bool(_fns)
+    and all(f.__module__ == 'lagarto.combat.emitter' for f in _fns)
+    and all(list(inspect.signature(f).parameters) == ['shooter', 'game', 'target', 'dials']
+            for f in _fns)
+    and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
