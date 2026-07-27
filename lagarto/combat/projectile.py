@@ -41,7 +41,11 @@ class Projectile:
         self.dmg = dmg
         self.effect = effect            # None | 'poison' | 'slow'
         self.life = life
-        self.radius = radius
+        # One dial for the whole game's bullet size (Gungeon reads chunky, not
+        # dainty). Applied here so every caller's `radius=` stays a relative
+        # weight and nobody has to remember to scale. It is DRAW size only --
+        # collision is body-overlap against the creature, not the bullet radius.
+        self.radius = radius * C.BULLET_SCALE
         self.hostile = hostile          # True: hits players; False: hits creatures
         self.dead = False
         self.spin = 0.0
@@ -80,10 +84,20 @@ class Projectile:
         # per-frame palette.mix each was the most expensive thing on screen and
         # read as noise anyway.
         if self.trail:
+            # A streak, not a stick: it starts at the body's own width and the
+            # cap rounds it, so it reads as motion instead of a rectangle glued
+            # to the front of the bullet. Drawn in `mid`, not `core`: a white
+            # streak is a white stick, and it costs the side its colour on the
+            # very part of the bullet that is longest on screen.
             pygame.draw.line(surf, mid, cam.w2s(self.trail[0]), sp,
-                             max(1, int(r * 0.5)))
-        # additive halo -- the ONLY place the creature's own colour survives
-        palette.glow(surf, sp, self.radius * 3.4 * z, self.color, 0.75)
+                             max(1, int(r * 0.85)))
+        # Two additive passes: a wide soft one for the bloom the scene reads as
+        # light, and a tight hot one right on the body so the core blows out
+        # instead of sitting flat inside its own halo. Both go through the
+        # quantised glow cache, so the second pass costs a blit and no new
+        # sprite -- the tight radius lands on the same key family as the body.
+        palette.glow(surf, sp, self.radius * 4.2 * z, self.color, C.BULLET_GLOW)
+        palette.glow(surf, sp, self.radius * 1.5 * z, core, C.BULLET_GLOW * 0.8)
         if self.effect == 'slow':       # web: a soft spiky orb
             pts = []
             for k in range(10):
@@ -130,9 +144,20 @@ def _body_sprite(r, hostile):
         _body_clears += 1
     rim, mid, core = side_palette(hostile)
     surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+    # The dark rim is an OUTLINE, not a shell. Filled to the full radius it put a
+    # dark ring between the hot core and the halo and the bullet read as a bubble
+    # -- a hole with a rim -- instead of a slug. One pixel of ink at the edge is
+    # all it takes to hold the shape against a bright floor; the hot core takes
+    # most of the pixels that ring gives up -- but not all of them.
+    #
+    # The side lives in `mid` (hot orange vs green), NOT in the core: both cores
+    # are near-white by design, so a core grown past about half the radius makes
+    # a hostile and a friendly bullet converge on the same white pill and undoes
+    # ADR-0014 at exactly the density where it matters. `mid` stays the body and
+    # the core stays a hot centre.
     pygame.draw.circle(surf, rim, (r, r), r)
-    pygame.draw.circle(surf, mid, (r, r), int(r * 0.8))
-    pygame.draw.circle(surf, core, (r, r), max(1, int(r * 0.42)))
+    pygame.draw.circle(surf, mid, (r, r), max(1, r - max(1, r // 6)))
+    pygame.draw.circle(surf, core, (r, r), max(1, int(r * 0.45)))
     _BODY_CACHE[key] = surf
     return surf
 
