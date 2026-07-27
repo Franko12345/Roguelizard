@@ -655,6 +655,7 @@ class Player(Lizard):
 
     def _whip_reflect(self, game):
         """Contragolpe: the swinging tail bats enemy shots back at their owners."""
+        from ..combat import projectile as proj
         js = self.spine.joints
         pv, _k = self._whip_span()
         tail = js[pv + 1:] if pv is not None else js[-3:]
@@ -665,7 +666,9 @@ class Player(Lizard):
             if any(pr.pos.distance_to(j) < reach for j in tail):
                 pr.hostile = False              # now it hits enemies
                 pr.vel = -pr.vel
-                pr.color = (255, 230, 150)
+                # the body repaints itself off `hostile`; the halo has to follow
+                # it, or a batted shot keeps glowing in the enemy's colour
+                pr.color = proj.FRIENDLY[1]
                 pr.dmg = max(pr.dmg, int(round(8 * self.damage_mult())))
                 game.fx.spark_burst(pr.pos, (255, 240, 180), 5, 240)
 

@@ -6,7 +6,7 @@ from pygame import Vector2
 from ...core import config as C
 from ...core import palette
 from ...core.mathutil import safe_norm
-from ...combat.projectile import spit as game_spit
+from ...combat.projectile import spit as game_spit, leave_puddle
 
 
 def ranged_tick(creature, game, dt, target):
@@ -89,9 +89,10 @@ def venom_tick(creature, game, dt, target):
             # dropped where the telegraph pointed instead of flying past
             travel = mouth.distance_to(target.pos) / C.VENOM_SPIT_SPEED
             pr.life = max(0.12, min(travel, 2.2))
-            pr.puddle = dict(r=C.VENOM_PUDDLE_R, dmg=C.VENOM_PUDDLE_DMG,
-                             life=C.VENOM_PUDDLE_LIFE, hue=100,
-                             tick=C.VENOM_PUDDLE_TICK)
+            # one movement-free modifier: the payload it leaves behind
+            pr.on_death.append(leave_puddle(
+                r=C.VENOM_PUDDLE_R, dmg=C.VENOM_PUDDLE_DMG,
+                life=C.VENOM_PUDDLE_LIFE, hue=100, tick=C.VENOM_PUDDLE_TICK))
             game.spawn_projectile(pr)
             game.fx.spark_burst(mouth, (150, 240, 110), 6, 190)
         return to * 0.05, 0.0
