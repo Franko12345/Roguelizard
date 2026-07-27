@@ -243,6 +243,7 @@ that reapplies it" — Ácido, venom puddle, sting. See
 ## Related
 
 - [Weapon](./weapon.md) — the automatic core.
+- [Projectile](./projectile.md) — every shot, and its three hooks.
 - [Hitbox](./hitbox.md) — body sampling + head crit.
 - [Damage model](./damage.md) — player HP flow.
 - [ADR-0006](../adr/0006-soft-player-contact.md) — soft contact.
