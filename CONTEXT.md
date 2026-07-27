@@ -120,6 +120,22 @@ verb. Isaac's dividing line — "+10% damage" is a mutation, "shoot swords" is
 an item.
 _Avoid_: relic, artifact.
 
+**Investida**:
+The dash: the damaging dodge. Invulnerable while it runs (`Player.dashing`),
+deals `DASH_DAMAGE` on contact, costs 18 energy on a 0.45 s cooldown, and
+commits you forward with a velocity impulse. Prose says **Investida**; the code
+field is `dash_time`/`dash_cd` and the HUD dial reads DASH — the same
+prose/code split as Whip / `whip_t`.
+_Avoid_: lunge, charge.
+
+**Rolamento**:
+The other dodge (`Player.rolling`): cheap, frequent, **no damage**, and
+steerable instead of committed. Same i-frames, from the same guard in
+`Player.hurt`. Its animation is the **fake roll** — the joints collapse into a
+spinning disc, because a real coil cannot close against the spine's bend limit.
+Prose says **Rolamento**; the fields are `roll_time`/`roll_cd`/`roll_f`.
+_Avoid_: dodge-roll, esquiva (that word covers both verbs, not this one).
+
 **Charm**:
 A permanent slot the player fills at camp. Persists across level-ups within a
 run. Costs 150 pollen.

@@ -76,6 +76,24 @@ def pad_item(joy):
     return _btn(joy, 1)                          # B
 
 
+TRIGGER_DEAD = 0.3       # a trigger is a 0..1 axis; this is where it counts as pressed
+
+
+def pad_roll(joy):
+    """LT or RT -- the only slot left (all four face buttons are taken).
+
+    Raw-joystick fallback only, and only on a 6-axis pad: on a 4-axis one
+    ``pad_aim`` reads axes 2/3 as the RIGHT STICK, so trusting axis 2 there would
+    make aiming roll.
+    """
+    try:
+        if joy.get_numaxes() < 6:
+            return False
+    except Exception:
+        return False
+    return _axis(joy, 2, TRIGGER_DEAD) > 0 or _axis(joy, 5, TRIGGER_DEAD) > 0
+
+
 class Pad:
     """A gamepad.
 
@@ -156,6 +174,12 @@ class Pad:
         if self.ctrl:
             return self._cb(pygame.CONTROLLER_BUTTON_B)
         return pad_item(self.joy)
+
+    def roll(self):
+        if self.ctrl:
+            return (self._ca(pygame.CONTROLLER_AXIS_TRIGGERLEFT, TRIGGER_DEAD) > 0
+                    or self._ca(pygame.CONTROLLER_AXIS_TRIGGERRIGHT, TRIGGER_DEAD) > 0)
+        return pad_roll(self.joy)
 
     # -- menu navigation -- #
     def confirm(self):
@@ -245,7 +269,7 @@ def describe_joysticks(pads):
         print(f"[gamepad] '{p.name}' via {api}")
 
 
-_ACTIONS = ('dash', 'tongue', 'whip', 'item')
+_ACTIONS = ('dash', 'tongue', 'whip', 'item', 'roll')
 
 
 class Controller:
@@ -266,8 +290,8 @@ class Controller:
         self._buf = {a: 0.0 for a in _ACTIONS}      # time left on a pending press
         self._held = {a: False for a in _ACTIONS}   # previous raw state (edge detect)
 
-    def _edges(self, dash, tongue, whip=False, item=False, dt=0.0):
-        for action, now in zip(_ACTIONS, (dash, tongue, whip, item)):
+    def _edges(self, dash, tongue, whip=False, item=False, roll=False, dt=0.0):
+        for action, now in zip(_ACTIONS, (dash, tongue, whip, item, roll)):
             if self._buf[action] > 0.0:
                 self._buf[action] = decay(self._buf[action], dt)
             if now and not self._held[action]:      # rising edge only: holding never repeats
@@ -294,6 +318,10 @@ class Controller:
     def item_edge(self):
         return self._buf['item'] > 0.0
 
+    @property
+    def roll_edge(self):
+        return self._buf['roll'] > 0.0
+
     def poll(self, keys, mouse_btn, cam, player_pos, dt=0.0):
         raise NotImplementedError
 
@@ -316,6 +344,8 @@ class KeyboardMouseController(Controller):
         tongue = bool(mouse_btn[2]) or keys[pygame.K_LSHIFT]
         whip = bool(mouse_btn[1]) or keys[pygame.K_q]      # middle mouse / Q
         item = keys[pygame.K_e]                            # active item
+        roll = keys[pygame.K_LCTRL]                        # rolamento (mouse has no
+        #                                                    free button left)
         # the window is a scaled copy of the logical surface -> map the cursor back
         self.aim_world = cam.s2w(display.mouse_logical())
 
@@ -330,8 +360,9 @@ class KeyboardMouseController(Controller):
             tongue = tongue or self.joy.tongue()
             whip = whip or self.joy.whip()
             item = item or self.joy.item()
+            roll = roll or self.joy.roll()
         self.move = m
-        self._edges(dash, tongue, whip, item, dt)
+        self._edges(dash, tongue, whip, item, roll, dt)
 
 
 class KeyboardController(Controller):
@@ -353,7 +384,7 @@ class KeyboardController(Controller):
             a = m if m.length_squared() > 0.1 else Vector2(1, 0)
         self.aim_world = player_pos + safe_norm(a) * 200
         self._edges(keys[pygame.K_RCTRL], keys[pygame.K_RSHIFT],
-                    keys[pygame.K_RALT], keys[pygame.K_u], dt)
+                    keys[pygame.K_RALT], keys[pygame.K_u], keys[pygame.K_o], dt)
 
 
 class GamepadController(Controller):
@@ -371,7 +402,7 @@ class GamepadController(Controller):
         elif self.move.length_squared() > 0.1:
             self.aim_world = player_pos + self.move * 200
         self._edges(self.joy.dash(), self.joy.tongue(), self.joy.whip(),
-                    self.joy.item(), dt)
+                    self.joy.item(), self.joy.roll(), dt)
 
 
 def make_controllers(num_players, joysticks):

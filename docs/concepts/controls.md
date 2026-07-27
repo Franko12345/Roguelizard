@@ -7,13 +7,22 @@ for the timer that keeps edges alive across zero-step frames.
 
 - **WASD** — move
 - **mouse** — aim
-- **left click / SPACE** — dash
+- **left click / SPACE** — dash (Investida)
 - **right click / SHIFT** — tongue
 - **middle click / Q** — whip (tail sweep)
+- **LCTRL** — Rolamento (the other dodge, [Dodge](./dodge.md))
+- **E** — active item
 
 In single-player, a gamepad also controls P1 (hybrid — whichever is
 active; `KeyboardMouseController(joy)`), so the game plays without a
 mouse.
+
+## The button budget is full
+
+All three mouse buttons and all four pad face buttons are taken (A/RB dash,
+X/LB tongue, Y whip, B item), which is why the Rolamento landed on a
+**trigger** — LT or RT, the first trigger this game reads — and on a keyboard
+key rather than a fourth click.
 
 ## Tongue auto-aim
 
@@ -22,8 +31,12 @@ and **costs energy** (8). Skips the mouse.
 
 ## P2 (coop)
 
-- **gamepad** (sticks + A/X/**Y**) if detected
-- else arrows + IJKL + RCtrl / RShift / **RAlt**
+- **gamepad** (sticks + A/X/**Y**/B + **LT/RT**) if detected
+- else arrows + IJKL + RCtrl / RShift / **RAlt** / U (item) / **O** (Rolamento)
+
+On the raw-joystick fallback the triggers are only read on a 6-axis pad: with
+four axes, axis 2/3 *are* the right stick, so trusting axis 2 would make aiming
+roll.
 
 ## Window (`display.py`)
 
@@ -44,5 +57,6 @@ navigates menu, level-up cards, and camp.
 ## Related
 
 - [Input buffer](./input-buffer.md) — grace window for actions.
+- [Dodge](./dodge.md) — what the new button does.
 - [Pause](./pause.md) — controls text is shared with the pause menu.
 - [Camp](./camp.md) — walk-in-shop input model.

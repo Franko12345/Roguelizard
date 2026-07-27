@@ -23,6 +23,11 @@ Takes incoming damage.
 Short (`hit_flash > 0.45`). **Do not touch** — they are what keeps the
 game fair.
 
+`hurt` is also where *every* other invulnerability is expressed — one condition,
+no `invuln` field: both dodges (`self.dashing or self.rolling`, see
+[Dodge](./dodge.md)), being downed, and the shed timer (Muda de Pele / Casulo).
+Every damage source funnels through here, so this is the only place to add one.
+
 ## Telegraphed projectiles
 
 Spitter has a wind-up (`shoot_charge`) with particles. Projectiles are
