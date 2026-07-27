@@ -20,8 +20,10 @@ shoots the point that reflex puts you on, and reuses `emitter.aimed_barrage`
 (the boss barrage's lead, dialled longer). The MORTEIRO answers the other one:
 its patch is picked at the **start** of the wind-up and only becomes a hazard a
 second later, so an investida aimed at it ends inside it. Neither is unfair:
-walking out always works, and against the ANTECIPADOR **standing still is a
-legitimate answer** — the counter to a lead shot is to stop leading it.
+walking out of the MORTEIRO's patch always works, and the ANTECIPADOR's lead is
+**linear** — it is beaten by changing direction, and it draws the point it will
+shoot for the whole wind-up. Freezing is *not* the answer to it: a lead of zero
+is a shot dead on your head (measured in [Balance](./balance.md)).
 
 ## Every shooter fires through the emitter
 

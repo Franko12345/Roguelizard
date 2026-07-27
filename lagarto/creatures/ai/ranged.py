@@ -118,8 +118,9 @@ def lead_tick(creature, game, dt, target):
     The telegraph is the lead point itself, drawn on the ground for the whole
     wind-up and re-aimed every frame, so it answers "am I inside?" *and* keeps
     the promise: what the marker shows at the trigger frame is where the shots
-    go. Standing still is a legitimate answer to it -- the fair counter to a
-    lead shot is to stop leading it.
+    go. The lead is LINEAR, so the counter is changing direction -- not
+    freezing, which just makes the lead zero and the shot dead on (measured in
+    docs/concepts/balance.md).
     """
     d = _dials(creature)
     to = safe_norm(target.pos - creature.pos)
