@@ -40,6 +40,12 @@ def _might(p, g): p.might *= 1.2
 def _area(p, g): p.area_mult *= 1.18
 def _haste(p, g): p.cooldown_mult *= 0.85
 def _amount(p, g): p.amount += 1
+# stackable SHOT modifiers (issue #104): they hang the projectile hooks from
+# #102 on every friendly bullet, and they STACK -- that is the asymmetry, an
+# enemy shot wears one modifier and the player's wears all of them. Both are
+# read in exactly one place, Game.spawn_projectile.
+def _rebote(p, g): p.shot_bounces += 1
+def _rastreio(p, g): p.shot_homing += 1
 
 # ---- part mutations (reuse Player.grant_part; body redraws itself) -------- #
 # NOTE: the club tail is charm-only (issue #22 -- see charms.py). It used to
@@ -51,6 +57,12 @@ def _horns(p, g): p.grant_part('horns', g)
 def _plates(p, g): p.grant_part('plates', g)
 
 
+# The weights are a SHARE of one table, so a new row is never free: it dilutes
+# every other card. Issue #104 added two (rebote/rastreio) and paid for them by
+# trimming the five cards that were already the weakest picks -- the four
+# cosmetic part cards and 'tongue' (whose range is now also sold by the
+# Lingua-Dardo charm). Untouched cards lost ~4% of their share instead of the
+# ~9% a bare append would have cost. tools/check_content.py pins that.
 MUTATIONS_LIST = [
     _m('health',  'Coracao Extra',   '+1 vida maxima',              5,   _health),
     _m('speed',   'Agilidade',       '+14% velocidade',             130, _speed),
@@ -58,18 +70,20 @@ MUTATIONS_LIST = [
     _m('energy',  'Folego',          '+30 energia maxima',          210, _energy),
     _m('regen',   'Regeneracao',     'cura vida lentamente',        150, _regen, 0.8),
     _m('xp',      'Metabolismo',     '+25% de XP',                  50,  _xp),
-    _m('tongue',  'Lingua Longa',    '+alcance da lingua',          320, _tongue),
+    _m('tongue',  'Lingua Longa',    '+alcance da lingua',          320, _tongue, 0.8),
     _m('thorns',  'Espinhos',        'dano de contato + espinhos',  330, _thorns),
-    _m('spikes',  'Placas Dorsais',  'mais espinhos afiados',       28,  _spikes),
-    _m('plates',  'Carapaca',        'placas de armadura',          260, _plates),
-    _m('horns',   'Chifres',         'chifres na cabeca',           20,  _horns, 0.9),
-    _m('legs',    'Pernas Extras',   '+2 pernas (mais estavel)',    275, _legs, 0.9),
+    _m('spikes',  'Placas Dorsais',  'mais espinhos afiados',       28,  _spikes, 0.8),
+    _m('plates',  'Carapaca',        'placas de armadura',          260, _plates, 0.8),
+    _m('horns',   'Chifres',         'chifres na cabeca',           20,  _horns, 0.7),
+    _m('legs',    'Pernas Extras',   '+2 pernas (mais estavel)',    275, _legs, 0.7),
     _m('venom',   'Peconha',         'dash/bote envenena',          105, _venom, 0.8),
     _m('wings',   'Membranas',       'dash: +50% dano e mais rapido', 175, _wings, 0.7),
     _m('might',   'Vigor',           '+20% dano (armas, dash, rabo)', 0,   _might, 1.2),
     _m('area',    'Amplitude',       '+18% area/alcance das armas', 150, _area, 1.1),
     _m('haste',   'Frenesi',         '+15% cadencia das armas',     190, _haste, 1.1),
     _m('amount',  'Fecundidade',     '+1 projetil/orbital',         55,  _amount, 0.9),
+    _m('rebote',  'Rebote',          'seus tiros quicam nas paredes', 195, _rebote, 0.9),
+    _m('rastreio', 'Rastreio',       'seus tiros curvam atras do alvo', 42, _rastreio, 0.9),
 ]
 MUTATIONS = Registry(MUTATIONS_LIST)
 # 'club' used to be here -- removed in issue #22 (charm-only now).

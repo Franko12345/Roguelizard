@@ -23,11 +23,18 @@ Defined in `lagarto/creatures/species.py`.
 - **spitter, scorpion** — ranged and sting-based; scorpion applies slow.
 - **wasp, bomber, gunner, venomer** — phase-2 arrivals that each attack
   a different player habit (see [CLAUDE.md](../../CLAUDE.md) hábito table).
+- **sniper (ANTECIPADOR), mortar (MORTEIRO)** — the two habits the
+  [Rolamento](./dodge.md) created: rolling on reflex, and charging in. See
+  [Enemy behaviors](./enemy-behaviors.md).
 - **centipede** — `plan='segmented'`, `behavior='burrow'`.
 - **octopus** — `plan='tentacle'`, `behavior='grapple'`, `weight=3.0`.
 
 Each entry declares `hp`, `speed`, part counts, and — when a part should
-be transferrable to the player — a `grants` field. Champions and bosses
+be transferrable to the player — a `grants` field. A species that shoots also
+declares `shot`: the [emitter](../../CONTEXT.md) pattern it fires plus that
+pattern's dials, e.g. `shot=dict(fn=emitter.fan_shot, count=1, spread=0, …)`.
+Widening the CUSPIDOR into a cone, or swapping it for a ring, is that dict — no
+AI code. Champions and bosses
 [modify](./champion.md) genome fields on top of these bases.
 
 ## `make()`: randomised spawns
@@ -44,7 +51,7 @@ ranges the behaviour tolerates; visual fields jitter more freely.
 
 1. Pick a base genome shape (`plan`, `radial`, part counts).
 2. Pick a `behavior` (already-implemented dispatch — inventing a new one
-   is not "add a species", it's "add an AI").
+   is not "add a species", it's "add an AI"). A shooter also needs `shot`.
 3. Add the entry to `SPECIES` with `hp`, `speed`, `grants`, `diet`.
 4. Add to the theme table (`THEMES` in `rounds.py`) if it should appear
    in rounds.

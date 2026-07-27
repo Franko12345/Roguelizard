@@ -26,19 +26,45 @@ from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
-from .projectile import spit as game_spit, bounce
+from .projectile import spit as game_spit, bounce, leave_puddle
+
+
+def _launch(pr, game, dials):
+    """Fire one shot, wearing the pattern's ONE movement modifier.
+
+    ``dials['mod']`` is a plain ``on_update`` hook (``projectile.homing`` /
+    ``projectile.bounce``), which is what lets a "new" boss pattern be a row of
+    dials instead of a new function. One and no more: the player is the only
+    side that stacks modifiers (see ``docs/concepts/projectile.md``).
+    """
+    mod = dials.get('mod')
+    if mod is not None:
+        pr.bounces_left = dials.get('bounces', 0)
+        pr.bounce_damp = dials.get('bounce_damp', 0.8)
+        pr.on_update.append(mod)
+    game.spawn_projectile(pr)
+
+
+def lead_point(target, dials):
+    """Where the target WILL be -- the single lead formula.
+
+    Shared by the boss's barrage and the ANTECIPADOR's on-ground telegraph, so
+    the marker the player reads cannot drift away from where the shots go.
+    """
+    return target.pos + target.vel * dials.get('lead', C.BOSS_BARRAGE_LEAD)
 
 
 def radial_burst(shooter, game, target, dials):
     """A full ring of shots, all at once -- the "get away from me" pattern."""
     mouth = shooter.spine.joints[0]
-    n = C.BOSS_RADIAL_COUNT
+    n = dials.get('count', C.BOSS_RADIAL_COUNT)
     for i in range(n):
         ang = (360.0 / n) * i
         aim = mouth + vfrom_angle(ang, 100)
-        pr = game_spit(mouth, aim, shooter.color, dmg=C.BOSS_RADIAL_DMG,
-                       effect=None, speed=C.BOSS_RADIAL_SPEED, radius=8)
-        game.spawn_projectile(pr)
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', C.BOSS_RADIAL_DMG),
+                       effect=None, speed=dials.get('shot_speed', C.BOSS_RADIAL_SPEED),
+                       radius=dials.get('radius', 8))
+        _launch(pr, game, dials)
     game.fx.ring(shooter.pos, shooter.color)
     game.fx.spark_burst(mouth, palette.lighten(shooter.color, 0.3), 16, 260)
     audio.play('w_spit', 0.5)
@@ -47,27 +73,65 @@ def radial_burst(shooter, game, target, dials):
 def fan_shot(shooter, game, target, dials):
     """A cone of shots toward the player -- dodge sideways, not backward.
     Dials come from the caller (Primordial's Massive Fan reuses this with a
-    wider/denser dial set instead of new code)."""
+    wider/denser dial set instead of new code; the CUSPIDOR and the
+    METRALHADOR reuse it with ``count=1``)."""
     mouth = shooter.spine.joints[0]
     n = dials.get('count', C.BOSS_FAN_COUNT)
     spread = dials.get('spread', C.BOSS_FAN_SPREAD)
-    base = safe_norm(target.pos - mouth)
+    jitter = dials.get('jitter', 0.0)
+    aim_at = lead_point(target, dials) if 'lead' in dials else target.pos
+    base = safe_norm(aim_at - mouth)
+    if jitter:                       # the gunner's dispersion: aim, not arrangement
+        base = base.rotate(random.uniform(-jitter, jitter))
     for i in range(n):
-        t = (i / max(1, n - 1)) - 0.5              # -0.5 .. 0.5
+        # a one-shot fan goes down the MIDDLE (it used to leave at -spread/2,
+        # which only never showed because every boss fan had 5+ shots)
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5     # -0.5 .. 0.5
         aim = mouth + base.rotate(t * spread) * 100
         pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', C.BOSS_FAN_DMG),
-                       effect=None, speed=dials.get('shot_speed', C.BOSS_FAN_SPEED), radius=8)
-        game.spawn_projectile(pr)
+                       effect=None, speed=dials.get('shot_speed', C.BOSS_FAN_SPEED),
+                       radius=dials.get('radius', 8))
+        _launch(pr, game, dials)
     game.fx.spark_burst(mouth, shooter.color, 10, 240)
     audio.play('w_spit', 0.45)
 
 
+def lob_shot(shooter, game, target, dials):
+    """A shot that LANDS on the aim point and leaves its payload there.
+
+    The ENVENENADOR's spit: ``life`` is cut to the travel time so the puddle is
+    dropped where the telegraph pointed instead of flying past, and the payload
+    rides ``on_death`` (see ``docs/concepts/projectile.md``). Area denial, not a
+    hit -- what it punishes is standing still.
+    """
+    mouth = shooter.spine.joints[0]
+    speed = dials.get('shot_speed', C.VENOM_SPIT_SPEED)
+    pr = game_spit(mouth, target.pos, shooter.color, dmg=dials.get('dmg', C.VENOM_SPIT_DMG),
+                   effect='poison', speed=speed, radius=dials.get('radius', 7))
+    travel = mouth.distance_to(target.pos) / speed
+    pr.life = max(0.12, min(travel, 2.2))
+    payload = dials.get('puddle')
+    if payload:
+        pr.on_death.append(leave_puddle(**payload))
+    _launch(pr, game, dials)
+    game.fx.spark_burst(mouth, palette.lighten(shooter.color, 0.3), 6, 190)
+    audio.play('w_spit', 0.4)
+
+
 def aimed_barrage(shooter, game, target, dials):
-    """A few shots aimed with lead at where the player is HEADING."""
-    lead = target.pos + target.vel * 0.35
-    shooter._barrage_left = C.BOSS_BARRAGE_SHOTS
-    shooter._barrage_aim = lead
+    """A few shots aimed with lead at where the player is HEADING.
+
+    Dials come from the caller: the ANTECIPADOR reuses this exact function with
+    a longer lead and a shorter burst instead of a second implementation of
+    "shoot where they are going".
+    """
+    shooter._barrage_left = dials.get('shots', C.BOSS_BARRAGE_SHOTS)
+    shooter._barrage_aim = lead_point(target, dials)
     shooter._barrage_cd = 0.0
+    shooter._barrage_gap = dials.get('gap', C.BOSS_BARRAGE_GAP)
+    shooter._barrage_speed = dials.get('shot_speed', C.BOSS_BARRAGE_SPEED)
+    shooter._barrage_dmg = dials.get('dmg', C.BOSS_BARRAGE_DMG)
+    shooter._barrage_radius = dials.get('radius', 7)
 
 
 def _tick_barrage(shooter, game):
@@ -78,10 +142,11 @@ def _tick_barrage(shooter, game):
     if shooter._barrage_cd > 0:
         return
     shooter._barrage_left -= 1
-    shooter._barrage_cd = C.BOSS_BARRAGE_GAP
+    shooter._barrage_cd = shooter._barrage_gap
     mouth = shooter.spine.joints[0]
-    pr = game_spit(mouth, shooter._barrage_aim, shooter.color, dmg=C.BOSS_BARRAGE_DMG,
-                   effect=None, speed=C.BOSS_BARRAGE_SPEED, radius=7)
+    pr = game_spit(mouth, shooter._barrage_aim, shooter.color, dmg=shooter._barrage_dmg,
+                   effect=None, speed=shooter._barrage_speed,
+                   radius=shooter._barrage_radius)
     game.spawn_projectile(pr)
     game.fx.spark_burst(mouth, shooter.color, 5, 200)
     audio.play('w_spit', 0.35)

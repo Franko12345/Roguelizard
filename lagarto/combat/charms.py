@@ -42,6 +42,14 @@ def _presas_ap(p, g): p.venom = True; p.genome.fangs = True
 def _presas_un(p, g): p.venom = ('venom' in p.mutations); p.genome.fangs = False
 def _olhos_ap(p, g): p.area_mult *= 1.2; p.genome.extra_eyes += 2
 def _olhos_un(p, g): p.area_mult /= 1.2; p.genome.extra_eyes = max(0, p.genome.extra_eyes - 2)
+# Lingua-Dardo (issue #104): the tongue also SHOOTS. It is the only aimed shot
+# the player has -- everything else is automatic (`nearest_enemy`) and stays
+# that way. A charm and not a level-up card for the same reason as the clava
+# (issue #22): it rewrites a verb, and rewriting a verb has to be a choice you
+# make at the camp, not a card the hand happens to roll. Charms are also
+# reversible, which a mutation is not, and this one changes how a button feels.
+def _dardo_ap(p, g): p.tongue_shot = True; p.genome.fangs = True
+def _dardo_un(p, g): p.tongue_shot = False; p.genome.fangs = False
 
 # ---- back ----------------------------------------------------------------- #
 def _carapaca_ap(p, g): p.armor = min(0.6, p.armor + 0.2); p.genome.plates += 1
@@ -72,6 +80,7 @@ CHARMS_LIST = [
     _c('antenas',  'head', 'Antenas',            '+alcance da lingua',       190, 30, _antenas_ap, _antenas_un),
     _c('presas',   'head', 'Presas de Veneno',   'ataques envenenam',        105, 34, _presas_ap, _presas_un),
     _c('olhos',    'head', 'Olhos de Cacador',   '+20% area das armas',       50, 34, _olhos_ap, _olhos_un),
+    _c('dardo',    'head', 'Lingua-Dardo',       'a lingua dispara um dardo',  95, 40, _dardo_ap, _dardo_un),
     _c('carapaca', 'back', 'Carapaca',           'bloqueia 20% do dano',     260, 42, _carapaca_ap, _carapaca_un),
     _c('espinhos', 'back', 'Espinhos',           'dano de contato',          330, 32, _espinhos_ap, _espinhos_un),
     _c('asas',     'back', 'Asas de Besouro',    '+velocidade e dash',       175, 38, _asas_ap, _asas_un),

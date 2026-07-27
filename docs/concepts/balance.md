@@ -100,6 +100,29 @@ change them**:
   the last 5 s and vanish), hp 3 → 2, attack every 0.6 s → 1.1 s; world
   eggs 6 → 3; shop egg 24 → 40 pollen.
 
+## Where the two #104 shooters landed, measured
+
+A new enemy is a new decision, not a new damage number — so the number is
+what gets checked. 4 of each against an invulnerable-HP player, 30 s, headless:
+
+| Species | Player standing still | Player circling at 190 px/s |
+|---|---|---|
+| ANTECIPADOR ×4 | 11.8 dmg/s | 8.7 dmg/s |
+| MORTEIRO ×4 | 8.1 | 5.0 |
+| METRALHADOR ×4 | 8.7 | 7.1 |
+| ENVENENADOR ×4 | 9.0 | 14.8 |
+| CUSPIDOR ×4 | 10.5 | 6.7 |
+
+Both new ones sit inside the band the existing shooters already occupy, so
+neither is a stealth difficulty bump.
+
+The ANTECIPADOR number reads backwards until you see what it means: it hurts a
+**still** player most, because a lead of zero is a shot dead on your head. Its
+counter is not to freeze and not to walk in a straight line — it is to
+**change direction** (the circling column is the same 4 enemies losing a third
+of their damage) or to spend i-frames. That is the correction the measurement
+forced on the design note: "standing still beats a lead shot" is false.
+
 ## Tracking — what this file asked for, and where it landed
 
 Issue #28 asked for tracking of the requests raised in this file.

@@ -33,8 +33,16 @@ _Avoid_: shape, form.
 
 **Behavior**:
 `Genome.behavior` — which AI dispatch the creature runs (`chase`, `ranged`,
-`lunge`, `hop`, `fly`, `bomber`, `gunner`, `venom`, `burrow`, `grapple`).
+`lunge`, `hop`, `fly`, `bomber`, `gunner`, `venom`, `lead`, `mortar`, `burrow`,
+`grapple`).
 _Avoid_: AI, mode.
+
+**Shot**:
+`Genome.shot` — how a creature attacks, as data: an **Emitter** Pattern plus
+that pattern's **Dials** (`dict(fn=emitter.fan_shot, count=1, …)`). The AI tick
+decides when to fire and where to walk; the shot decides what leaves the mouth,
+so a species' whole attack arrangement changes from `species.py`.
+_Avoid_: attack data, weapon (a Weapon is the player's automatic kind).
 
 **Champion**:
 A named variant of an enemy species with a visual trait that explains its
@@ -175,9 +183,16 @@ _Avoid_: attack, move, ability (all taken).
 **Emitter**:
 `lagarto/combat/emitter.py` — the one place every Pattern is implemented,
 shared by [Boss](docs/concepts/boss.md) and common enemy alike. It never looks
-its own tuning up: the caller passes **dials** (a plain dict; the boss passes
-its `PATTERNS` row). See [ADR-0012](docs/adr/0012-shared-pattern-emitter.md).
+its own tuning up: the caller passes **Dials**. See
+[ADR-0012](docs/adr/0012-shared-pattern-emitter.md).
 _Avoid_: pattern library, bullet factory, spawner.
+
+**Dials**:
+The plain dict of tuning a Pattern reads (`count`, `spread`, `lead`, `mod`, …).
+A boss passes its `PATTERNS` row; a common enemy passes its **Shot**. A "new"
+attack is usually a new dial set on a pattern that already exists — Massive
+Fan, deathroll, Web Dome, `radial_wall` are all dials and no code.
+_Avoid_: params, config, tuning dict (say **dials**).
 
 **Projectile**:
 Every shot in the game, from one class (`lagarto/combat/projectile.py`).
@@ -191,8 +206,10 @@ projectile).
 **Hook**:
 A plain function appended to one of a Projectile's three lists — `on_update`
 (movement), `on_hit`, `on_death`. No base class, no registry: a modifier IS the
-function. The player stacks hooks; an enemy shot picks **one** movement and
-stops there. See [Projectile](docs/concepts/projectile.md).
+function. The player stacks hooks (`Game._stack_shot_mods`, counters like
+`shot_bounces`); an enemy shot picks **one** movement and stops there
+(`emitter._launch`, `dials['mod']`). See
+[Projectile](docs/concepts/projectile.md).
 _Avoid_: modifier class, behaviour, component, plugin.
 
 ### Run structure
@@ -284,7 +301,10 @@ _Avoid_: emotion, state.
 **Telegraph**:
 The pre-attack tell the player reads. Rule of thumb: **draw the footprint,
 not just a warning** (the puddle before the shockwave, not a flashing icon).
-Time _and_ visibility are both required.
+Time _and_ visibility are both required. A common enemy draws its footprint
+through the same `rain` drawer a boss uses (`AILizard._draw_mark`), but at full
+radius from the first frame — a growing circle understates the danger zone
+while it grows.
 _Avoid_: warning, tell (informal — `tell` is fine in casual speech, but the
 noun is `telegraph` in prose and code comments).
 

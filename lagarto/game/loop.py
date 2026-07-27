@@ -19,6 +19,7 @@ from ..creatures.ai import AILizard
 from ..creatures.player import Player
 from ..creatures import species
 from ..combat import evolution
+from ..combat import projectile
 from ..audio import engine as audio
 from ..render import ui
 from ..flow import progression
@@ -476,7 +477,31 @@ class Game:
         ``self.enemies`` (a dying DIVISOR splitting inside _collisions)."""
         self.pending_enemies.append(e)
 
+    def _stack_shot_mods(self, proj):
+        """The player's stackable shot modifiers (#104), applied once per shot.
+
+        Same reason Retaguarda lives in ``spawn_projectile``: this is the one
+        choke point every friendly bullet already passes, and a per-weapon copy
+        of the rule is how the dash ended up with two of them. Stacking is the
+        point -- an enemy shot wears one modifier, the player's wears every one
+        they own (docs/concepts/projectile.md).
+        """
+        alive = [p for p in self.players if not p.dead]
+        if not alive:
+            return
+        bounces = max(getattr(p, 'shot_bounces', 0) for p in alive)
+        homing = max(getattr(p, 'shot_homing', 0) for p in alive)
+        if bounces:
+            proj.bounces_left = bounces
+            proj.bounce_damp = 1.0        # a player ricochet that limps is a dud
+            proj.on_update.append(projectile.bounce)
+        if homing:
+            proj.home_mult = homing
+            proj.on_update.append(projectile.homing)
+
     def spawn_projectile(self, proj, mirror=True):
+        if mirror and not proj.hostile:   # mirror=False is the Retaguarda copy,
+            self._stack_shot_mods(proj)   # which already carries the modifiers
         self.projectiles.append(proj)
         # Retaguarda mirrors every friendly shot backwards. It lives HERE because
         # this is the single choke point every weapon already goes through --

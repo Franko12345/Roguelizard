@@ -28,7 +28,7 @@ THEMES = {
     'enxame':     dict(banner='ENXAME', pool=['runner', 'runner', 'spiky', 'snake'],
                        budget=1.3, cap=7),
     'cuspidores': dict(banner='CHUVA DE CUSPIDORES',
-                       pool=['spitter', 'spitter', 'gunner', 'runner'],
+                       pool=['spitter', 'spitter', 'gunner', 'sniper', 'runner'],
                        budget=0.85, cap=5),
     'tanques':    dict(banner='MARCHA DOS TANQUES',
                        pool=['tank', 'horned', 'octopus', 'tank'],
@@ -44,7 +44,8 @@ THEMES = {
     'estouro':    dict(banner='CAMPO MINADO',   # keep moving, never body-block
                        pool=['bomber', 'bomber', 'runner', 'gunner'],
                        budget=0.9, cap=6),
-    'praga':      dict(banner='PRAGA', pool=['venomer', 'venomer', 'spitter', 'wasp'],
+    'praga':      dict(banner='PRAGA',
+                       pool=['venomer', 'venomer', 'mortar', 'spitter', 'wasp'],
                        budget=0.8, cap=5),      # ground denial -> stop camping
     'invasao':    dict(banner='INVASAO', pool=list(species.ENEMY_SPECIES),
                        budget=0.9, cap=6),

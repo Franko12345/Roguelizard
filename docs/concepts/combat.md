@@ -80,6 +80,21 @@ should mean more lag and more whip, but the reel is only ~10 frames long, so a
 soft spring simply never arrives at the coiled shape and the tongue stays
 straight.
 
+### Lingua-Dardo — the one aimed shot
+
+The `dardo` [Charm](./charm.md) makes the launch also fire a projectile down
+the same aim the tongue grabs on (`Player._fire_tongue_dart`, at launch, not at
+stick). It is the **only** attack the player aims: every
+[Weapon](./weapon.md) stays automatic (`nearest_enemy`) and stays that way —
+a modifier here is a build, not a skill check.
+
+It is a charm and not a level-up card for the same reason as the clava
+(issue #22): it rewrites a **verb**, and rewriting a verb is a choice made at
+the camp, not a card the hand happened to roll. Charms are also reversible; a
+mutation is not, and this one changes how a button you already press behaves.
+The dart goes through `spawn_projectile` like everything else, so the player's
+stacked shot modifiers ride it too.
+
 ### What it catches
 
 Set at **stick**. Food is glued to the sticky pad and rides the tip home, then

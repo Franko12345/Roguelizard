@@ -142,12 +142,21 @@ def _body_sprite(r, hostile):
 # --------------------------------------------------------------------------- #
 
 def homing(pr, dt, game):
-    """on_update: curve toward the nearest enemy (Ferrão, the ferrão item)."""
-    tgt = game.nearest_enemy(pr.pos, 520)
-    if tgt:
+    """on_update: curve toward whoever is on the OTHER side (Ferrão, the ferrão
+    item, the player's Rastreio stacks, a boss's homing fan).
+
+    It used to hunt ``nearest_enemy`` unconditionally, so a hostile shot wearing
+    this hook chased its own horde. The side is already on the projectile --
+    reading it here is what lets both sides share the one hook. ``home_mult``
+    (default 1) is how the player's stacked modifier turns the same curve
+    tighter without a second function.
+    """
+    tgt = game.nearest_player(pr.pos) if pr.hostile else game.nearest_enemy(pr.pos, 520)
+    if tgt and pr.pos.distance_to(tgt.pos) < 520:
         speed = pr.vel.length()
         desired = safe_norm(tgt.pos - pr.pos)
-        pr.vel = safe_norm(safe_norm(pr.vel).lerp(desired, min(1, 7 * dt))) * speed
+        rate = min(1, 7 * getattr(pr, 'home_mult', 1.0) * dt)
+        pr.vel = safe_norm(safe_norm(pr.vel).lerp(desired, rate)) * speed
 
 
 def bounce(pr, dt, game):

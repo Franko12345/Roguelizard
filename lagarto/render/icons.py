@@ -625,10 +625,11 @@ ICONS = {
     'spikes': _spikes_icon, 'plates': _plates_icon, 'horns': _horns_icon,
     'legs': _legs_icon, 'venom': _drop, 'wings': _wings_icon,   # 'club' -> charm-only (#22)
     'might': _bolt, 'area': _expand, 'haste': _clock, 'amount': _plus_one,
+    'rebote': _bounce, 'rastreio': _target,      # #104 shot modifiers
     # charms
     'antenas': _antennae, 'olhos': _eyes, 'carapaca': _plates_icon,
     'asas': _wings_icon, 'nectar': _sac, 'glandula': _sac, 'presas': _fangs,
-    'espinhos': _spikes_icon, 'clava': _club,
+    'espinhos': _spikes_icon, 'clava': _club, 'dardo': _arrow,
     # boss emblems (rounds.draw_boss_bar) -- one recognisable mark per fight
     'boss_rei_lagarto': _boss_crown, 'boss_centopeiadeira': _boss_gear,
     'boss_kraken_mor': _boss_kraken_eye, 'boss_mae_escaravelho': _boss_hive,
