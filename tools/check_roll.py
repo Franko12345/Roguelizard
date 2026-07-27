@@ -116,6 +116,41 @@ assert abs(rolls - round(2.0 / cycle)) <= 1, \
 print(f"  frequency: {rolls} rolls in 2s ({cycle:.2f}s cycle), "
       f"vs a dash every {p.dash_cooldown:.2f}s")
 
+# 4b. it has to actually CARRY you -- the point of a dodge is leaving where the
+# bullet is going. This shipped as a steer multiplier with no impulse: 1.9x for
+# 0.15 s moved about a third of a body length, and playtest read it as "tried to
+# roll and did not dash". Distance is the thing the player feels, so measure it.
+def travel(action):
+    g2 = Game(1, make_controllers(1, []), fonts.get(16), fonts.get(26),
+              mode='normal', chars=None)
+    q = g2.players[0]
+    q.energy = q.max_energy
+    start = Vector2(q.pos)
+    for i in range(60):                      # one second of holding a direction
+        q.ctrl.move = Vector2(0, 1)
+        if i == 0 and action:
+            q.ctrl._buf[action] = C.INPUT_BUFFER
+        q.update(DT, g2)
+    return q.pos.distance_to(start), q
+
+
+walked, q = travel(None)
+rolled, _ = travel('roll')
+dashed, _ = travel('dash')
+body = q.max_r * 2
+assert rolled - walked > body * 2, \
+    f"a rolamento adds only {rolled - walked:.0f} px over walking ({body:.0f} px of body) " \
+    f"-- it is not carrying you out of anything"
+assert rolled < dashed, \
+    f"the rolamento ({rolled - walked:.0f} px) covers as much ground as the investida " \
+    f"({dashed - walked:.0f} px): the investida has to stay the bigger commitment"
+roll_eff = (rolled - walked) / C.ROLL_COST
+dash_eff = (dashed - walked) / (C.DASH_COST + 4)
+assert roll_eff > dash_eff, \
+    "the rolamento is not the cheaper way to cover ground, so nobody will press it"
+print(f"  travel: +{rolled - walked:.0f} px per roll vs +{dashed - walked:.0f} px per "
+      f"investida ({roll_eff:.1f} vs {dash_eff:.1f} px per energy point)")
+
 # 5. co-op: BOTH control schemes own the button, on different keys
 g = Game(2, make_controllers(2, []), fonts.get(16), fonts.get(26),
          mode='normal', chars=None)

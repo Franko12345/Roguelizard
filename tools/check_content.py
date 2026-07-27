@@ -143,8 +143,15 @@ def sniper_shot(vel):
     return mark, g.projectiles[0].vel, e.spine.joints[0], p
 
 
+class _At:
+    """The only thing lead_point wants from a shooter is where its head is."""
+    def __init__(self, pos):
+        self.spine = type('S', (), {'joints': [Vector2(pos)]})()
+
+
 mark, shot_vel, mouth, p = sniper_shot((0, 260))
-want = p.pos + Vector2(0, 260) * C.SNIPER_LEAD
+want = emitter.lead_point(_At(mouth), p, {'lead': C.SNIPER_LEAD,
+                                          'shot_speed': C.SNIPER_SPEED})
 assert mark and mark[0].distance_to(want) < 1e-6, \
     f"the marker showed {mark} but the lead point is {want} -- the telegraph lies"
 lead_dir = (want - mouth).normalize()
@@ -157,8 +164,41 @@ assert abs(gap) > 8, f"the 'lead' shot is aimed within {abs(gap):.1f} deg of the
 still_mark, still_vel, still_mouth, still_p = sniper_shot((0, 0))
 assert abs(still_vel.normalize().angle_to((still_p.pos - still_mouth).normalize())) < 1e-3, \
     "a motionless target still got led -- standing still has to be an answer"
-print(f"  lead: a target at 260 px/s is shot {abs(gap):.1f} deg ahead of itself "
-      f"({C.SNIPER_LEAD:.2f}s of lead); a still one is shot dead on")
+
+# The assertion that actually matters is not the formula, it is the OUTCOME: a
+# straight-line runner at constant speed is the case a leading shot must hit,
+# and the one the fixed-seconds lead missed at every range. Fly the shot and
+# measure. The error has to stay flat across distance -- a lead that is a
+# constant number of seconds instead of the flight time drifts linearly, which
+# is exactly how this shipped broken (44 px at 150, 172 px at 450).
+misses = []
+for dist in (150, 250, 350, 450):
+    g2, p2 = fresh()
+    e2 = species.make('sniper', MID + Vector2(dist, 0))
+    g2.enemies.append(e2)
+    closest = 1e9
+    for _ in range(900):
+        p2.pos += Vector2(0, 190) * DT
+        p2.vel = Vector2(0, 190)
+        p2.spine.resolve(p2.pos)
+        e2.update(DT, g2)
+        for pr in list(g2.projectiles):
+            pr.update(DT, g2)
+            if pr.hostile:
+                closest = min(closest, pr.pos.distance_to(p2.pos))
+    misses.append(closest)
+body_r = p.max_r
+assert max(misses) < body_r * 1.5, \
+    f"the ANTECIPADOR misses a straight-line runner by up to {max(misses):.0f} px " \
+    f"against a {body_r:.0f} px body -- {[round(m) for m in misses]} by range"
+assert misses[-1] - misses[0] < body_r * 0.6, \
+    f"the miss grows with distance ({misses[0]:.0f} px -> {misses[-1]:.0f} px): " \
+    f"the lead is a fixed time again, not the flight time"
+print(f"  lead: a target at 260 px/s is shot {abs(gap):.1f} deg ahead of itself; "
+      f"a still one is shot dead on")
+print(f"  lead hits: a straight-line runner is missed by "
+      f"{'/'.join(f'{m:.0f}' for m in misses)} px at 150/250/350/450 px of range "
+      f"(body is {body_r:.0f} px)")
 
 # --------------------------------------------------------------------------- #
 # 4. the MORTEIRO draws its footprint on the ground BEFORE it arms             #
