@@ -16,6 +16,7 @@ import random
 
 from ...core import config as C
 from ...combat import emitter
+from ...combat import projectile as proj
 from .personality import BossPersonality
 
 PATTERNS = {
@@ -94,6 +95,22 @@ PATTERNS = {
     'grid_of_fire': dict(fn=emitter.grid_of_fire, windup=C.MURALHA_GRID_WINDUP, telegraph='rain',
                          cell=C.MURALHA_GRID_CELL, dmg=C.MURALHA_GRID_DMG,
                          tick=C.MURALHA_GRID_TICK, life=C.MURALHA_GRID_LIFE),
+    # ---- issue #104: three more special attacks, ZERO new pattern code ------ #
+    # Each is dials on a function that already existed, plus at most one
+    # `mod` -- the single on_update movement hook the emitter attaches (#102).
+    # Leque teleguiado: slow shots that CURVE, so backing off in a straight line
+    # stops working and the answer becomes breaking line of sight or the roll.
+    'homing_fan': dict(fn=emitter.fan_shot, windup=0.75, telegraph='fan',
+                       count=3, spread=24, shot_speed=190, dmg=13,
+                       mod=proj.homing),
+    # Muralha de balas: a dense, SLOW ring -- density instead of speed, which is
+    # the Serpente de Cristal's whole identity ("nao acelera, so fica mais densa").
+    'radial_wall': dict(fn=emitter.radial_burst, windup=0.9, telegraph='radial',
+                        count=22, shot_speed=150, dmg=11),
+    # Leque antecipado: the cone aims where you are GOING (same lead formula as
+    # the barrage and the ANTECIPADOR), so dodging sideways into it is the trap.
+    'lead_fan': dict(fn=emitter.fan_shot, windup=0.7, telegraph='fan',
+                     count=5, spread=30, shot_speed=280, dmg=15, lead=0.6),
 }
 
 
@@ -155,7 +172,7 @@ def primordial_phases():
         dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon'],
              cd_mul=0.85),
         dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon',
-                                     'deathroll'], cd_mul=0.5),
+                                     'deathroll', 'homing_fan'], cd_mul=0.5),
     ]
 
 
@@ -198,8 +215,9 @@ def crystal_phases():
         dict(hp_frac=1.0, patterns=['barrage', 'fan'], cd_mul=1.0),
         dict(hp_frac=0.66, patterns=['barrage', 'fan', 'spiral'], cd_mul=1.0),
         # "nao acelera, fica mais precisa" -- cd_mul quase intocado de proposito
-        # (os outros chefes cortam pra 0.5-0.75; este so ganha 1 padrao a mais)
-        dict(hp_frac=0.33, patterns=['fan', 'spiral', 'deathroll'], cd_mul=0.85),
+        # (os outros chefes cortam pra 0.5-0.75; este so ganha 1 padrao a mais).
+        # radial_wall e literalmente isso: mais denso, mais LENTO (issue #104).
+        dict(hp_frac=0.33, patterns=['fan', 'spiral', 'radial_wall'], cd_mul=0.85),
     ]
 
 
@@ -214,7 +232,9 @@ def wasp_phases():
     return [
         dict(hp_frac=1.0, patterns=['charge', 'fan'], cd_mul=0.9),
         dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85),
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'spiral'], cd_mul=0.6),
+        # 'mergulha e mira onde voce VAI estar': lead_fan e o mesmo lead do
+        # barrage aberto em leque -- so dials (issue #104)
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan'], cd_mul=0.6),
     ]
 
 
