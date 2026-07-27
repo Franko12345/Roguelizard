@@ -21,13 +21,20 @@ lizard travelled about a third of its own body, and the verb read as "tried to
 roll and did not dash". A dodge that does not leave the spot the bullet is
 going to is not a dodge.
 
-The rolamento now launches like the investida (2.6× max speed against 3.0×).
-Measured over one second of holding a direction: **+133 px per roll against
-+223 px per investida**, at 5 energy against 18 — 26.6 px per energy point
-against 12.4. The investida is still the bigger single commitment and the only
-one that hurts anybody; the rolamento is the cheaper, more frequent exit.
-`tools/check_roll.py` asserts all three of those relations, because "it moves
-you" turned out to be the part nobody had measured.
+The rolamento now launches like the investida (3.4× max speed against 3.0×, over
+a shorter window). Measured over one second of holding a direction: **+174 px
+per roll against +223 px per investida**, at 5 energy against 18 — 34.8 px per
+energy point against 12.4. The investida is still the bigger single commitment
+and the only one that hurts anybody; the rolamento is the cheaper, more frequent
+exit. `tools/check_roll.py` asserts all three of those relations, because "it
+moves you" turned out to be the part nobody had measured.
+
+A second playtest killed the animation for the same class of reason. The pose
+was a *fake roll* — collapse the spine into a spinning disc — and it read as
+"it just curls you up": the body became a blob and the direction you left in
+was unreadable. It is a squash-and-release now, compress on the launch and
+overshoot past neutral on the exit. See [Dodge](../concepts/dodge.md) for the
+filter that makes those constants look strange.
 
 ## Consequences
 

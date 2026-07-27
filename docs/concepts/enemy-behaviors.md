@@ -18,8 +18,16 @@ The last two attack the habits the [Rolamento](./dodge.md) created. The roll is
 cheap (5 energy, 0.2 s), so it gets pressed without looking — the ANTECIPADOR
 shoots the point that reflex puts you on, and reuses `emitter.aimed_barrage`
 (the boss barrage's lead, dialled to a perfect prediction). The MORTEIRO answers
-the other one: its patch is picked at the **start** of the wind-up and only
-becomes a hazard a second later, so an investida aimed at it ends inside it.
+the other one: it **throws a shell** at a patch picked when it fires, and the
+patch only becomes a hazard when the shell lands ~0.9 s later, so an investida
+aimed at the MORTEIRO ends inside it.
+
+The shell is the wind-up, not a decoration on one. `emitter.lob_shot` gets
+`flight=C.MORTAR_ARM`, so the arc always takes the same beat however far it was
+thrown and lands exactly as the footprint's countdown runs out; the puddle comes
+from the shell's own `on_death`. Before this the puddle simply materialised when
+a timer expired, which is a hazard with no cause on screen — see
+[Projectile](./projectile.md).
 
 Neither is unfair, and the fairness comes from the telegraph rather than from
 bad aim. Walking out of the MORTEIRO's patch always works. The ANTECIPADOR
@@ -88,8 +96,10 @@ that reapplies it" — Ácido, venom puddle, sting slow._
 build no projectile of their own; the same species fires 1 shot or 7 depending
 only on its dial; the ANTECIPADOR's shot lands 19.9° ahead of a target moving at
 260 px/s and its ground mark shows exactly that point (a still target is shot
-dead on); the MORTEIRO's footprint is drawn in 72/72 directions for 60 frames,
-away from its own body, **before** any puddle exists.
+dead on) and its miss against a straight-line runner is asserted to stay both
+small and **flat across distance**; the MORTEIRO's footprint is drawn in 72/72
+directions, away from its own body, **before** any puddle exists, and its shell
+is asserted to actually leave the ground rather than slide along it.
 
 ## Related
 

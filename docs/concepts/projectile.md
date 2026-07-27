@@ -101,6 +101,29 @@ between core and halo and the bullet reads as a bubble instead of a slug. The
 streak is drawn in the mid colour for the same reason: it is the longest part of
 the bullet on screen, so a white one throws the side away.
 
+## Lobbed shots
+
+`Projectile.lift` is a **fake height in screen pixels**. The world position
+stays flat — this game has no z — so only the draw moves up, and the telegraph
+already on the ground doubles as the shadow. The `arc(height)` hook rides
+`on_update` and follows a sine over the shot's own lifetime, so the apex lands
+halfway and the height is exactly zero when it dies.
+
+`emitter.lob_shot` takes two dials that make this usable as a weapon:
+
+| dial | what it does |
+|---|---|
+| `at` | land on a point the caller already committed to, instead of chasing the player |
+| `flight` | pin the travel **time** rather than the speed, so the same beat elapses however far it was thrown |
+
+Together they are what lets the MORTEIRO's footprint and its shell be one event:
+the patch is drawn at the throw, `flight=C.MORTAR_ARM` makes the shell land as
+the countdown ends, and the puddle arrives from the shell's own `on_death`. One
+clock, one cause — instead of a timer conjuring a hazard out of nothing.
+
+The streak has to be lifted with the body, or a lobbed shot draws a rigid spike
+from its own height down to ground it has not reached yet.
+
 ## Size and glow
 
 Two dials in `config.py`, both draw-only — collision is body overlap against the
