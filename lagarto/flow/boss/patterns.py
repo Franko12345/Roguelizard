@@ -1,441 +1,52 @@
-"""Boss attack patterns and phase kits.
+"""Boss dial table and phase kits.
 
-A pattern is a plain function ``(boss, game, target) -> None`` that spawns
-Projectiles through the existing ``game.spawn_projectile`` pipeline. A phase kit
-is just a list of pattern ids per HP threshold -- "boss is data" (see
-``lagarto.flow.boss`` for the framework overview).
+The pattern FUNCTIONS live in ``lagarto.combat.emitter`` -- shared with common
+enemies (see ``docs/adr/0012-shared-pattern-emitter.md``). What lives here is
+the boss-side DATA: ``PATTERNS`` maps a pattern id to the emitter function plus
+the dials that function reads, and a phase kit is just a list of pattern ids per
+HP threshold -- "boss is data" (see ``lagarto.flow.boss`` for the framework
+overview).
+
+``BossAI`` passes the whole ``PATTERNS[pid]`` dict to the emitter as its
+``dials`` argument, so a variant of a pattern (Massive Fan, deathroll, Web Dome)
+is one more row in this table and no new code.
 """
 
-import math
 import random
-from pygame import Vector2
 
-from ...audio import engine as audio
 from ...core import config as C
-from ...core import palette
-from ...core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
-from ...combat.projectile import spit as game_spit
+from ...combat import emitter
 from .personality import BossPersonality
 
-# --------------------------------------------------------------------------- #
-#  Patterns: (boss, game, target) -> fires projectiles / spawns adds          #
-# --------------------------------------------------------------------------- #
-
-def radial_burst(boss, game, target):
-    """A full ring of shots, all at once -- the "get away from me" pattern."""
-    mouth = boss.spine.joints[0]
-    n = C.BOSS_RADIAL_COUNT
-    for i in range(n):
-        ang = (360.0 / n) * i
-        aim = mouth + vfrom_angle(ang, 100)
-        pr = game_spit(mouth, aim, boss.color, dmg=C.BOSS_RADIAL_DMG,
-                       effect=None, speed=C.BOSS_RADIAL_SPEED, radius=8)
-        game.spawn_projectile(pr)
-    game.fx.ring(boss.pos, boss.color)
-    game.fx.spark_burst(mouth, palette.lighten(boss.color, 0.3), 16, 260)
-    audio.play('w_spit', 0.5)
-
-
-def fan_shot(boss, game, target):
-    """A cone of shots toward the player -- dodge sideways, not backward.
-    Dials come from the pattern dict (Primordial's Massive Fan reuses this
-    with a wider/denser dict entry instead of new code)."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    mouth = boss.spine.joints[0]
-    n = pat.get('count', C.BOSS_FAN_COUNT)
-    spread = pat.get('spread', C.BOSS_FAN_SPREAD)
-    base = safe_norm(target.pos - mouth)
-    for i in range(n):
-        t = (i / max(1, n - 1)) - 0.5              # -0.5 .. 0.5
-        aim = mouth + base.rotate(t * spread) * 100
-        pr = game_spit(mouth, aim, boss.color, dmg=pat.get('dmg', C.BOSS_FAN_DMG),
-                       effect=None, speed=pat.get('shot_speed', C.BOSS_FAN_SPEED), radius=8)
-        game.spawn_projectile(pr)
-    game.fx.spark_burst(mouth, boss.color, 10, 240)
-    audio.play('w_spit', 0.45)
-
-
-def aimed_barrage(boss, game, target):
-    """A few shots aimed with lead at where the player is HEADING."""
-    mouth = boss.spine.joints[0]
-    lead = target.pos + target.vel * 0.35
-    boss._barrage_left = C.BOSS_BARRAGE_SHOTS
-    boss._barrage_aim = lead
-    boss._barrage_cd = 0.0
-
-
-def _tick_barrage(boss, game):
-    """Called every frame while a barrage is in flight (set by aimed_barrage)."""
-    if getattr(boss, '_barrage_left', 0) <= 0:
-        return
-    boss._barrage_cd -= game.dt_last
-    if boss._barrage_cd > 0:
-        return
-    boss._barrage_left -= 1
-    boss._barrage_cd = C.BOSS_BARRAGE_GAP
-    mouth = boss.spine.joints[0]
-    pr = game_spit(mouth, boss._barrage_aim, boss.color, dmg=C.BOSS_BARRAGE_DMG,
-                   effect=None, speed=C.BOSS_BARRAGE_SPEED, radius=7)
-    game.spawn_projectile(pr)
-    game.fx.spark_burst(mouth, boss.color, 5, 200)
-    audio.play('w_spit', 0.35)
-
-
-def summon_adds(boss, game, target):
-    """Call in reinforcements from the round's own theme pool (a real cost:
-    it spends a window where the boss does nothing else, and the adds count
-    against the round's cap like anything else)."""
-    from ...creatures import species
-    from .. import rounds as roundslib
-    pool = roundslib.THEMES.get(game.rounds.theme, {}).get('pool', species.ENEMY_SPECIES)
-    for _ in range(C.BOSS_SUMMON_COUNT):
-        key = random.choice(pool)
-        pos = boss.pos + random_dir(boss.max_r * 1.6)
-        e = species.make(key, pos)
-        game.spawn_enemy(e)
-        game.fx.ring(pos, boss.color)
-    game.fx.spark_burst(boss.pos, palette.lighten(boss.color, 0.4), 20, 300)
-    audio.play('nest', 0.6)
-
-
-def shockwave(boss, game, target):
-    """Instant AoE centred on the boss -- no projectile, just a ring of hurt.
-    Tail-slam-style attacks (Rei Lagarto) use this: the telegraph already drew
-    the exact radius, so at fire time it's a plain distance check."""
-    for p in game.players:
-        if p.dead or p.down:
-            continue
-        if p.pos.distance_to(boss.pos) < C.BOSS_SHOCKWAVE_RADIUS + p.max_r * 0.4:
-            p.hurt(game, safe_norm(p.pos - boss.pos), C.BOSS_SHOCKWAVE_DMG)
-    game.fx.ring(boss.pos, boss.color)
-    game.fx.ring(boss.pos, palette.lighten(boss.color, 0.3))
-    game.shake(8)
-    audio.play('hit', 0.5)
-
-
-def spiral_pattern(boss, game, target):
-    """Kick off a rotating spray -- ticked per-frame by ``_tick_spiral`` like
-    ``aimed_barrage``/``_tick_barrage``, so the spiral keeps turning while the
-    boss is free to do anything else (it's not a blocking loop).
-
-    Dials come from the PATTERN, not hardcoded config: ``deathroll`` reuses
-    this exact function with a denser/faster dict entry instead of duplicating
-    the tick logic -- "boss is data" applies to variants of one pattern too.
-    """
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    boss._spiral_left = pat.get('shots', C.BOSS_SPIRAL_SHOTS)
-    boss._spiral_ang = random.uniform(0, 360)
-    boss._spiral_cd = 0.0
-    boss._spiral_turn = pat.get('turn', C.BOSS_SPIRAL_TURN)
-    boss._spiral_gap = pat.get('gap', C.BOSS_SPIRAL_GAP)
-    boss._spiral_speed = pat.get('shot_speed', C.BOSS_SPIRAL_SPEED)
-    boss._spiral_dmg = pat.get('shot_dmg', C.BOSS_SPIRAL_DMG)
-
-
-def _tick_spiral(boss, game):
-    if getattr(boss, '_spiral_left', 0) <= 0:
-        return
-    boss._spiral_cd -= game.dt_last
-    if boss._spiral_cd > 0:
-        return
-    boss._spiral_left -= 1
-    boss._spiral_cd = boss._spiral_gap
-    mouth = boss.spine.joints[0]
-    aim = mouth + vfrom_angle(boss._spiral_ang, 100)
-    boss._spiral_ang = (boss._spiral_ang + boss._spiral_turn) % 360
-    pr = game_spit(mouth, aim, boss.color, dmg=boss._spiral_dmg,
-                   effect=None, speed=boss._spiral_speed, radius=7)
-    game.spawn_projectile(pr)
-
-
-def charge_attack(boss, game, target):
-    """Not an instant fire -- flips the FSM into 'charging' (see ``BossAI.tick``)
-    so the boss itself becomes the hazard for a beat, Gurdy-Jr/Chub style."""
-    boss._charge_dir = safe_norm(target.pos - boss.pos)
-
-
-def pincha_bite(boss, game, target):
-    """Quick short-range strike -- fast windup, no projectile, just a contact
-    check at the reach the telegraph line showed. Dials come from the pattern
-    dict (default = Centopeiadeira's pincers); Kraken-Mor's tentacle swipe
-    reuses this exact function with a longer reach, Aranha-Rei's poison bite
-    with an optional `slow` (the player has no poison status to apply, so it
-    substitutes the same "landed bite roots you" idea every sting in this
-    game already uses) -- instead of new code either time."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    reach = boss.max_r * pat.get('reach', C.BOSS_PINCHA_REACH)
-    dmg = pat.get('dmg', C.BOSS_PINCHA_DMG)
-    if target.pos.distance_to(boss.pos) < reach:
-        landed = target.hurt(game, safe_norm(target.pos - boss.pos), dmg)
-        slow = pat.get('slow')
-        if landed and slow:
-            target.apply_slow(*slow)
-        game.fx.spark_burst(boss.spine.joints[0], boss.color, 10, 260)
-        game.shake(4)
-
-
-def _select_arms_rain(boss, game, target):
-    """Picks the slam points at WINDUP START (not fire time), so the
-    telegraph can show them as growing circles for the whole windup -- called
-    once by the FSM via the pattern's ``select`` hook (see ``tick()``).
-    Dials from the pattern dict: Primordial's Sky Slam reuses this with
-    ``count=1, spread=0`` (a single point pinned on the target = a giant
-    shadow, not a cluster) instead of new selection code."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    n = pat.get('count', C.BOSS_ARMS_RAIN_COUNT)
-    spread = pat.get('spread', C.BOSS_ARMS_RAIN_SPREAD)
-    boss._rain_points = [Vector2(target.pos) + random_dir(random.uniform(0, spread))
-                         for _ in range(n)]
-
-
-def arms_rain(boss, game, target):
-    """Fires at windup end -- damages wherever ``_select_arms_rain`` marked."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    radius = pat.get('radius', C.BOSS_ARMS_RAIN_RADIUS)
-    dmg = pat.get('dmg', C.BOSS_ARMS_RAIN_DMG)
-    for pt in getattr(boss, '_rain_points', []):
-        for p in game.players:
-            if p.dead or p.down:
-                continue
-            if p.pos.distance_to(pt) < radius + p.max_r * 0.4:
-                p.hurt(game, safe_norm(p.pos - pt), dmg)
-        game.fx.ring(pt, boss.color)
-        game.fx.burst(pt, palette.lighten(boss.color, 0.3), 14, 260)
-    boss._rain_points = []
-    game.shake(6)
-    audio.play('hit', 0.4)
-
-
-def sky_slam(boss, game, target):
-    """Primordial: the same single-point slam as ``arms_rain`` (pattern dict
-    sets count=1) plus a lingering magma puddle where it lands -- 'Sky Slam'
-    and 'Magma Spit' folded into one attack instead of two separate ones."""
-    from ...combat import weapons
-    pts = list(getattr(boss, '_rain_points', []))
-    arms_rain(boss, game, target)
-    for pt in pts:
-        game.spawn_puddle(weapons.Puddle(pt, C.BOSS_SKY_SLAM_PUDDLE_R,
-                                         C.BOSS_SKY_SLAM_PUDDLE_DMG,
-                                         C.BOSS_SKY_SLAM_PUDDLE_LIFE, 18,
-                                         hostile=True, tick=0.5))
-
-
-def web_trap(boss, game, target):
-    """Mãe-Escaravelho's Web Trap: a patch that roots (heavy slow, tiny
-    damage) instead of hurting -- reuses the single-point select from
-    ``sky_slam``/``arms_rain`` and ``weapons.Puddle``'s ``slow=`` param
-    (added for Rei Lagarto's scar) instead of new hazard code. Dials come
-    from the pattern dict -- Aranha-Rei's Web Dome reuses this exact
-    function with more points and a bigger radius via ``arms_rain``'s
-    ``count``/``spread`` select, no new selection or hazard code either."""
-    from ...combat import weapons
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    radius = pat.get('radius', C.BOSS_WEB_TRAP_R)
-    dmg = pat.get('dmg', C.BOSS_WEB_TRAP_DMG)
-    life = pat.get('life', C.BOSS_WEB_TRAP_LIFE)
-    slow = pat.get('slow', C.BOSS_WEB_TRAP_SLOW)
-    for pt in getattr(boss, '_rain_points', []):
-        game.spawn_puddle(weapons.Puddle(pt, radius, dmg, life, 200, hostile=True,
-                                         tick=0.4, slow=(slow, 1.2)))
-    boss._rain_points = []
-    game.fx.burst(boss.pos, (240, 240, 250), 8, 140)
-
-
-# --------------------------------------------------------------------------- #
-#  Olho-Sismico (B9, tier 5): the new patterns. gaze/bullet_hell reuse the      #
-#  spiral tick; tentacle_swipe reuses pincha_bite; seismic_pulse IS shockwave.  #
-# --------------------------------------------------------------------------- #
-
-def gaze(boss, game, target):
-    """A slow sweeping beam from the iris. Reuses the spiral tick (a rotating
-    stream of shots), just started ARC/2 *before* the player and turning slowly,
-    so it reads as a laser sweeping ACROSS the player, not an omni spiral."""
-    spiral_pattern(boss, game, target)          # sets up _spiral_* from the dict
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    boss._spiral_ang = angle_of(target.pos - boss.spine.joints[0]) - pat.get('arc', 70) / 2
-
-
-def spawn_orb(boss, game, target):
-    """Spawns a few floating shooters around the eye. Reuses species.make +
-    spawn_enemy: a ranged 'gunner' stands in for an orb (it hovers near the eye
-    and streams shots) instead of a bespoke orb entity the engine doesn't have."""
-    from ...creatures import species
-    n = PATTERNS[boss.boss_ai.pattern_id].get('count', C.EYE_ORB_COUNT)
-    for _ in range(n):
-        pos = boss.pos + random_dir(boss.max_r * 1.9)
-        e = species.make('gunner', pos)
-        game.spawn_enemy(e)
-        game.fx.ring(pos, boss.color)
-    game.fx.spark_burst(boss.spine.joints[0], palette.lighten(boss.color, 0.4), 16, 280)
-    audio.play('nest', 0.5)
-
-
-# --------------------------------------------------------------------------- #
-#  A Muralha (B10, tier 6): the wall boss. New patterns for fire_breath,
-#  hand_slam, eye_laser, bouncing_bullets, grid_of_fire.                    #
-# --------------------------------------------------------------------------- #
-
-def fire_breath(boss, game, target):
-    """Continuous cone of fire from the mouth. Uses a per-frame tick like
-    spiral_pattern. Telegrafo: mouth opens fully, red glow."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    boss._breath_left = pat.get('shots', C.MURALHA_BREATH_SHOTS)
-    boss._breath_cd = 0.0
-    boss._breath_gap = pat.get('gap', C.MURALHA_BREATH_GAP)
-    boss._breath_speed = pat.get('shot_speed', C.MURALHA_BREATH_SPEED)
-    boss._breath_dmg = pat.get('shot_dmg', C.MURALHA_BREATH_DMG)
-    boss._breath_spread = pat.get('spread', C.MURALHA_BREATH_SPREAD)
-    # Set mouth to fully open for the attack
-    boss.mouth_open = 1.0
-
-
-def _tick_fire_breath(boss, game):
-    if getattr(boss, '_breath_left', 0) <= 0:
-        return
-    boss._breath_cd -= game.dt_last
-    if boss._breath_cd > 0:
-        return
-    boss._breath_left -= 1
-    boss._breath_cd = boss._breath_gap
-    mouth = boss.spine.joints[0]
-    # Fan of fire in fixed plan, mouth faces left (toward arena)
-    base = Vector2(-1, 0)
-    for i in range(3):  # 3 streams per tick
-        t = (i / 2) - 0.5  # -0.5, 0, 0.5
-        ang = base.rotate(t * boss._breath_spread)
-        aim = mouth + ang * 100
-        pr = game_spit(mouth, aim, boss.color, dmg=boss._breath_dmg,
-                       effect=None, speed=boss._breath_speed, radius=10)
-        game.spawn_projectile(pr)
-    game.fx.spark_burst(mouth, (255, 120, 40), 8, 200)
-    audio.play('w_spit', 0.3)
-
-
-def hand_slam(boss, game, target):
-    """Stone hand emerges from side and slams down. Telegrafo: glow on side."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    # hand_slam uses the select hook to pre-pick the slam position
-    if not getattr(boss, '_hand_slam_pos', None):
-        return
-    pos = boss._hand_slam_pos
-    radius = pat.get('radius', C.MURALHA_HAND_RADIUS)
-    dmg = pat.get('dmg', C.MURALHA_HAND_DMG)
-    for p in game.players:
-        if p.dead or p.down:
-            continue
-        if p.pos.distance_to(pos) < radius + p.max_r * 0.4:
-            p.hurt(game, safe_norm(p.pos - pos), dmg)
-    game.fx.ring(pos, boss.color)
-    game.fx.burst(pos, palette.lighten(boss.color, 0.3), 20, 280)
-    boss._hand_slam_pos = None
-    game.shake(8)
-    audio.play('hit', 0.5)
-
-
-def _select_hand_slam(boss, game, target):
-    """Select slam position at windup start for telegraph."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    # Hand comes from left or right side of wall
-    side = random.choice([-1, 1])  # -1 = left hand, +1 = right hand
-    # Spawn near the side of the wall, at player's Y
-    hand_x = boss.pos.x + side * boss.max_r * 1.2
-    hand_y = target.pos.y
-    boss._hand_slam_pos = Vector2(hand_x, hand_y)
-
-
-def eye_laser(boss, game, target):
-    """Multiple eyes fire simultaneous beams. Telegrafo: eyes glow."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    mouth = boss.spine.joints[0]
-    n = pat.get('count', C.MURALHA_EYE_BEAMS)
-    spread = pat.get('spread', C.MURALHA_EYE_SPREAD)
-    # Eyes are along the wall - fire leftward toward player
-    base = Vector2(-1, 0)
-    for i in range(n):
-        t = (i / max(1, n - 1)) - 0.5
-        ang = base.rotate(t * spread)
-        aim = mouth + ang * 150
-        pr = game_spit(mouth, aim, boss.color, dmg=pat.get('dmg', C.MURALHA_EYE_DMG),
-                       effect=None, speed=pat.get('shot_speed', C.MURALHA_EYE_SPEED), radius=8)
-        game.spawn_projectile(pr)
-    game.fx.spark_burst(mouth, (255, 255, 100), 12, 260)
-    audio.play('w_spit', 0.4)
-
-
-def bouncing_bullets(boss, game, target):
-    """Projectiles that ricochet off arena walls. Telegrafo: yellow glow at mouth."""
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    mouth = boss.spine.joints[0]
-    n = pat.get('count', C.MURALHA_BOUNCE_COUNT)
-    base = safe_norm(target.pos - mouth)
-    for i in range(n):
-        t = (i / max(1, n - 1)) - 0.5
-        spread = pat.get('spread', C.MURALHA_BOUNCE_SPREAD)
-        ang = base.rotate(t * spread)
-        aim = mouth + ang * 100
-        pr = game_spit(mouth, aim, boss.color, dmg=pat.get('dmg', C.MURALHA_BOUNCE_DMG),
-                       effect=None, speed=pat.get('shot_speed', C.MURALHA_BOUNCE_SPEED), radius=7)
-        pr.bounces_left = pat.get('bounces', C.MURALHA_BOUNCE_BOUNCES)
-        pr.bounce_damp = 0.8
-        game.spawn_projectile(pr)
-    game.fx.spark_burst(mouth, (255, 255, 80), 14, 240)
-    audio.play('w_spit', 0.4)
-
-
-def grid_of_fire(boss, game, target):
-    """Grid of fire cells on the ground with small gaps. Creates Puddle hazards."""
-    from ...combat import weapons
-    pat = PATTERNS[boss.boss_ai.pattern_id]
-    cell = pat.get('cell', C.MURALHA_GRID_CELL)
-    dmg = pat.get('dmg', C.MURALHA_GRID_DMG)
-    tick = pat.get('tick', C.MURALHA_GRID_TICK)
-    life = pat.get('life', C.MURALHA_GRID_LIFE)
-    # Arena is 700x500, wall on right. Grid covers left portion
-    cols = 700 // cell
-    rows = 500 // cell
-    for cx in range(cols):
-        for cy in range(rows):
-            # Leave small gaps - skip some cells
-            if (cx + cy) % 3 == 0:  # 1/3 are gaps
-                continue
-            x = cx * cell + cell // 2
-            y = cy * cell + cell // 2
-            pos = Vector2(x, y)
-            game.spawn_puddle(weapons.Puddle(pos, cell * 0.45, dmg, life, 180,
-                                             hostile=True, tick=tick))
-    game.fx.burst(boss.pos, (255, 80, 40), 30, 200)
-
-
-# --------------------------------------------------------------------------- #
-
 PATTERNS = {
-    'radial': dict(fn=radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
-    'fan': dict(fn=fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
-    'barrage': dict(fn=aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
-    'summon': dict(fn=summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
-    'shockwave': dict(fn=shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
-    'pincha': dict(fn=pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
+    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
+    'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
+    'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
+    'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
+    'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
+    'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
-    # reach via the pattern dict -- no new logic for a longer arm
-    'swipe': dict(fn=pincha_bite, windup=0.5, telegraph='line', reach=2.4, dmg=19),
-    'arms_rain': dict(fn=arms_rain, select=_select_arms_rain,
+    # reach via the dials -- no new logic for a longer arm
+    'swipe': dict(fn=emitter.pincha_bite, windup=0.5, telegraph='line', reach=2.4, dmg=19),
+    'arms_rain': dict(fn=emitter.arms_rain, select=emitter._select_arms_rain,
                       windup=C.BOSS_ARMS_RAIN_WINDUP, telegraph='rain'),
-    'sky_slam': dict(fn=sky_slam, select=_select_arms_rain,
+    'sky_slam': dict(fn=emitter.sky_slam, select=emitter._select_arms_rain,
                      windup=C.BOSS_SKY_SLAM_WINDUP, telegraph='rain',
                      count=1, spread=0, radius=C.BOSS_SKY_SLAM_RADIUS,
                      dmg=C.BOSS_SKY_SLAM_DMG),
-    'massive_fan': dict(fn=fan_shot, windup=C.BOSS_MASSIVE_FAN_WINDUP, telegraph='fan',
+    'massive_fan': dict(fn=emitter.fan_shot, windup=C.BOSS_MASSIVE_FAN_WINDUP, telegraph='fan',
                         count=12, spread=70, shot_speed=220, dmg=20),
-    'web_trap': dict(fn=web_trap, select=_select_arms_rain, windup=C.BOSS_WEB_TRAP_WINDUP,
+    'web_trap': dict(fn=emitter.web_trap, select=emitter._select_arms_rain,
+                     windup=C.BOSS_WEB_TRAP_WINDUP,
                      telegraph='rain', count=1, spread=60),
     # Aranha-Rei's Web Dome: same web_trap fn/select, just more/bigger patches
-    'web_dome': dict(fn=web_trap, select=_select_arms_rain, windup=0.8, telegraph='rain',
-                     count=5, spread=180, radius=70, life=9.0),
+    'web_dome': dict(fn=emitter.web_trap, select=emitter._select_arms_rain, windup=0.8,
+                     telegraph='rain', count=5, spread=180, radius=70, life=9.0),
     # Aranha-Rei's poison bite: same pincha_bite, roots instead of poisoning
     # (the player has no poison status -- see pincha_bite's docstring)
-    'poison_bite': dict(fn=pincha_bite, windup=0.3, telegraph='line',
+    'poison_bite': dict(fn=emitter.pincha_bite, windup=0.3, telegraph='line',
                         reach=1.6, dmg=15, slow=(0.5, 1.4)),
-    'deathroll': dict(fn=spiral_pattern, windup=0.5, telegraph='spiral',
+    'deathroll': dict(fn=emitter.spiral_pattern, windup=0.5, telegraph='spiral',
                       shots=C.BOSS_DEATHROLL_SHOTS, turn=C.BOSS_DEATHROLL_TURN,
                       gap=C.BOSS_DEATHROLL_GAP, shot_speed=260, shot_dmg=12),
     # burrow has no `fn`/instant fire -- BossAI.tick special-cases `burrow=True`
@@ -447,37 +58,40 @@ PATTERNS = {
     # octopus's own ai.grapple.tick (reach/root/snap+pull+slow, telegraph
     # included -- Lizard.draw already shows the arms converging via arm_target)
     'grapple': dict(fn=None, windup=0.05, telegraph=None, grapple=True),
-    'spiral': dict(fn=spiral_pattern, windup=C.BOSS_SPIRAL_WINDUP, telegraph='spiral'),
-    'charge': dict(fn=charge_attack, windup=C.BOSS_CHARGE_WINDUP, telegraph='line', charge=True),
+    'spiral': dict(fn=emitter.spiral_pattern, windup=C.BOSS_SPIRAL_WINDUP, telegraph='spiral'),
+    'charge': dict(fn=emitter.charge_attack, windup=C.BOSS_CHARGE_WINDUP, telegraph='line',
+                   charge=True),
     # Olho-Sismico. seismic_pulse = the existing 'shockwave' (reused in eye_phases).
-    'gaze': dict(fn=gaze, windup=C.EYE_GAZE_WINDUP, telegraph='line',
+    'gaze': dict(fn=emitter.gaze, windup=C.EYE_GAZE_WINDUP, telegraph='line',
                  shots=C.EYE_GAZE_SHOTS, turn=C.EYE_GAZE_TURN, gap=C.EYE_GAZE_GAP,
                  shot_speed=C.EYE_GAZE_SPEED, shot_dmg=C.EYE_GAZE_DMG, arc=C.EYE_GAZE_ARC),
-    # tentacle sweep: same pincha_bite contact fn, longer reach via the dict
-    'tentacle_swipe': dict(fn=pincha_bite, windup=C.EYE_SWIPE_WINDUP, telegraph='line',
+    # tentacle sweep: same pincha_bite contact fn, longer reach via the dials
+    'tentacle_swipe': dict(fn=emitter.pincha_bite, windup=C.EYE_SWIPE_WINDUP, telegraph='line',
                            reach=C.EYE_SWIPE_REACH, dmg=C.EYE_SWIPE_DMG),
-    'spawn_orb': dict(fn=spawn_orb, windup=C.EYE_ORB_WINDUP, telegraph='horn',
+    'spawn_orb': dict(fn=emitter.spawn_orb, windup=C.EYE_ORB_WINDUP, telegraph='horn',
                       count=C.EYE_ORB_COUNT),
-    # bullet hell: a dense/fast spiral -- same spiral_pattern, denser dict
-    'bullet_hell': dict(fn=spiral_pattern, windup=C.EYE_BULLET_WINDUP, telegraph='radial',
+    # bullet hell: a dense/fast spiral -- same spiral_pattern, denser dials
+    'bullet_hell': dict(fn=emitter.spiral_pattern, windup=C.EYE_BULLET_WINDUP,
+                        telegraph='radial',
                         shots=C.EYE_BULLET_SHOTS, turn=C.EYE_BULLET_TURN, gap=C.EYE_BULLET_GAP,
                         shot_speed=C.EYE_BULLET_SPEED, shot_dmg=C.EYE_BULLET_DMG),
     # A Muralha (B10, tier 6) -- plan='fixed'
-    'fire_breath': dict(fn=fire_breath, windup=C.MURALHA_FIRE_WINDUP, telegraph='fan',
+    'fire_breath': dict(fn=emitter.fire_breath, windup=C.MURALHA_FIRE_WINDUP, telegraph='fan',
                         shots=C.MURALHA_BREATH_SHOTS, gap=C.MURALHA_BREATH_GAP,
                         shot_speed=C.MURALHA_BREATH_SPEED, shot_dmg=C.MURALHA_BREATH_DMG,
                         spread=C.MURALHA_FIRE_SPREAD),
-    'hand_slam': dict(fn=hand_slam, select=_select_hand_slam, windup=C.MURALHA_HAND_WINDUP,
+    'hand_slam': dict(fn=emitter.hand_slam, select=emitter._select_hand_slam,
+                      windup=C.MURALHA_HAND_WINDUP,
                       telegraph='line', radius=C.MURALHA_HAND_RADIUS, dmg=C.MURALHA_HAND_DMG),
-    'eye_laser': dict(fn=eye_laser, windup=C.MURALHA_EYE_WINDUP, telegraph='line',
+    'eye_laser': dict(fn=emitter.eye_laser, windup=C.MURALHA_EYE_WINDUP, telegraph='line',
                       count=C.MURALHA_EYE_BEAMS, spread=45,
                       shot_speed=C.MURALHA_EYE_SPEED, dmg=C.MURALHA_EYE_DMG,
                       gap=C.MURALHA_EYE_GAP),
-    'bouncing_bullets': dict(fn=bouncing_bullets, windup=C.MURALHA_BOUNCE_WINDUP,
+    'bouncing_bullets': dict(fn=emitter.bouncing_bullets, windup=C.MURALHA_BOUNCE_WINDUP,
                              telegraph='line', count=C.MURALHA_BOUNCE_COUNT,
                              shot_speed=C.MURALHA_BOUNCE_SPEED, dmg=C.MURALHA_BOUNCE_DMG,
                              spread=60, bounces=C.MURALHA_BOUNCE_BOUNCES),
-    'grid_of_fire': dict(fn=grid_of_fire, windup=C.MURALHA_GRID_WINDUP, telegraph='rain',
+    'grid_of_fire': dict(fn=emitter.grid_of_fire, windup=C.MURALHA_GRID_WINDUP, telegraph='rain',
                          cell=C.MURALHA_GRID_CELL, dmg=C.MURALHA_GRID_DMG,
                          tick=C.MURALHA_GRID_TICK, life=C.MURALHA_GRID_LIFE),
 }
