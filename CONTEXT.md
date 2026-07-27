@@ -260,10 +260,11 @@ which the player never reaches. A boss with no entry fights in the open world.
 _Avoid_: room, chamber, bounds.
 
 **Sandbox**:
-The dev-only mode behind `--sandbox`: a real `Game` with the wave machine
-frozen, driven by hand through a left-docked overlay to spawn any entity and
-watch it in the actual world. Not a player-facing `Mode`.
-_Avoid_: debug mode, test level, editor.
+The dev-only mode behind `--sandbox` (`Game.mode == 'sandbox'`): a real `Game`
+with the `RoundManager` auto-spawner frozen, driven by hand through a
+left-docked overlay to spawn any entity and watch it in the actual world.
+Not a player-facing `Mode`. Launch presets persist in `~/.lagarto/sandbox.json`.
+_Avoid_: debug mode, dev mode, test level, test mode, editor.
 
 ### Economy
 
