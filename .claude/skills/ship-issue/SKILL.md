@@ -117,6 +117,19 @@ gh pr merge <N> --merge --delete-branch
 
 Use `--merge` (merge commit), not `--squash`, when the base branch is an integration line that accumulates a stack — the individual commits carry per-issue history. Confirm with the user if unsure.
 
+**Close the issue by hand, in the same step.** `Closes #<N>` in the PR body only fires when the PR merges into the repo's *default* branch — merging into an integration branch leaves the issue open. So:
+
+```bash
+gh issue close <N> -c "Merged into <base-branch> via #<PR>. Verified: <the check output>."
+```
+
+The comment carries the evidence, not just the link: smoke result plus whatever `tools/` check proved it, per `docs/agents/verification.md`.
+
+Two more things `gh pr merge` gets wrong when a worktree is in play:
+
+- `--delete-branch` fails with `fatal: '<base>' is already used by worktree at …` because it tries to check the base out locally. The merge itself still lands. Verify with `gh pr view <N> --json state -q '.state'` and delete the remote branch with `git push origin --delete <feature-branch>`.
+- If two parallel issues both add an ADR, they will both claim the same number. Whichever merges second gets renumbered: `git mv` the file, fix the index row in `docs/adr/README.md`, and grep for the old number in `docs/`.
+
 ## Cleanup
 
 After merge, remove the worktree if the parent thread will not need it again:
