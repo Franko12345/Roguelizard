@@ -16,6 +16,8 @@ class Genome:
                  'plan', 'knockback',
                  'eye_count', 'spikes', 'horns', 'plates', 'tail', 'fins',
                  'hue', 'sat', 'val', 'speed', 'hp', 'behavior', 'diet', 'name',
+                 # how this creature SHOOTS: an emitter pattern + its dials
+                 'shot',
                  # charm-driven visible parts
                  'antennae', 'wings', 'extra_eyes', 'spore_sacs', 'nectar_sac', 'fangs',
                  # weight/inertia feel (plans/01_animacao_procedural_avancada.md #7);
@@ -46,6 +48,11 @@ class Genome:
         self.hp = kw.get('hp', 2)
         self.knockback = kw.get('knockback', 1.0)     # <1 = shrugs off shove (heavy bruiser)
         self.behavior = kw.get('behavior', 'chase')   # chase | flee | wander | ranged | lunge
+        # The attack pattern this creature fires, as data: ``dict(fn=<emitter
+        # pattern>, **dials)``. Same shape the boss dial table uses, so a
+        # species changes from a single spit to a radial burst by editing this
+        # dict -- criatura = genoma (ADR-0001), and that includes how it shoots.
+        self.shot = kw.get('shot', None)
         self.diet = tuple(kw.get('diet', ()))         # kinds this creature hunts
         self.name = kw.get('name', 'critter')
         # charm-driven visible parts (equip toggles these)

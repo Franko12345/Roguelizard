@@ -9,6 +9,7 @@ is the body part the player gains by eating one (Phase 4 wires that up), and
 import random as _random
 
 from ..core import config as C
+from ..combat import emitter
 from .genome import Genome
 
 SPECIES = {
@@ -48,9 +49,14 @@ SPECIES = {
                                  hue=265, sat=0.55, val=0.7, speed=1.15,
                                  behavior='lunge', hp=6, diet=('prey',),
                                  angular_damping=0.15, linear_damping=0.2, weight=0.8)),
+    # `shot` is the emitter pattern this species fires (ADR-0012): a single
+    # aimed spit is just a one-shot fan, so widening the CUSPIDOR into a cone --
+    # or into a radial burst, or a spiral -- is a dial edit here and no code.
     'spitter': dict(role='enemy', xp=7, score=60, grants=None,
                     genome=Genome(name='spitter', size=0.95, leg_count=4, hue=150,
                                   speed=0.85, behavior='ranged', hp=6, diet=('prey',),
+                                  shot=dict(fn=emitter.fan_shot, count=1, spread=0,
+                                            dmg=C.ENEMY_PROJ_DMG, shot_speed=230),
                                   angular_damping=0.3, linear_damping=0.25, weight=1.0)),
     'scorpion': dict(role='enemy', xp=8, score=65, grants='sting',
                      genome=Genome(name='scorpion', size=1.05, leg_count=6, hue=18,
@@ -77,11 +83,21 @@ SPECIES = {
                    genome=Genome(name='gunner', size=0.9, leg_count=4, hue=200,
                                  sat=0.85, speed=0.9, behavior='gunner', hp=5,
                                  extra_eyes=2, diet=('prey',),
+                                 shot=dict(fn=emitter.fan_shot, count=1,
+                                           jitter=C.GUNNER_SPREAD, dmg=C.GUNNER_DMG,
+                                           shot_speed=300, radius=5),
                                  angular_damping=0.25, linear_damping=0.2, weight=0.9)),
     'venomer': dict(role='enemy', xp=8, score=70, grants='sting',
                     genome=Genome(name='venomer', size=1.05, leg_count=4, hue=100,
                                   sat=0.9, speed=0.8, behavior='venom', hp=6,
                                   spore_sacs=True, tail='sting', diet=('prey',),
+                                  shot=dict(fn=emitter.lob_shot, dmg=C.VENOM_SPIT_DMG,
+                                            shot_speed=C.VENOM_SPIT_SPEED, radius=7,
+                                            puddle=dict(r=C.VENOM_PUDDLE_R,
+                                                        dmg=C.VENOM_PUDDLE_DMG,
+                                                        life=C.VENOM_PUDDLE_LIFE,
+                                                        hue=100,
+                                                        tick=C.VENOM_PUDDLE_TICK)),
                                   angular_damping=0.3, linear_damping=0.25, weight=1.0)),
 
     # ---- phase B4: new procedural BODIES + their own mechanics ------------ #
