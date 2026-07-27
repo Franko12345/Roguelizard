@@ -29,6 +29,7 @@ regression is visible rather than merely detected.
 | `check_music.py` | The stem mix, against a REAL mixer (the dummy audio driver no-ops every call). |
 | `check_difficulty.py` | Early waves unchanged, late waves actually ramp. |
 | `check_shop_prices.py` | A shop price raised in one camp is still raised in the next. |
+| `check_sandbox_store.py` | All three sandbox store paths (manual pick, random N, launch preset) stage a catalog of the native offers plus the wrapped ones. |
 | `check_doc_paths.py` | No doc cites a source path that does not exist. |
 
 Plus `python lizard_game.py --smoke 400`, which is the floor, not the ceiling:
