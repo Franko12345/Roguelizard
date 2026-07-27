@@ -58,7 +58,9 @@ class Projectile:
         # runs every frame it overlaps, so without it one dart hits 30x.
         self.pierce = False
         self._pierced = None
-        self.trail = []                 # recent world positions -> a Gungeon streak
+        # Countdown to the next backward spark. Starts at zero so the very first
+        # frame emits one and the shot never leaves the muzzle bare.
+        self._spark_cd = 0.0
         # Fake height, in screen pixels, for anything LOBBED. The world position
         # stays flat -- this game has no z -- so only the draw lifts, which is
         # what makes a shot read as thrown-and-landed instead of slid along the
@@ -66,12 +68,24 @@ class Projectile:
         self.lift = 0.0
 
     def update(self, dt, game=None):
-        self.trail.append((self.pos.x, self.pos.y))
-        if len(self.trail) > 3:
-            self.trail.pop(0)
         self.pos += self.vel * dt
         self.life -= dt
         self.spin += dt * 9
+        self._spark_cd -= dt
+        if game is not None and self._spark_cd <= 0:
+            self._spark_cd = C.BULLET_SPARK_GAP
+            # Against the motion, in the side's own `mid` (ADR-0014): the sparks
+            # are what is longest on screen now that the streak is gone, so they
+            # have to carry the side. Spaced, not per-frame -- see the budget
+            # note in docs/concepts/projectile.md.
+            back = -safe_norm(self.vel)
+            # Dropped clear of the body, not inside it: emitted at `pos` the
+            # spark is swallowed by the bullet's own halo and the shot grows a
+            # hair instead of shedding a spark.
+            game.fx.spark_burst(self.pos + back * self.radius * 1.8,
+                                side_palette(self.hostile)[1], 1,
+                                self.vel.length() * 0.35, direction=back,
+                                life=C.BULLET_SPARK_LIFE)
         # Movement modifiers run AFTER integration and BEFORE the out-of-bounds
         # kill, which is what lets `bounce` clamp a shot back inside the arena.
         for fn in self.on_update:
@@ -87,21 +101,9 @@ class Projectile:
             sp = (sp[0], sp[1] - self.lift * z)
         r = max(4, int(self.radius * z) & ~1)     # even -> halves the cache keys
         rim, mid, core = side_palette(self.hostile)
-        # trailing streak: ONE line. At ~100 bullets a seven-circle tail with a
-        # per-frame palette.mix each was the most expensive thing on screen and
-        # read as noise anyway.
-        if self.trail:
-            # A streak, not a stick: it starts at the body's own width and the
-            # cap rounds it, so it reads as motion instead of a rectangle glued
-            # to the front of the bullet. Drawn in `mid`, not `core`: a white
-            # streak is a white stick, and it costs the side its colour on the
-            # very part of the bullet that is longest on screen.
-            tail = cam.w2s(self.trail[0])
-            if self.lift:
-                # lift the tail too, or a lobbed shot draws a rigid spike from
-                # its own height down to the ground it has not reached yet
-                tail = (tail[0], tail[1] - self.lift * z)
-            pygame.draw.line(surf, mid, tail, sp, max(1, int(r * 0.85)))
+        # No streak here. The direction is told by the sparks `update` drops
+        # behind the shot -- a solid tail is a flat-capped rectangle glued to the
+        # bullet, and the bigger the bullet the more it reads as a skewer.
         # Two additive passes: a wide soft one for the bloom the scene reads as
         # light, and a tight hot one right on the body so the core blows out
         # instead of sitting flat inside its own halo. Both go through the

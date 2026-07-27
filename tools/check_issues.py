@@ -48,6 +48,13 @@ from lagarto.combat import projectile as projlib
 chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
     and _pj.returncode == 0,
     "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
+from lagarto.render.fx import FX as _FX
+chk(116, "faisca no lugar do rastro",
+    not hasattr(projlib.Projectile((0, 0), (0, 0), (1, 1, 1)), 'trail')
+    and 'pygame.draw.line' not in src(projlib)
+    and 'direction' in inspect.signature(_FX.spark_burst).parameters
+    and _pj.returncode == 0,
+    "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
