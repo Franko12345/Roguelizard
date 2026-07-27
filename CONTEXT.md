@@ -149,6 +149,20 @@ Charged by kills, fired on E. Not the same as a Weapon (weapons are
 automatic).
 _Avoid_: active, ultimate.
 
+**Pattern**:
+One attack arrangement, as a plain function
+`(shooter, game, target, dials) -> None` — a ring of shots, a cone, a rotating
+spray, a contact bite. Named by its id (`fan`, `spiral`, `web_trap`). Not a
+class, not an "attack object".
+_Avoid_: attack, move, ability (all taken).
+
+**Emitter**:
+`lagarto/combat/emitter.py` — the one place every Pattern is implemented,
+shared by [Boss](docs/concepts/boss.md) and common enemy alike. It never looks
+its own tuning up: the caller passes **dials** (a plain dict; the boss passes
+its `PATTERNS` row). See [ADR-0012](docs/adr/0012-shared-pattern-emitter.md).
+_Avoid_: pattern library, bullet factory, spawner.
+
 ### Run structure
 
 **Round**:
