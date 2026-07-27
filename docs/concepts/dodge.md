@@ -60,6 +60,14 @@ roughly a third of what you ask for. `0.35` in the config draws as ~`0.62`. That
 is why the constants look extreme, and why `tools/check_roll.py` asserts on
 `p.squash` — the thing on screen — rather than on the value that was set.
 
+**The colour is the i-frame tell.** The body tints toward `C.ROLL_IFRAME_COLOR`
+(ice blue) on the same `roll_f` envelope, so it arrives and leaves with the
+squash rather than carrying a timer of its own. `color` is what the body, the
+glow and the trail all read, so mutating it against a pristine `base_color` —
+the idiom [AI](./ai.md) already uses to fade a friend out — is the entire
+effect. **Not white:** `hit_flash` whitens the body already, and "I cannot be
+hit" must not read as "I just got hit".
+
 **Legs.** `leg_pull` gathers the rest targets, but a foot is *planted* and only
 steps once dragged `step_len` away, which never completes inside 0.15 s — the
 legs trailed as four straight sticks. `_roll_pose` reels the feet in with the
