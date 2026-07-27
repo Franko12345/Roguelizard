@@ -35,6 +35,12 @@ _roll = subprocess.run([sys.executable, 'tools/check_roll.py'], capture_output=T
 chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
     and _roll.returncode == 0,
     "" if _roll.returncode == 0 else _roll.stderr.decode()[-90:])
+_pj = subprocess.run([sys.executable, 'tools/check_projectile.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.combat import projectile as projlib
+chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
+    and _pj.returncode == 0,
+    "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
