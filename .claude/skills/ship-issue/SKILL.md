@@ -55,8 +55,27 @@ Delegate mechanical work (renames, moves, mass import rewrites) to a `general-pu
 - The base branch name (so it knows what to diff against).
 - Instruction to use `git mv` for moves (preserves rename history).
 - Instruction to **not** open a PR or push — that stays with the parent.
+- The standing brief block below, verbatim. A subagent starts cold: it never
+  sees the conversation, so anything omitted here is simply absent.
 
 Keep design/judgment work in the parent thread.
+
+### Standing brief block (paste into every subagent brief)
+
+```
+Read `CLAUDE.md` in the worktree first, including the "Ferramentas — sempre
+use o RTK" and "Modos de trabalho" sections.
+
+- `rtk` is mandatory. The Bash hook rewrites simple command lines for free,
+  but it cannot reach inside a pipeline, an `&&` chain, or a heredoc — so
+  prefer one simple command per Bash call, and write `rtk grep …` /
+  `rtk read …` by hand when a pipeline is unavoidable.
+- Build the ponytail way: reuse what the repo already has before writing
+  anything new; no abstraction, config knob, or scaffolding that the issue
+  did not ask for. Read the whole flow first, then take the shortest fix.
+- Code, commits, PRs and docs are written in normal prose — the caveman
+  style applies to chat replies only, never to files.
+```
 
 ## Smoke test
 

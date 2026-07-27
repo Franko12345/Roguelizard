@@ -130,12 +130,47 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 Vale para **toda** sessão neste repo, inclusive subagents.
 
 - Comandos comuns (`git`, `ls`, `grep`, …) são reescritos automaticamente
-  pelo hook do Claude Code — nada a fazer.
+  pelo hook do Claude Code (`PreToolUse`/`Bash` → `rtk hook claude`, em
+  `~/.claude/settings.json`) — nada a fazer.
 - Meta-comandos rodam sempre com `rtk` explícito: `rtk gain`,
   `rtk gain --history`, `rtk discover`, `rtk proxy <cmd>` (executa cru,
   sem filtro, para depurar).
 - Se `rtk gain` falhar, há colisão de nome com o `rtk` da
   reachingforthejack (Rust Type Kit) — confira com `which rtk`.
+
+### O que o hook NÃO alcança
+
+O hook reescreve uma linha de comando **simples**. Ele não entra em
+pipeline (`find … | xargs wc -l`), cadeia `&&`/`;`, nem heredoc
+(`python - <<'PY'`). Nesses casos **nada** é proxiado.
+
+`rtk discover` mediu: 5108 comandos em 30 dias, só 6,6% proxiados,
+~267K tokens perdidos — `grep -n` sozinho custou 151,8K.
+
+**Regra: um comando simples por chamada de Bash, não one-liner esperto.**
+Se o pipeline for inevitável, escreva `rtk grep …` / `rtk read …` na mão
+dentro dele. Agrupar comandos pra economizar round-trip é economia falsa:
+o `grep -n` não proxiado custa mais tokens do que a chamada extra.
+
+## Modos de trabalho — caveman + ponytail
+
+Dois plugins ligados por hook de `SessionStart`, ativos em **toda** sessão
+deste repo (`~/.claude/settings.json` e `.claude/settings.local.json`):
+
+- **ponytail** (`full`) — governa o **que** se constrói. Sobe a escada e
+  para no primeiro degrau que resolve: precisa existir? já existe no
+  repo? stdlib resolve? uma linha resolve? Sem abstração não pedida,
+  sem scaffolding "pra depois". Casa com a regra de duplicata deste
+  `CLAUDE.md`: reusar o que já existe vem antes de escrever de novo.
+  Não vale pra validação de entrada, segurança, nem pra entender o
+  problema — leia tudo primeiro, seja preguiçoso depois.
+- **caveman** (`full`) — governa **como se fala**, nunca o que se escreve.
+  Prosa curta, sem enfeite. **Código, commit, PR e doc saem em prosa
+  normal** — o estilo morre na fronteira do arquivo. Mantém a língua do
+  usuário (PT aqui) e todo termo técnico literal.
+
+Desligar: `stop ponytail` / `stop caveman`. Nível: `/ponytail lite|full|ultra`,
+`/caveman lite|full|ultra`.
 
 ## Documentação — como manter consistente
 
