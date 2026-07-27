@@ -219,7 +219,8 @@ Still missing from `plans/02 §7` (all assigned per the triage doc above):
 | `beam_barrage` | telegraphed laser barrage | ground markers | High Dragun | #74 |
 | `teleport_strike` | vanishes, reappears, attacks | shadow at destination | Mine Flayer, Isaac | #75 |
 
-Files: `lagarto/flow/boss/patterns.py`
+Files: `lagarto/combat/emitter.py` (the function) + `lagarto/flow/boss/patterns.py`
+(one `PATTERNS` row of dials) — see [ADR-0012](adr/0012-shared-pattern-emitter.md)
 Effort: ~3h (folded into the consuming boss tickets)
 
 ---
