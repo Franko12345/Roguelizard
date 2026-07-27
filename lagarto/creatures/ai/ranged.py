@@ -129,7 +129,7 @@ def lead_tick(creature, game, dt, target):
     if creature.shoot_charge > 0:
         creature.shoot_charge -= dt
         creature.squat_bias = 0.9
-        creature._rain_points = [emitter.lead_point(target, d)]
+        creature._rain_points = [emitter.lead_point(creature, target, d)]
         if creature.shoot_charge <= 0:
             emitter.aimed_barrage(creature, game, target, d)
             creature._rain_points = []

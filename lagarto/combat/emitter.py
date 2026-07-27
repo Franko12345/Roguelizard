@@ -45,13 +45,32 @@ def _launch(pr, game, dials):
     game.spawn_projectile(pr)
 
 
-def lead_point(target, dials):
-    """Where the target WILL be -- the single lead formula.
+def lead_point(shooter, target, dials):
+    """Where the target WILL be when the shot arrives -- the single lead formula.
 
     Shared by the boss's barrage and the ANTECIPADOR's on-ground telegraph, so
     the marker the player reads cannot drift away from where the shots go.
+
+    The lead time is the shot's FLIGHT time, not a constant. It used to be a
+    fixed number of seconds, which meant the aim was only correct at the one
+    distance where ``dist / shot_speed`` happened to equal that constant --
+    measured, the ANTECIPADOR missed a straight-line runner by 44 px at 150 px
+    of range and by 172 px at 450, against a 21 px body. The error grew with
+    distance because the flight time did and the lead did not.
+
+    ``lead`` is now how GOOD the prediction is, in [0, 1]: 1.0 leads perfectly,
+    0.6 leads 60% of the way and can be beaten by holding a straight line. One
+    refinement pass, because the first estimate uses the distance to where the
+    target is standing rather than to where it is going.
     """
-    return target.pos + target.vel * dials.get('lead', C.BOSS_BARRAGE_LEAD)
+    quality = dials.get('lead', C.BOSS_BARRAGE_LEAD)
+    speed = dials.get('shot_speed', C.BOSS_BARRAGE_SPEED)
+    if speed <= 0:
+        return Vector2(target.pos)
+    origin = shooter.spine.joints[0]
+    t = target.pos.distance_to(origin) / speed
+    t = (target.pos + target.vel * t).distance_to(origin) / speed
+    return target.pos + target.vel * (t * quality)
 
 
 def radial_burst(shooter, game, target, dials):
@@ -79,7 +98,7 @@ def fan_shot(shooter, game, target, dials):
     n = dials.get('count', C.BOSS_FAN_COUNT)
     spread = dials.get('spread', C.BOSS_FAN_SPREAD)
     jitter = dials.get('jitter', 0.0)
-    aim_at = lead_point(target, dials) if 'lead' in dials else target.pos
+    aim_at = lead_point(shooter, target, dials) if 'lead' in dials else target.pos
     base = safe_norm(aim_at - mouth)
     if jitter:                       # the gunner's dispersion: aim, not arrangement
         base = base.rotate(random.uniform(-jitter, jitter))
@@ -126,7 +145,7 @@ def aimed_barrage(shooter, game, target, dials):
     "shoot where they are going".
     """
     shooter._barrage_left = dials.get('shots', C.BOSS_BARRAGE_SHOTS)
-    shooter._barrage_aim = lead_point(target, dials)
+    shooter._barrage_aim = lead_point(shooter, target, dials)
     shooter._barrage_cd = 0.0
     shooter._barrage_gap = dials.get('gap', C.BOSS_BARRAGE_GAP)
     shooter._barrage_speed = dials.get('shot_speed', C.BOSS_BARRAGE_SPEED)
