@@ -17,8 +17,8 @@ Constrained by [ADR-0005](../adr/0005-camp-is-a-physical-clearing.md).
 ## POIs in the clearing
 
 - **Beetle tent** — the shop. Touching it opens `'shop'` mode.
-  Contents: heal, max-HP, might, [Charm](./charm.md), egg. Costs rise
-  per purchase. Charm is fixed at 150 pollen.
+  Contents: heal, max-HP, might, [Charm](./charm.md), egg. Charm starts
+  at 150 pollen; the rest are cheap. See _Prices persist_ below.
 - **Three doors** — each shows a theme + bonus (heal / pollen / card).
   Crossing one commits — `_apply_route` calls `rounds.request_next(theme)`.
 
@@ -30,6 +30,20 @@ shake + dust + sparks + a ring on landing. A **growing shadow** on the
 ground telegraphs where it will land. Interaction is locked until the
 POI touches the ground (`tent_landed` / `dr['landed']`) — entering a
 mid-air door was a real bug.
+
+## Prices persist for the whole run
+
+Buying an item multiplies its price by `C.SHOP_PRICE_MULT` (1.25), and
+that price **stays raised in every later camp**. The camp dict is thrown
+away when you leave the clearing, so the raised price lives on
+`Game.shop_prices` (`{item name: cost}`, per run) and `_roll_shop` reads
+it back when it builds the next tent. Buying nothing keeps an item at
+its base price forever.
+
+It used to be 1.6× stored in the throwaway camp dict, which reset every
+clearing — Nectar was permanently 12 pollen and cheap healing was
+infinite. Persisting the price is why the step per purchase got gentler:
+it now compounds across a whole run instead of one visit.
 
 ## Shop is choice, not toll
 
