@@ -138,6 +138,7 @@ class Player(Lizard):
         self.dash_chain_bonus = False
         self.tongue_throw = False    # tongue throws instead of pulling
         self.tongue_drain = False
+        self.tongue_shot = False     # Lingua-Dardo charm: the tongue also SHOOTS
         self.whip_darts = False      # whip fires darts from the arc tips
         self.whip_reflect = False    # whip bats enemy shots back
         self.whip_full = False       # whip sweeps the whole circle
@@ -889,6 +890,26 @@ class Player(Lizard):
         audio.play('tongue_out', 0.55)
         game.fx.dust(mouth)
         game.shake(1.5)
+        if self.tongue_shot:            # Lingua-Dardo (#104): the ONE aimed shot
+            self._fire_tongue_dart(game)
+
+    def _fire_tongue_dart(self, game):
+        """Lingua-Dardo: the tongue spits a dart along the same aim it grabs on.
+
+        The only player attack the player themself aims -- every weapon stays
+        automatic (`nearest_enemy`), so this is a verb, not a second aiming
+        system. It goes through ``spawn_projectile`` like everything else, so
+        the stacked shot modifiers (#104) ride it too.
+        """
+        from ..combat.projectile import spit as mk_spit
+        mouth = self._mouth()
+        aim = self.tongue_target.pos if self.tongue_target is not None \
+            else mouth + self.aim * self.tongue_range
+        game.spawn_projectile(mk_spit(
+            mouth, aim, self.color, dmg=int(round(C.TONGUE_DART_DMG * self.damage_mult())),
+            effect='poison' if self.venom else None, speed=C.TONGUE_DART_SPEED,
+            radius=5, hostile=False))
+        game.fx.spark_burst(mouth, palette.lighten(self.color, 0.3), 5, 220)
 
     def _tongue_connect(self, game):
         """The taut frame: resolve the hit and spend the impact juice."""
