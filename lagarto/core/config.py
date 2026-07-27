@@ -277,6 +277,35 @@ INPUT_BUFFER = 0.15
 DASH_COST = 14
 TONGUE_COST = 8
 
+# --- rolamento: a segunda esquiva, barata e sem dano (issue #103) ------------- #
+# A investida (o dash) e invulneravel mas PONTUAL: 0,16 s de i-frames num cd de
+# 0,45 s por 18 de energia = 36% do ciclo em rajada, 5% sustentado. Com 5% nao da
+# pra subir a densidade de bala sem ser injusto. O rolamento nao mexe em nada
+# disso: ele ganha na FREQUENCIA (custo 5, cd 0,2 s) e perde o dano, e nao te
+# joga pra frente -- a investida te lanca na direcao de quem atira, que em bullet
+# hell e geralmente o lugar errado.
+ROLL_COST = 5
+ROLL_CD = 0.2            # contado do FIM do rolamento: 0,15 rolando + 0,2 se
+                         # recuperando = 43% do ciclo invulneravel em rajada, e
+                         # a energia (6/s de regen) e o que limita de verdade
+ROLL_TIME = 0.15         # i-frames por rolamento
+ROLL_SPEED = 1.9         # multiplicador de velocidade; steer continua vivo, entao
+                         # o rolamento e DIRIGIVEL (a investida e um impulso comprometido)
+# Fake roll: as juntas desabam umas sobre as outras num disco do tamanho de ~uma
+# vertebra, e aquilo gira. Nao e um coil de verdade porque nao caberia: 11 juntas
+# x bend=26 graus = 286 graus de curvatura total, a bola nunca fecharia. Encolher
+# `spine.link` contorna a trava -- `resolve()` le o link fresco todo frame.
+ROLL_LINK = 0.2          # fracao do link de repouso no auge do colapso: as ~10
+                         # juntas caem dentro de ~40px, a espessura do proprio
+                         # corpo (2 * max_r). Nao aperte muito mais: abaixo de
+                         # ~0,15 a tira de quads e o contorno se cruzam e aparecem
+                         # lascas e riscos soltos por 2-3 frames.
+ROLL_SQUAT = 0.82        # squat_bias no auge (compressao)
+ROLL_LEG_PULL = 0.45     # leg_pull no auge (pernas recolhidas)
+ROLL_SPIN = 1440         # graus/s de giro do disco (~0,6 volta por rolamento)
+ROLL_EASE = 26           # taxa do approach que entra E sai do colapso. NUNCA
+                         # snapado: colapso instantaneo teleporta o corpo.
+
 # --- tongue: a chameleon slingshot, not an arc ------------------------------- #
 # Three beats, and the split between them IS the feel. OUT is short and
 # ease-out so the tongue leaves the mouth explosively and decelerates into the

@@ -19,6 +19,11 @@ propagates the constraint from head to tail every frame.
   tail. `parts.py` reads this for spike/plate positioning.
 - **`bend`** — max angle change between consecutive joints (degrees).
   Smaller = stiffer.
+- **`link` / `link0`** — the joint spacing, and its resting value. `resolve()`
+  reads `link` **fresh every frame**, so a pose can squeeze the whole chain
+  per-frame without a rebuild; scale off `link0` and put it back. That is how
+  the Rolamento's disc is made ([Dodge](./dodge.md)) and, permanently, how
+  Olho-Sísmico is a ball.
 
 ## Body polygon
 

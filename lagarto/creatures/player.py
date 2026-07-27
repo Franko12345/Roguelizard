@@ -41,6 +41,11 @@ class Player(Lizard):
         # everything this dash already hit -- collisions run every frame, so
         # without this one dash lands ~10 hits on whatever it overlaps
         self.dash_hits = set()
+        # rolamento (issue #103): the OTHER dodge -- cheap, frequent, no damage.
+        # No hit set, on purpose: nothing about it touches an enemy.
+        self.roll_time = 0.0
+        self.roll_cd = 0.0
+        self.roll_f = 0.0         # 0..1 eased collapse of the fake roll
         self.clog = 0.0           # how buried in enemy bodies we are (collision.py)
         self.clog_f = 0.0         # smoothed, so the drag eases in/out
         # tail whip ("rabada"): a lateral lunge whose follow-through swings the tail
@@ -152,6 +157,10 @@ class Player(Lizard):
     @property
     def dashing(self):
         return self.dash_time > 0
+
+    @property
+    def rolling(self):
+        return self.roll_time > 0
 
     def gain_charm(self, cid, game=None):
         from ..combat import charms
@@ -281,7 +290,10 @@ class Player(Lizard):
         # player (never an enemy) is in ``game.players``.
         if game.mode == 'sandbox' and game.god_mode and self in game.players:
             return False
-        if self.dashing or self.hit_flash > 0.45 or self.down or self.shed_t > 0:
+        # Both dodges are invulnerable and this is the ONE place that says so:
+        # the investida (dash) and the rolamento are two verbs, one i-frame rule.
+        if self.dashing or self.rolling or self.hit_flash > 0.45 or self.down \
+                or self.shed_t > 0:
             return False
         dmg *= (1.0 - self.armor)                       # carapaca charm blocks a %
         self.health -= dmg
@@ -393,6 +405,25 @@ class Player(Lizard):
                 game.fx.dust(self.pos + perp * (s * self.max_r * 0.5))
             game.shake(5)
 
+        # --- rolamento: the second dodge (issue #103) ---------------------- #
+        # Invulnerable like the investida, but it wins on FREQUENCY instead of
+        # impact: no damage, no set of hits, and no launch impulse -- steer stays
+        # live, so a roll is steerable, while the investida commits you forward
+        # (in bullet hell, usually toward whoever is shooting).
+        self.roll_cd = decay(self.roll_cd, dt)
+        self.roll_time = decay(self.roll_time, dt)
+        if c.roll_edge and self.roll_cd <= 0 and self.energy >= C.ROLL_COST:
+            c.consume('roll')
+            self.roll_time = C.ROLL_TIME
+            self.roll_cd = C.ROLL_TIME + C.ROLL_CD    # cd starts when the roll ends
+            self.energy -= C.ROLL_COST
+            audio.play('dash', 0.45)
+            game.fx.dust(self.pos)
+        if self.rolling:
+            speed_mul *= C.ROLL_SPEED
+            game.fx.trail(self.pos, self.color)
+        self._roll_pose(dt)
+
         self.steer(c.move, dt, speed_mul)
         self.integrate(dt, on_plant=game.fx.dust, bounds=game.arena_bounds)
         self._whip_arc(dt)
@@ -498,6 +529,48 @@ class Player(Lizard):
         self.energy = clamp(self.energy + dt * 6, 0, self.max_energy)
         if self.regen > 0 and self.health < self.max_health:
             self.health = min(self.max_health, self.health + self.regen * dt)
+
+    def _roll_pose(self, dt):
+        """Fake roll: the joints collapse onto each other into a spinning disc.
+
+        Not a real coil, because a real one cannot close: 11 joints at the
+        spine's ``bend=26`` limit is ~286 degrees of curvature, so the ball
+        stays an arc. Shrinking ``spine.link`` closes it instead, and needs no
+        rebuild -- ``Spine.resolve`` reads the link fresh every frame (the
+        ``orbital`` body plan does the same trick permanently, at ``maxr*0.3``).
+        Legs come in with ``leg_pull``, the body compresses with ``squat_bias``.
+
+        Eased in AND out, same contract as ``squat_bias``: an instant collapse
+        teleports the body. The spin is a per-frame rotation of every joint
+        around the head -- ``resolve`` derives each direction from the previous
+        frame's positions, so the rotation persists rather than being undone
+        (the same reason ``_whip_arc`` survives to draw time).
+        """
+        self.roll_f = approach(self.roll_f, 1.0 if self.rolling else 0.0,
+                               C.ROLL_EASE, dt)
+        if self.roll_f < 1e-3:
+            self.roll_f = 0.0
+            self.spine.link = self.spine.link0
+            return
+        f = self.roll_f
+        self.spine.link = self.spine.link0 * (1.0 - f * (1.0 - C.ROLL_LINK))
+        self.squat_bias = 1.0 - f * (1.0 - C.ROLL_SQUAT)
+        self.leg_pull = 1.0 - f * (1.0 - C.ROLL_LEG_PULL)
+        js = self.spine.joints
+        spin = C.ROLL_SPIN * f * dt
+        for i in range(1, len(js)):
+            js[i] = js[0] + (js[i] - js[0]).rotate(spin)
+        # ``leg_pull`` alone is not enough: a foot is PLANTED and only takes a
+        # step once the body has dragged its rest spot ``step_len`` away, which
+        # over a 0.15 s roll never completes -- the legs stayed behind the disc
+        # as four straight sticks. Reel the feet in with the body instead, on
+        # the same ease, and cancel any step in flight so the two don't fight.
+        gather = min(1.0, C.ROLL_EASE * dt * f)
+        for leg in self.legs:
+            leg.stepping = False
+            leg.lift = 0.0
+            leg.foot = leg.foot.lerp(
+                leg.rest_target(self.spine, self.vel, C.ROLL_LEG_PULL), gather)
 
     def _whip_span(self):
         """(pivot index, joint count) of the section that whips.

@@ -624,10 +624,10 @@ def _main_items(meta):
 
 CONTROLS = (
     "P1:  WASD mover  -  mouse mirar  -  clique/ESPACO dash  -  dir/SHIFT lingua",
-    "P1:  clique-meio/Q rabada (golpe de cauda)",
-    "P1 (gamepad):  sticks  -  A dash  -  X lingua  -  Y rabada   (no single-player)",
-    "P2:  setas mover  -  IJKL mirar  -  RCtrl dash  -  RShift lingua  -  RAlt rabada",
-    "P2 (gamepad):  sticks  -  A dash  -  X lingua  -  Y rabada",
+    "P1:  clique-meio/Q rabada (golpe de cauda)  -  LCtrl rolamento",
+    "P1 (gamepad):  sticks  -  A dash  -  X lingua  -  Y rabada  -  LT/RT rolamento   (no single-player)",
+    "P2:  setas mover  -  IJKL mirar  -  RCtrl dash  -  RShift lingua  -  RAlt rabada  -  O rolamento",
+    "P2 (gamepad):  sticks  -  A dash  -  X lingua  -  Y rabada  -  LT/RT rolamento",
     "",
     "armas atacam sozinhas - suba de nivel p/ evoluir  -  [R] rerrola as cartas - 1x por round (LAGARTO)",
     "F11 tela cheia  -  F3 medidor de FPS  -  ESC pausa",

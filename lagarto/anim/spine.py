@@ -32,6 +32,11 @@ class Spine:
     def __init__(self, pos, n, link, radii, bend=30.0):
         self.joints = [Vector2(pos) for _ in range(n)]
         self.link = link
+        # Resting link. ``resolve()`` reads ``link`` fresh every frame, so a pose
+        # can squeeze the whole chain for a few frames (the rolamento's disc) by
+        # scaling off this instead of caching a base itself -- a cached copy goes
+        # stale the moment ``rebuild_body`` grows the creature mid-pose.
+        self.link0 = link
         self.radii = list(radii)
         self.bend = bend
 
