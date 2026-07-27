@@ -30,6 +30,13 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.combat import weapons as weplib
+chk(111, "deployable torreta", 'torreta' in weplib.WEAPONS
+    and "'turret'" in src(__import__('lagarto.creatures.ai', fromlist=['x']))
+    and _tu.returncode == 0,
+    "" if _tu.returncode == 0 else _tu.stderr.decode()[-90:])
 _ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.creatures.ai import BEHAVIORS as _beh
