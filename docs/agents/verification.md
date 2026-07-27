@@ -25,6 +25,7 @@ regression is visible rather than merely detected.
 | `check_windup.py` | The action gates fire once per press and never repeat while held. |
 | `check_music.py` | The stem mix, against a REAL mixer (the dummy audio driver no-ops every call). |
 | `check_difficulty.py` | Early waves unchanged, late waves actually ramp. |
+| `check_shop_prices.py` | A shop price raised in one camp is still raised in the next. |
 | `check_doc_paths.py` | No doc cites a source path that does not exist. |
 
 Plus `python lizard_game.py --smoke 400`, which is the floor, not the ceiling:
