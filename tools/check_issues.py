@@ -22,6 +22,7 @@ from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu
+from lagarto.input.controllers import _ACTIONS
 import lagarto
 
 src = lambda m: inspect.getsource(m)
@@ -29,6 +30,11 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_roll = subprocess.run([sys.executable, 'tools/check_roll.py'], capture_output=True,
+                       env={**os.environ, 'PYTHONPATH': '.'})
+chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
+    and _roll.returncode == 0,
+    "" if _roll.returncode == 0 else _roll.stderr.decode()[-90:])
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
