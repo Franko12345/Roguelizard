@@ -26,7 +26,7 @@ from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
-from .projectile import spit as game_spit, bounce, leave_puddle
+from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook
 
 
 def _launch(pr, game, dials):
@@ -124,14 +124,27 @@ def lob_shot(shooter, game, target, dials):
     hit -- what it punishes is standing still.
     """
     mouth = shooter.spine.joints[0]
-    speed = dials.get('shot_speed', C.VENOM_SPIT_SPEED)
-    pr = game_spit(mouth, target.pos, shooter.color, dmg=dials.get('dmg', C.VENOM_SPIT_DMG),
-                   effect='poison', speed=speed, radius=dials.get('radius', 7))
-    travel = mouth.distance_to(target.pos) / speed
-    pr.life = max(0.12, min(travel, 2.2))
+    # `at` lands it on a point the caller already committed to -- the MORTEIRO's
+    # marked patch -- instead of chasing the player. Without it the telegraph on
+    # the ground and the thing in the air would disagree.
+    land = dials.get('at') or target.pos
+    flight = dials.get('flight')
+    dist = mouth.distance_to(land)
+    # `flight` pins the travel TIME instead of the speed, so a lob always takes
+    # the same beat to land however far it was thrown -- which is what lets the
+    # footprint's countdown and the shot's arrival be the same clock.
+    speed = (dist / flight) if flight else dials.get('shot_speed', C.VENOM_SPIT_SPEED)
+    pr = game_spit(mouth, land, shooter.color, dmg=dials.get('dmg', C.VENOM_SPIT_DMG),
+                   effect=dials.get('effect', 'poison'), speed=max(1.0, speed),
+                   radius=dials.get('radius', 7))
+    travel = dist / max(1.0, speed)
+    pr.life = max(0.12, min(travel, 2.6))
     payload = dials.get('puddle')
     if payload:
         pr.on_death.append(leave_puddle(**payload))
+    height = dials.get('arc')
+    if height:
+        pr.on_update.append(arc_hook(height))
     _launch(pr, game, dials)
     game.fx.spark_burst(mouth, palette.lighten(shooter.color, 0.3), 6, 190)
     audio.play('w_spit', 0.4)

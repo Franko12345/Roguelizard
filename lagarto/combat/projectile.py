@@ -59,6 +59,11 @@ class Projectile:
         self.pierce = False
         self._pierced = None
         self.trail = []                 # recent world positions -> a Gungeon streak
+        # Fake height, in screen pixels, for anything LOBBED. The world position
+        # stays flat -- this game has no z -- so only the draw lifts, which is
+        # what makes a shot read as thrown-and-landed instead of slid along the
+        # floor. The telegraph on the ground doubles as its shadow.
+        self.lift = 0.0
 
     def update(self, dt, game=None):
         self.trail.append((self.pos.x, self.pos.y))
@@ -78,6 +83,8 @@ class Projectile:
     def draw(self, surf, cam):
         z = cam.zoom
         sp = cam.w2s(self.pos)
+        if self.lift:
+            sp = (sp[0], sp[1] - self.lift * z)
         r = max(4, int(self.radius * z) & ~1)     # even -> halves the cache keys
         rim, mid, core = side_palette(self.hostile)
         # trailing streak: ONE line. At ~100 bullets a seven-circle tail with a
@@ -89,8 +96,12 @@ class Projectile:
             # to the front of the bullet. Drawn in `mid`, not `core`: a white
             # streak is a white stick, and it costs the side its colour on the
             # very part of the bullet that is longest on screen.
-            pygame.draw.line(surf, mid, cam.w2s(self.trail[0]), sp,
-                             max(1, int(r * 0.85)))
+            tail = cam.w2s(self.trail[0])
+            if self.lift:
+                # lift the tail too, or a lobbed shot draws a rigid spike from
+                # its own height down to the ground it has not reached yet
+                tail = (tail[0], tail[1] - self.lift * z)
+            pygame.draw.line(surf, mid, tail, sp, max(1, int(r * 0.85)))
         # Two additive passes: a wide soft one for the bloom the scene reads as
         # light, and a tight hot one right on the body so the core blows out
         # instead of sitting flat inside its own halo. Both go through the
@@ -211,6 +222,26 @@ def bounce(pr, dt, game):
         bounced = True
     if bounced:
         pr.bounces_left -= 1
+
+
+def arc(height):
+    """on_update: rise and fall over the shot's own lifetime -- a lob.
+
+    Pure draw (see ``Projectile.lift``): the shot still travels in a straight
+    line to the point the telegraph drew, it just does not look like it slid
+    there. ``life`` is already cut to the travel time by ``lob_shot``, so the
+    apex lands halfway and the height is zero exactly when it dies.
+    """
+    def fly(pr, dt, game):
+        life0 = getattr(pr, '_life0', None)
+        if life0 is None:
+            # `update` decrements life before running the hooks, so the first
+            # call has already lost one step -- add it back to recover the full
+            # flight. Captured here so the hook stays self-contained.
+            life0 = pr._life0 = max(1e-6, pr.life + dt)
+        f = min(1.0, max(0.0, 1.0 - pr.life / life0))
+        pr.lift = height * math.sin(f * math.pi)
+    return fly
 
 
 def leave_puddle(**kw):
