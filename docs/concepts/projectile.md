@@ -81,9 +81,9 @@ emitter follows, written down here so it stays a rule.
 
 ## Colour codes the side, not the species
 
-The bullet body is **fixed per side**: hostile is a hot-white core in a dark
-rim, friendly is the player's green. The creature's own colour survives only in
-the additive halo. See
+The bullet body is **fixed per side**: hostile is hot orange, friendly is the
+player's green, each with a white-hot centre. The creature's own colour survives
+only in the additive halo. See
 [ADR-0014](../adr/0014-bullet-colour-encodes-side.md) for why this partially
 overrides [ADR-0001](../adr/0001-genome-is-the-creature.md), and it applies to
 bosses too, with no exception.
@@ -92,12 +92,41 @@ The whip's Contragolpe flips `pr.hostile`, so a batted-back shot repaints
 itself; it only has to move `pr.color` to the friendly hue so the halo agrees
 with the body.
 
+**The side lives in the mid ring, not the core.** Both cores are near-white by
+design, so growing one past about half the radius makes hostile and friendly
+converge on the same white pill — which undoes the whole rule at exactly the
+density it exists for. The dark rim is an *outline*, one pixel of ink to hold
+the shape against a bright floor; filled to the full radius it puts a dark ring
+between core and halo and the bullet reads as a bubble instead of a slug. The
+streak is drawn in the mid colour for the same reason: it is the longest part of
+the bullet on screen, so a white one throws the side away.
+
+## Size and glow
+
+Two dials in `config.py`, both draw-only — collision is body overlap against the
+creature, so neither changes what a bullet can reach:
+
+| dial | what it does |
+|---|---|
+| `BULLET_SCALE` | multiplies every caller's `radius=`, which stays a relative weight |
+| `BULLET_GLOW` | intensity of the additive halo |
+
+The glow is **two** passes: a wide soft one the scene reads as light, and a
+tight hot one on the body so the centre blows out instead of sitting flat inside
+its own halo. Both go through the quantised glow cache. `palette._glow_sprite`
+scales its step count with radius (10 / 18 / 26) — steps cost nothing per frame
+because they only run on a cache miss, and ten of them banded visibly into
+concentric rings once bullets got big enough to take the second pass.
+
 ## Budget
 
 The body is a sprite cached on `(even radius, side)` — only affordable
 *because* the body stopped carrying the creature's colour, which collapses it to
-two colour variants. The trail is one line, not seven fading circles. See
-[Performance](./performance.md).
+two colour variants. The trail is one line, not seven fading circles.
+
+Measured at 92 bullets on screen: **0.87 ms** of the 16.6 ms frame, of which the
+two glow passes are most of it (one pass alone measures 0.42 ms). The check
+asserts under 4 ms. See [Performance](./performance.md).
 
 ## Verification
 

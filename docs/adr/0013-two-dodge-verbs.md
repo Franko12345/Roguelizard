@@ -5,24 +5,40 @@ a 0.45 s cooldown for 18 energy is 36% of the cycle in a burst and ~5%
 sustained, and 5% is not enough headroom to raise bullet density without being
 unfair. Rather than make the investida cheaper or longer — which would also make
 it a better *weapon*, since it deals damage — we added a second verb: the
-**Rolamento** is cheap (5 energy, 0.2 s cooldown), deals no damage, and does not
-launch you forward.
+**Rolamento** is cheap (5 energy, 0.2 s cooldown) and deals no damage.
 
 So the player owns two invulnerability buttons on purpose. They are not
-redundant: the investida trades frequency for damage and forward commitment (in
-a bullet-hell, usually *toward* whoever is shooting), the rolamento trades
-damage for frequency and steering. Both read their i-frames from the one guard
-in `Player.hurt`.
+redundant: the investida trades frequency for damage and reach, the rolamento
+trades damage for frequency and efficiency. Both read their i-frames from the
+one guard in `Player.hurt`.
+
+### The asymmetry is damage and cost, not impulse
+
+This first shipped with the rolamento deliberately *not* launching — steer
+stayed live and it only multiplied speed, so the investida would keep its
+identity as the committed move. Playtest killed that: at 1.9× for 0.15 s the
+lizard travelled about a third of its own body, and the verb read as "tried to
+roll and did not dash". A dodge that does not leave the spot the bullet is
+going to is not a dodge.
+
+The rolamento now launches like the investida (2.6× max speed against 3.0×).
+Measured over one second of holding a direction: **+133 px per roll against
++223 px per investida**, at 5 energy against 18 — 26.6 px per energy point
+against 12.4. The investida is still the bigger single commitment and the only
+one that hurts anybody; the rolamento is the cheaper, more frequent exit.
+`tools/check_roll.py` asserts all three of those relations, because "it moves
+you" turned out to be the part nobody had measured.
 
 ## Consequences
 
 - The gamepad's button budget is spent: the four face buttons were already
   taken, so the rolamento sits on a **trigger** (LT/RT) — the first trigger this
   game reads at all.
-- Registered risk: if going forward does not punish enough, the investida stays
-  the optimal dodge and the rolamento dies as a button. The test is whether
-  enemies that lead their shots make the investida dangerous. If they do not,
-  the investida's economy is the thing to reopen — not the rolamento's.
+- The registered risk was that the investida would stay the optimal dodge and
+  the rolamento would die as a button. It nearly did, for the opposite reason to
+  the one predicted: not because forward commitment was too cheap, but because
+  the rolamento covered no ground at all. The economy that needed reopening was
+  the rolamento's, not the investida's, which is untouched.
 - The animation is a *fake* roll (collapse the joints into a spinning disc), not
   a coil; the spine's bend limit makes a real coil impossible. See
   [Dodge](../concepts/dodge.md).

@@ -116,12 +116,29 @@ what gets checked. 4 of each against an invulnerable-HP player, 30 s, headless:
 Both new ones sit inside the band the existing shooters already occupy, so
 neither is a stealth difficulty bump.
 
-The ANTECIPADOR number reads backwards until you see what it means: it hurts a
-**still** player most, because a lead of zero is a shot dead on your head. Its
-counter is not to freeze and not to walk in a straight line — it is to
-**change direction** (the circling column is the same 4 enemies losing a third
-of their damage) or to spend i-frames. That is the correction the measurement
-forced on the design note: "standing still beats a lead shot" is false.
+> **Superseded — these two rows measured a bug, not a design.** The lead was a
+> fixed 0.35–0.5 *seconds* rather than the shot's flight time, so the aim was
+> only correct at the single distance where `dist / shot_speed` happened to
+> equal that constant. Measured against a 21 px body, the ANTECIPADOR missed a
+> straight-line runner by 44 px at 150 px of range and by 172 px at 450: the
+> error grew linearly with distance because the flight time did and the lead did
+> not. That is why "it hurts a still player most" showed up in the table, and
+> the design note written from it — that the counter is changing direction —
+> was reasoning from the artefact.
+>
+> The real counter is what the species was designed for: it shoots where you
+> *will be*, so holding any predictable path feeds it, and the answer is the
+> marker on the ground plus a rolamento. With the flight-time lead the miss is
+> 17/20/22/24 px across the same four ranges — flat, not growing.
+> `tools/check_content.py` now asserts both the size and the flatness.
+>
+> The MORTEIRO row is suspect for its own reason: `MORTAR_RANGE` was 440, barely
+> above the top of its own 230–380 kite band, and at genome speed 0.72 against a
+> 224 px/s player it simply got left behind — in range 13% of the time, one
+> puddle in 15 s against a moving target. Range is now 780.
+>
+> **Both rows need re-measuring.** Left here rather than deleted because the
+> method was sound and the numbers are the before-picture.
 
 ## Tracking — what this file asked for, and where it landed
 

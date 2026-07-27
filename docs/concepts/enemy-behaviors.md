@@ -17,13 +17,23 @@ new decision, not more HP.
 The last two attack the habits the [Rolamento](./dodge.md) created. The roll is
 cheap (5 energy, 0.2 s), so it gets pressed without looking — the ANTECIPADOR
 shoots the point that reflex puts you on, and reuses `emitter.aimed_barrage`
-(the boss barrage's lead, dialled longer). The MORTEIRO answers the other one:
-its patch is picked at the **start** of the wind-up and only becomes a hazard a
-second later, so an investida aimed at it ends inside it. Neither is unfair:
-walking out of the MORTEIRO's patch always works, and the ANTECIPADOR's lead is
-**linear** — it is beaten by changing direction, and it draws the point it will
-shoot for the whole wind-up. Freezing is *not* the answer to it: a lead of zero
-is a shot dead on your head (measured in [Balance](./balance.md)).
+(the boss barrage's lead, dialled to a perfect prediction). The MORTEIRO answers
+the other one: its patch is picked at the **start** of the wind-up and only
+becomes a hazard a second later, so an investida aimed at it ends inside it.
+
+Neither is unfair, and the fairness comes from the telegraph rather than from
+bad aim. Walking out of the MORTEIRO's patch always works. The ANTECIPADOR
+**draws the exact point it will shoot, for the whole wind-up** — it predicts
+where you will be when the bullet arrives, so any path you are already
+committed to feeds it, and the answer is to read the marker and break the
+commitment (a rolamento is the cheapest way to).
+
+`lead` is a **quality**, not a duration: `1.0` predicts perfectly, and a boss's
+`0.8` or a `lead_fan`'s `0.6` deliberately under-leads so a change of pace beats
+it. The lead *time* always comes from the shot's flight (`dist / shot_speed`) in
+`emitter.lead_point`. It was once a fixed number of seconds, which meant every
+leading shot in the game was only aimed correctly at one distance — see the
+superseded rows in [Balance](./balance.md).
 
 ## Every shooter fires through the emitter
 
