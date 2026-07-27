@@ -29,10 +29,28 @@ The card pool mixes:
 - **Weapon cards** (`WeaponCard`) — new weapon or `+1` level. Cap 6
   equipped ([VIBORA](./character.md) caps at 2).
 - **Passive cards** (`MUTATIONS`) — stats (health, speed, dash, energy,
-  regen, XP, tongue, thorns, venom, wings) and parts (spikes/plates/
-  horns/legs). The club tail is **charm-only** — see [Charm](./charm.md).
+  regen, XP, tongue, thorns, venom, wings), parts (spikes/plates/
+  horns/legs) and the two **shot modifiers** (Rebote, Rastreio). The club
+  tail is **charm-only** — see [Charm](./charm.md).
 
 Input handled in `app.py` (1/2/3, arrows + ENTER, click).
+
+## Weight is a share, so a new card is never free
+
+`roll_cards` picks by weight, so every row added dilutes every row already
+there. Adding two cards at 1.0 to an 18-card table costs each survivor ~9% of
+its own share — invisible in review, visible over a hundred runs.
+
+The rule: **a new card is paid for by re-tuning, not appended**. #104 added
+Rebote and Rastreio at 0.9 and paid with the five weakest picks — the four
+cosmetic part cards (`spikes` 1.0→0.8, `plates` 1.0→0.8, `horns` 0.9→0.7,
+`legs` 0.9→0.7) and `tongue` (1.0→0.8, whose range the Lingua-Dardo charm now
+also sells). Table 17.4 → 18.2 over 18 → 20 cards; untouched cards lost 4.4%
+instead of 9.4%.
+
+`tools/check_content.py` holds a snapshot of the table as it stood before #104
+and fails if an untouched card loses more than 6% of its share, so the next
+addition has to do the same arithmetic.
 
 ## Synergies (`SYNERGIES`)
 
