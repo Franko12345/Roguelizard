@@ -37,8 +37,13 @@ later would otherwise silently skip the payload.
 
 ### What ships today
 
-- `projectile.homing` — `on_update`; curves toward the nearest enemy. The
-  Ferrão weapon and the ferrão item.
+- `projectile.homing` — `on_update`; curves toward whoever is on the **other**
+  side (`nearest_player` for a hostile shot, `nearest_enemy` for a friendly
+  one). It used to hunt `nearest_enemy` unconditionally, which made a hostile
+  shot wearing the hook chase its own horde; the side was already on the
+  projectile. `pr.home_mult` (default 1) tightens the curve — that is how a
+  stacked player modifier gets stronger without a second function. The Ferrão
+  weapon, the ferrão item, the player's Rastreio, a boss's `homing_fan`.
 - `projectile.bounce` — `on_update`; ricochets off the arena walls, losing
   speed each time. Reads `pr.bounces_left` / `pr.bounce_damp` off the shot, so
   a mirrored copy keeps its own count. A Muralha's bouncing bullets.
@@ -53,6 +58,17 @@ later would otherwise silently skip the payload.
 
 The player may stack modifiers freely. An **enemy** shot chooses **one**
 movement and stops there.
+
+Both halves have exactly one implementation site:
+
+- **Player.** `Game._stack_shot_mods`, called from `spawn_projectile` — the one
+  choke point every friendly bullet already passes (the same reason Retaguarda
+  lives there). The stacks are counters, not flags: `shot_bounces` /
+  `shot_homing`, raised by the Rebote and Rastreio [mutations](./evolution.md).
+  Two Rebotes are two ricochets.
+- **Enemy.** `emitter._launch`, which appends `dials['mod']` — singular, by
+  construction. A "new" boss pattern is dials plus at most that one hook
+  (`homing_fan` is `fan_shot` + `homing`, and nothing else).
 
 This is deliberate and it is the cheap defence against combinations nobody
 tested: an enemy bullet that bounces *and* curves *and* splits is a
