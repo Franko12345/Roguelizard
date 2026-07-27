@@ -104,6 +104,21 @@ never reaches. A boss with no entry in `ARENAS` fights in the open world.
 A Muralha has the tightest box in the game (900x640, a corridor); the
 Primordial and the Terror Alado have none, because both fights are about space.
 
+A pattern that paints the **ground** reads `game.arena_bounds` and anchors its
+cells to that box — never to the world origin. `grid_of_fire` measured its grid
+from (0, 0) and therefore lit the map's top-left corner while the fight happened
+2 000 px away: the attack existed, telegraphed, and hit nobody. The emitter is
+shared, so the same function falls back to a box of the arena's size around the
+shooter when there is no arena at all.
+
+How much of the box a grid may light is capped twice: `Game.spawn_puddle` keeps
+at most 40 puddles alive in the whole world (a cell size that asks for more
+loses the far side of the arena, silently), and the fire's life must stay under
+the shortest interval that can reapply it — recover + the attack cooldown +
+the wind-up, ~1.4 s for A Muralha — or two grids overlap and the damage stacks.
+Same rule as the enemy puddles ([Enemy behaviors](./enemy-behaviors.md)), on
+the boss side. `tools/check_muralha.py` asserts all three.
+
 ## Body plan vs re-skin
 
 Two ways to give a boss its look, and the choice is not cosmetic:

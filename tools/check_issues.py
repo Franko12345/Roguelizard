@@ -30,6 +30,12 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitter',
+                                                          fromlist=['x']).grid_of_fire)
+    and _mu.returncode == 0,
+    "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
 _ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.creatures.ai import BEHAVIORS as _beh
