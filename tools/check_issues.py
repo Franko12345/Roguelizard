@@ -21,7 +21,7 @@ from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
-from lagarto.game import menu
+from lagarto.game import menu, state_camp, loop as gameloop
 import lagarto
 
 src = lambda m: inspect.getsource(m)
@@ -29,6 +29,11 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
+    and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
+    "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
