@@ -625,6 +625,7 @@ ICONS = {
     'spikes': _spikes_icon, 'plates': _plates_icon, 'horns': _horns_icon,
     'legs': _legs_icon, 'venom': _drop, 'wings': _wings_icon,   # 'club' -> charm-only (#22)
     'might': _bolt, 'area': _expand, 'haste': _clock, 'amount': _plus_one,
+    'rebote': _bounce, 'rastreio': _target,      # #104 shot modifiers
     # charms
     'antenas': _antennae, 'olhos': _eyes, 'carapaca': _plates_icon,
     'asas': _wings_icon, 'nectar': _sac, 'glandula': _sac, 'presas': _fangs,

@@ -104,6 +104,12 @@ class Player(Lizard):
         self.area_mult = 1.0         # aura/range size
         self.cooldown_mult = 1.0     # <1 = faster
         self.amount = 0              # +projectiles / +orbitals
+        # Stackable SHOT modifiers (issue #104). Both are counters, not flags:
+        # the player stacks modifiers on one bullet, an enemy shot picks exactly
+        # one (docs/concepts/projectile.md). Read at one place only --
+        # Game.spawn_projectile, the choke point every friendly shot passes.
+        self.shot_bounces = 0        # ricochets off the walls before dying
+        self.shot_homing = 0         # how hard the shot curves toward a target
         self.pollen_mult = 1.0       # from meta-progression (Colheita)
         self.weapons = {}            # weapon id -> level
         self.weapon_state = {}       # weapon id -> per-weapon state
