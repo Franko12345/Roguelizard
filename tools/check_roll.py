@@ -20,7 +20,7 @@ import pygame
 pygame.init()
 from pygame import Vector2
 from lagarto.render import display
-from lagarto.core import fonts, config as C
+from lagarto.core import fonts, config as C, palette
 from lagarto.game.loop import Game
 from lagarto.input.controllers import make_controllers
 display.init()
@@ -112,6 +112,28 @@ assert p.roll_f == 0.0, f"roll_f never came back to 0 ({p.roll_f})"
 assert spread(p) > rest * 0.8, "the body never came back to length"
 print(f"  release: drawn squash overshoots to {squat_max:.2f}, settles at "
       f"{p.squash:.2f}")
+
+# 2b. the colour has to SAY the i-frames are up, and give the body back after
+g, p = fresh()
+rest_col = tuple(p.color)
+press(p)
+p.update(DT, g)                      # the roll starts on this frame, not the press
+apart = 0.0
+while p.rolling:
+    apart = max(apart, sum(abs(a - b) for a, b in zip(p.color, rest_col)))
+    p.update(DT, g)
+assert apart > 60, \
+    f"the body only shifted {apart:.0f} in colour while invulnerable -- nothing " \
+    f"on screen says the hit is going to miss"
+# and it must not be the hit-flash tint, or "untouchable" reads as "just hurt"
+assert tuple(p.color) != tuple(palette.lighten(rest_col, 0.8)), \
+    "the i-frame tint is the hit-flash whitening -- the two states collide"
+for _ in range(180):
+    p.update(DT, g)
+assert tuple(p.color) == rest_col, \
+    f"the body kept the i-frame tint after the roll ({p.color} vs {rest_col})"
+print(f"  i-frames: body shifts {apart:.0f} toward {C.ROLL_IFRAME_COLOR} while "
+      f"invulnerable, back to {rest_col} after")
 
 g, p = fresh()
 press(p)

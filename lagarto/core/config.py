@@ -373,6 +373,11 @@ ROLL_SQUAT = 0.35        # -> ~0.75 desenhado: comprime de verdade
 ROLL_STRETCH = 1.42      # -> ~1.15 desenhado. Estica ALEM do neutro ao soltar --
                          # e o "relaxa" da dupla. Sem passar de 1.0 a volta e um
                          # retorno, nao uma mola
+ROLL_IFRAME_COLOR = (150, 225, 255)   # azul-gelo: le como "intocavel". NAO use
+                                      # branco -- hit_flash ja clareia o corpo, e
+                                      # "nao posso ser atingido" nao pode parecer
+                                      # "acabei de ser atingido"
+ROLL_IFRAME_MIX = 0.8    # quanto da cor de i-frame no auge (0..1)
 ROLL_LEG_PULL = 0.55     # pernas recolhidas no auge (menos que o antigo 0.45: sem
                          # bola pra formar, elas so precisam sair do caminho)
 ROLL_EASE = 30           # taxa de entrada na compressao. NUNCA snapado --

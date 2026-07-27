@@ -45,7 +45,11 @@ class Player(Lizard):
         # No hit set, on purpose: nothing about it touches an enemy.
         self.roll_time = 0.0
         self.roll_cd = 0.0
-        self.roll_f = 0.0         # 0..1 eased collapse of the fake roll
+        self.roll_f = 0.0         # 0..1 eased envelope of the squash/release
+        # Pristine colour to tint away from while the i-frames are up, same
+        # idiom AILizard uses for a friend fading out. `color` is what the body,
+        # the glow and the trail all read, so mutating it is the whole effect.
+        self.base_color = self.color
         self.clog = 0.0           # how buried in enemy bodies we are (collision.py)
         self.clog_f = 0.0         # smoothed, so the drag eases in/out
         # tail whip ("rabada"): a lateral lunge whose follow-through swings the tail
@@ -573,8 +577,16 @@ class Player(Lizard):
                                dt)
         if self.roll_f < 1e-3:
             self.roll_f = 0.0
+            self.color = self.base_color
             return
         f = self.roll_f
+        # Colour says "you cannot be hit right now". It rides the same envelope
+        # as the pose, so it arrives and leaves with the squash instead of
+        # needing a timer of its own, and it tints toward a COOL pale rather
+        # than white -- `hit_flash` already whitens the body, and "I am
+        # untouchable" must not read like "I just got hit".
+        self.color = palette.mix(self.base_color, C.ROLL_IFRAME_COLOR,
+                                 f * C.ROLL_IFRAME_MIX)
         if self.rolling:
             self.squat_bias = 1.0 - f * (1.0 - C.ROLL_SQUAT)
         else:
