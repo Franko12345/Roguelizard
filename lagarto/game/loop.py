@@ -102,6 +102,9 @@ class Game:
         self.step_once = False       # one-shot: advance the frozen AI exactly one tick
         self.combo_flash = 0.0
         self.pollen = 0
+        # per-RUN shop prices, keyed by item name: a purchase raises the price
+        # and it stays raised in every later camp (see state_camp._roll_shop)
+        self.shop_prices = {}
         self.hitstop = 0.0        # freeze frames on heavy impacts
         self.flash = 0.0          # brief white screen flash
         self.dt_last = C.DT       # boss.py's per-frame barrage tick reads this
@@ -417,7 +420,7 @@ class Game:
             return
         it = self.camp['shop'][i]
         it['fn'](self)
-        it['cost'] = int(it['cost'] * 1.6)
+        it['cost'] = self.shop_prices[it['name']] = int(it['cost'] * C.SHOP_PRICE_MULT)
         self.camp['msg'] = it['name']
         self.camp['msg_t'] = 1.4
 

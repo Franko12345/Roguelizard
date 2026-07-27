@@ -15,7 +15,8 @@ from ...creatures.ai import burrow as burrow_ai
 from ...creatures.ai import grapple as grapple_ai
 from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir
 from ...creatures.base import TAIL_SPRING_STIFFNESS
-from .patterns import PATTERNS, _tick_barrage, _tick_spiral, _tick_fire_breath, default_phases
+from ...combat.emitter import _tick_barrage, _tick_spiral, _tick_fire_breath
+from .patterns import PATTERNS, default_phases
 from .telegraph import TELEGRAPHS
 from .personality import default_personality
 
@@ -161,7 +162,7 @@ class BossAI:
                 self._windup_target = Vector2(target.pos)
                 select = PATTERNS[pid].get('select')
                 if select:
-                    select(b, game, target)
+                    select(b, game, target, PATTERNS[pid])
                 return Vector2(), 0.0
             speed = C.BOSS_APPROACH_SPEED * speed_mul if dist > 240 else 0.0
             return to, speed
@@ -180,7 +181,7 @@ class BossAI:
                     self.state = 'grappling'
                     self._grapple_seen_windup = False
                     return Vector2(), 0.0
-                pat['fn'](b, game, target)
+                pat['fn'](b, game, target, pat)   # the row IS the emitter's dials
                 b.squat_bias = 1.4   # release the coil
                 if self.pattern_id == 'summon':
                     self.summon_cd = C.BOSS_SUMMON_CD

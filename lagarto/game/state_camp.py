@@ -114,7 +114,7 @@ def _roll_shop(game):
                      and progression.unlocked(game.meta, 'charm', c.id)]
             if avail:
                 pl.gain_charm(random.choice(avail), g)
-    return [
+    items = [
         dict(name='Nectar de Cura', desc='+40 vida', cost=12, hue=140, icon='health', fn=heal),
         dict(name='Vitalidade', desc='+20 vida maxima', cost=28, hue=5, icon='health', fn=vitality),
         dict(name='Vigor', desc='+15% dano das armas', cost=32, hue=0, icon='might', fn=might),
@@ -122,6 +122,11 @@ def _roll_shop(game):
         dict(name='Charm', desc='adaptacao p/ um slot', cost=150, hue=280, icon='nectar', fn=charm),
         dict(name='Ovo de Amigo', desc='aliado temporario', cost=40, hue=270, icon='legs', fn=egg),
     ]
+    # o dict do camp e descartado a cada camp; o preco nao. Game.shop_prices
+    # guarda o que ja encareceu nesta run (Game._apply_buy escreve nele).
+    for it in items:
+        it['cost'] = game.shop_prices.get(it['name'], it['cost'])
+    return items
 
 
 def _camp_drop_off(game, delay):

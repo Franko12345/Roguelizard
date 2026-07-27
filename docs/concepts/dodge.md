@@ -26,7 +26,7 @@ dealing no damage and by not throwing you forward, which in a bullet-hell is
 usually *toward* whoever is shooting.
 
 Nothing about the investida changed. See
-[ADR-0012](../adr/0012-two-dodge-verbs.md) for the decision and the registered
+[ADR-0013](../adr/0013-two-dodge-verbs.md) for the decision and the registered
 risk: if going forward does not punish enough, the investida is still the
 optimal dodge and the rolamento dies as a button.
 

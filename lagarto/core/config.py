@@ -230,6 +230,9 @@ CAMP_DROP_DUR = 0.40     # duracao da queda de cada peca
 CAMP_TENT_DELAY = 0.12   # a barraca cai primeiro
 CAMP_DOOR_DELAY = 0.30   # 1a porta; as outras escalonam por CAMP_DOOR_STAGGER
 CAMP_DOOR_STAGGER = 0.14
+# o preco de um item da loja sobe a cada compra e PERSISTE pela run inteira
+# (era 1.6x resetando a cada camp -- dava pra farmar cura barata pra sempre)
+SHOP_PRICE_MULT = 1.25
 
 # --- ritmo das telas de jogo (level-up / acampamento) ---------------------- #
 # Estados que animam a propria entrada/saida (veu + dropdown + absorcao):
