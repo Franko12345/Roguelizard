@@ -118,8 +118,19 @@ def telegraph_rain(surf, cam, b, ai, prog, col, blink):
     The points are picked at windup START (see ``_select_arms_rain`` in
     patterns.py) so the telegraph can draw them for the entire windup --
     this is the >= 27 frames rule from enemy-behaviors.md.
+
+    ``b.mark_r`` lets a non-boss borrow this drawer at its own size (the
+    ANTECIPADOR's lead point, the MORTEIRO's patch); a boss leaves it 0 and
+    gets the arms-rain radius it always had. That ring is drawn at FULL size
+    from the first frame -- the growing circle understates the danger zone
+    while it grows, and for a common enemy whose whole pitch is "you are
+    standing in it" that is the one thing the mark may not do (same rule the
+    bomber's fuse footprint follows). The urgency lives in the line and the
+    glow, which already scale with ``prog``.
     """
-    r = int(C.BOSS_ARMS_RAIN_RADIUS * cam.zoom * (0.3 + 0.7 * prog))
+    mark = getattr(b, 'mark_r', 0)
+    r = int(mark * cam.zoom) if mark else \
+        int(C.BOSS_ARMS_RAIN_RADIUS * cam.zoom * (0.3 + 0.7 * prog))
     for pt in getattr(b, '_rain_points', []):
         psp = cam.w2s(pt)
         pygame.draw.circle(surf, col, psp, r,

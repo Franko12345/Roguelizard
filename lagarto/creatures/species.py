@@ -100,6 +100,28 @@ SPECIES = {
                                                         tick=C.VENOM_PUDDLE_TICK)),
                                   angular_damping=0.3, linear_damping=0.25, weight=1.0)),
 
+    # ---- issue #104: os dois habitos que o rolamento (#103) criou ---------- #
+    # ANTECIPADOR: mira liderando -> pune rolar por reflexo.
+    # MORTEIRO: poca que arma com atraso -> pune investir na cara.
+    'sniper': dict(role='enemy', xp=8, score=70, grants=None,
+                   genome=Genome(name='sniper', size=0.92, length=1.15, leg_count=4,
+                                 hue=172, sat=0.75, val=0.95, speed=0.9,
+                                 behavior='lead', hp=6, extra_eyes=2, antennae=True,
+                                 diet=('prey',),
+                                 shot=dict(fn=emitter.aimed_barrage, lead=C.SNIPER_LEAD,
+                                           shots=C.SNIPER_SHOTS, gap=C.SNIPER_GAP,
+                                           shot_speed=C.SNIPER_SPEED, dmg=C.SNIPER_DMG,
+                                           radius=6),
+                                 angular_damping=0.35, linear_damping=0.3, weight=1.1)),
+    'mortar': dict(role='enemy', xp=8, score=70, grants=None,
+                   genome=Genome(name='mortar', size=1.1, girth=1.3, length=0.8,
+                                 leg_count=6, hue=330, sat=0.8, val=0.9, speed=0.72,
+                                 behavior='mortar', hp=8, spore_sacs=True, diet=(),
+                                 # count/spread are read by emitter._select_arms_rain:
+                                 # one patch, noised, picked at the START of the arm
+                                 shot=dict(count=1, spread=C.MORTAR_SPREAD),
+                                 angular_damping=0.45, linear_damping=0.4, weight=1.6)),
+
     # ---- phase B4: new procedural BODIES + their own mechanics ------------ #
     # CENTOPEIA: a segmented burrower (Isaac's Para-Bite/Moles). Dives, then
     # ambushes from a telegraphed spot -- punishes camping and straight lines.
@@ -189,6 +211,12 @@ LORE = {
     'venomer': ('ENVENENADOR', 'Cospe veneno onde voce esta e deixa uma poca que '
                                'corroi. Nao mira para acertar, mira para tomar o '
                                'terreno.'),
+    'sniper':  ('ANTECIPADOR', 'Nao atira em voce: atira no lugar para onde voce '
+                               'esta indo. A marca no chao mostra o ponto — quem '
+                               'rola por reflexo rola pra dentro dela.'),
+    'mortar':  ('MORTEIRO', 'Marca o chao e so depois a poca nasce. Fecha o ponto '
+                            'de pouso: investir na cara dele e terminar dentro do '
+                            'que ele armou.'),
     'centipede': ('CENTOPEIA', 'Corpo em aneis com dezenas de patas. Caça na '
                                'superficie, entao mergulha e reaparece embaixo de '
                                'quem fica parado. O anel no chao mostra onde vai aflorar.'),
