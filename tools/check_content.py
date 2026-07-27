@@ -208,9 +208,23 @@ e = species.make('mortar', MID + Vector2(330, 0))
 tick = BEHAVIORS['mortar']
 armed_at = None
 saw_mark = False
+max_lift = 0.0
+shell_seen = 0
 for i in range(900):
     tick(e, g, DT, p)
     e.shoot_cd = max(0.0, e.shoot_cd - DT)
+    # The puddle is no longer conjured by a timer: the MORTEIRO THROWS a shell
+    # and the payload rides its on_death. So the check has to fly the shell,
+    # which is the better test anyway -- it proves the thing in the air and the
+    # footprint on the ground are the same event.
+    for pr in list(g.projectiles):
+        shell_seen += 1
+        pr.update(DT, g)
+        max_lift = max(max_lift, pr.lift)
+        if pr.dead:
+            for fn in pr.on_death:
+                fn(pr, g)
+            g.projectiles.remove(pr)
     if e.shoot_charge > 0 and getattr(e, '_rain_points', None):
         if not saw_mark:
             saw_mark = True
@@ -246,8 +260,16 @@ assert len(g.puddles) == 1 and g.puddles[0].pos.distance_to(mark_pt) < 1e-6, \
     f"the puddle did not land on the marked spot ({len(g.puddles)} puddles)"
 arm_frames = C.MORTAR_ARM / DT
 assert arm_frames >= 27, f"the footprint only shows for {arm_frames:.0f} frames"
+# it has to LOOK thrown: a shell in the air, lifted off the ground, not a
+# puddle that appears when a timer runs out
+assert shell_seen > 0, "no shell was ever in the air -- the puddle just appeared"
+assert max_lift > C.MORTAR_ARC * 0.8, \
+    f"the shell only rose {max_lift:.0f} px of {C.MORTAR_ARC} -- it slid along " \
+    f"the floor instead of being lobbed"
 print(f"  footprint: {ring_px}/72 directions drawn for {arm_frames:.0f} frames "
       f"({mark_pt.distance_to(e.pos):.0f} px from its own body), then one puddle on the mark")
+print(f"  lob: the shell arcs {max_lift:.0f} px up and lands on the mark, "
+      f"{C.MORTAR_ARM}s of flight on a {C.MORTAR_CD}s cadence")
 
 # --------------------------------------------------------------------------- #
 # 5. an effect can never outlive the cooldown that reapplies it                #

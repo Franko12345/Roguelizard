@@ -63,9 +63,15 @@ assert not p.dashing, "the roll must not report as a dash (that IS the damage fl
 # holding the button cannot chain a second roll before the cooldown
 frames = 1
 peak = spread(p)                     # tightest the body gets while the roll runs
+# `squash` is what gets DRAWN: base.py consumes squat_bias into it through a
+# smoothed approach, then decays squat_bias for the next frame. Reading
+# squat_bias after update() therefore reports a post-decay value that nothing
+# renders -- measure the thing on screen.
+squat_min = p.squash                 # deepest compression actually drawn
 while p.rolling and frames < 60:
     p.update(DT, g)
     peak = min(peak, spread(p))
+    squat_min = min(squat_min, p.squash)
     frames += 1
 want = round(C.ROLL_TIME / DT)
 assert abs(frames - want) <= 2, f"roll lasted {frames} frames, expected ~{want}"
@@ -75,32 +81,44 @@ p.hit_flash = 0.0            # the hit above never landed, so nothing to clear
 assert p.hurt(g, Vector2(1, 0), 10) is True, "i-frames outlived the roll"
 assert p.health < h0, "hurt() said it landed but no health moved"
 
-# 2. the disc: collapsed to ~one vertebra, and eased into it
-assert peak < rest * 0.55, \
-    f"body did not collapse: {peak:.1f}px across vs {rest:.1f}px at rest"
-assert peak < p.max_r * 2.4, \
-    f"the disc is {peak:.1f}px across, wider than the body is thick " \
-    f"({p.max_r * 2.0:.1f}px)"
-print(f"  disc: {rest:.0f}px of body -> {peak:.0f}px, max_r {p.max_r:.0f}")
+# 2. squash then stretch -- a spring, not a ball.
+# The first version collapsed the spine into a spinning disc and this check
+# asserted exactly that. Playtest read it as "it just curls you up": the body
+# became a blob and you could not tell which way you had gone, which is the one
+# thing a dodge has to show. So the assertions are inverted on purpose -- the
+# body must compress WITHOUT losing its shape, and it must overshoot on release.
+assert p.spine.link == p.spine.link0, \
+    "the spine link is being scaled again -- that is the old ball collapse"
+assert squat_min < 0.9, \
+    f"the body barely compressed: drawn squash bottomed at {squat_min:.2f}"
+assert peak > rest * 0.6, \
+    f"the body curled into a {peak:.0f}px blob from {rest:.0f}px -- it should " \
+    f"squash along its own length, not collapse"
+print(f"  squash: drawn squash {squat_min:.2f} at the bottom (rest ~1.00), body "
+      f"still {peak:.0f}px of {rest:.0f}px long")
+
+# release: the drawn squash has to pass BACK THROUGH neutral and overshoot,
+# then settle. Without the overshoot it is a return, not a spring.
+squat_max = 0.0
+for _ in range(180):
+    p.update(DT, g)
+    squat_max = max(squat_max, p.squash)
+assert squat_max > 1.03, \
+    f"the drawn squash never went past neutral on release (peaked at " \
+    f"{squat_max:.2f}) -- that is a return, not a spring"
+assert abs(p.squash - 1.0) < 0.03, \
+    f"squash settled at {p.squash:.2f} instead of neutral"
+assert p.roll_f == 0.0, f"roll_f never came back to 0 ({p.roll_f})"
+assert spread(p) > rest * 0.8, "the body never came back to length"
+print(f"  release: drawn squash overshoots to {squat_max:.2f}, settles at "
+      f"{p.squash:.2f}")
 
 g, p = fresh()
 press(p)
 p.update(DT, g)
 first = p.roll_f
-assert 0.0 < first < 0.9, f"collapse snapped on frame 1 (roll_f={first:.2f})"
-assert p.spine.link > p.spine.link0 * C.ROLL_LINK * 1.5, \
-    "the link snapped straight to its collapsed value"
-print(f"  eased: roll_f frame 1 = {first:.2f}, link "
-      f"{p.spine.link:.1f} of {p.spine.link0:.1f}")
-
-# 3. the collapse UNWINDS on its own, and gives the link back exactly
-press(p, held=False)
-for _ in range(180):
-    p.update(DT, g)
-assert p.roll_f == 0.0, f"roll_f never came back to 0 ({p.roll_f})"
-assert p.spine.link == p.spine.link0, \
-    f"link left shrunk: {p.spine.link} != {p.spine.link0}"
-assert spread(p) > rest * 0.8, "the body never uncurled"
+assert 0.0 < first < 0.9, f"the compression snapped on frame 1 (roll_f={first:.2f})"
+print(f"  eased: roll_f frame 1 = {first:.2f}")
 
 # 4. the cooldown really gates the frequency (energy aside)
 g, p = fresh()
