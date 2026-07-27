@@ -66,6 +66,33 @@ play (RSS 364 → 470 MB), which stalled long sessions. Today:
 
 See [ADR-0009](../adr/0009-glow-cache-quantized-keys.md).
 
+## The bullet body is a cached sprite — same key discipline
+
+A bullet used to cost ~11 primitives: up to 7 trail circles, each with a
+`palette.mix` recomputed every frame, one additive glow blit, and 3 body
+circles. At the ~100 bullets a bullet-hell round puts on screen, that was the
+most expensive thing being drawn.
+
+- **The trail is one line**, from the oldest of 3 kept positions to the
+  current one. At 100 bullets a seven-circle fading tail reads as noise
+  anyway.
+- **The body is a cached sprite**, keyed on `(even radius, side)` and capped at
+  `_BODY_MAX = 96` with `clear()` on overflow. Two colour variants exist in
+  total, because the body colour encodes the side and not the creature
+  ([ADR-0014](../adr/0014-bullet-colour-encodes-side.md)) — that is the *only*
+  reason this key is affordable. Do not reintroduce a continuous radius or a
+  per-creature colour into it; that is the same trap
+  [ADR-0009](../adr/0009-glow-cache-quantized-keys.md) is about.
+- `projectile.body_stats()` returns `(entries, hits, misses, clears)`, the same
+  diagnostics as `palette.glow_stats()`.
+
+Measured with 92 live bullets (`tools/check_projectile.py`, steady state):
+**draw 1.13 ms → 0.22 ms**, step 0.07 ms — 0.28 ms of the 16.6 ms frame. The
+check fails if it ever passes 4 ms.
+
+Collision is not the bottleneck and was left alone: a hostile bullet only tests
+against 1-2 players.
+
 ## No full-screen `Surface` per frame
 
 `ui._tint(surf, colour, alpha)` is the only path for darkening /
@@ -132,5 +159,6 @@ Two traps, both hit while doing it:
 
 - [ADR-0002](../adr/0002-fixed-timestep-decoupled-render.md) — the loop.
 - [ADR-0009](../adr/0009-glow-cache-quantized-keys.md) — the glow key.
+- [Projectile](./projectile.md) — what the bullet sprite cache draws.
 - [Input buffer](./input-buffer.md) — the sim/render decoupling implies it.
 - [UI legibility](./ui-legibility.md) — text cache follows the same rule.

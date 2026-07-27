@@ -2,7 +2,7 @@
 
 from ...audio import engine as audio
 from ...core.mathutil import random_dir
-from ..projectile import Projectile
+from ..projectile import Projectile, homing
 from .base import Weapon
 
 
@@ -29,7 +29,7 @@ class Ferrao(Weapon):
             pr = Projectile(mouth, v, self.color,
                             dmg=int(round(lv['dmg'] * player.might)),
                             radius=6, hostile=False, life=3.0)
-            pr.homing = True
+            pr.on_update.append(homing)
             game.spawn_projectile(pr)
         game.fx.spark_burst(mouth, self.color, 3, 150)
         audio.play('w_homing', 0.28)

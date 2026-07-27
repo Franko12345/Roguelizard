@@ -179,6 +179,22 @@ its own tuning up: the caller passes **dials** (a plain dict; the boss passes
 its `PATTERNS` row). See [ADR-0012](docs/adr/0012-shared-pattern-emitter.md).
 _Avoid_: pattern library, bullet factory, spawner.
 
+**Projectile**:
+Every shot in the game, from one class (`lagarto/combat/projectile.py`).
+`hostile=True` hits players, `False` hits creatures. Its body colour encodes
+that **side** and nothing else — the firing creature's colour survives only in
+the halo, bosses included (see
+[ADR-0014](docs/adr/0014-bullet-colour-encodes-side.md)).
+_Avoid_: bullet, shot, bala (fine in speech, but the field and the docs say
+projectile).
+
+**Hook**:
+A plain function appended to one of a Projectile's three lists — `on_update`
+(movement), `on_hit`, `on_death`. No base class, no registry: a modifier IS the
+function. The player stacks hooks; an enemy shot picks **one** movement and
+stops there. See [Projectile](docs/concepts/projectile.md).
+_Avoid_: modifier class, behaviour, component, plugin.
+
 ### Run structure
 
 **Round**:

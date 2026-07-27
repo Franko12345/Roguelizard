@@ -24,6 +24,7 @@ regression is visible rather than merely detected.
 | `check_oscillators.py` | Each `PhaseOscillator` reproduces the inline sine it replaced, exactly. |
 | `check_windup.py` | The action gates fire once per press and never repeat while held. |
 | `check_roll.py` | The Rolamento costs, gives i-frames, deals no damage, and collapses into a disc — eased, and it gives the resting `spine.link` back. |
+| `check_projectile.py` | The three hooks fire and are the ONLY path; a bullet's body reads its side and never its species; the sprite cache stays capped; ~100 bullets are timed against the frame. |
 | `check_music.py` | The stem mix, against a REAL mixer (the dummy audio driver no-ops every call). |
 | `check_difficulty.py` | Early waves unchanged, late waves actually ramp. |
 | `check_shop_prices.py` | A shop price raised in one camp is still raised in the next. |

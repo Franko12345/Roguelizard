@@ -56,6 +56,8 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 
 - [Combat](docs/concepts/combat.md) — dash, whip (rabada), tongue,
   soft-contact, clog.
+- [Projectile](docs/concepts/projectile.md) — a bala e seus três ganchos
+  (`on_update` / `on_hit` / `on_death`).
 - [Weapon](docs/concepts/weapon.md) · [Item](docs/concepts/item.md) ·
   [Charm](docs/concepts/charm.md) · [Synergy](docs/concepts/synergy.md).
 - [Hitbox](docs/concepts/hitbox.md) — corpo inteiro + cabeça é ponto
@@ -63,6 +65,8 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 - [ADR-0006](docs/adr/0006-soft-player-contact.md) — contato macio.
 - [ADR-0008](docs/adr/0008-might-scales-all-damage.md) — `might` escala
   armas + dash + rabada.
+  [ADR-0014](docs/adr/0014-bullet-colour-encodes-side.md) — cor da bala
+  codifica o lado, não a criatura.
 
 ### Run e progressão
 

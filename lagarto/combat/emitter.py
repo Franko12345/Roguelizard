@@ -26,7 +26,7 @@ from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
-from .projectile import spit as game_spit
+from .projectile import spit as game_spit, bounce
 
 
 def radial_burst(shooter, game, target, dials):
@@ -373,6 +373,9 @@ def bouncing_bullets(shooter, game, target, dials):
                        effect=None, speed=dials.get('shot_speed', C.MURALHA_BOUNCE_SPEED), radius=7)
         pr.bounces_left = dials.get('bounces', C.MURALHA_BOUNCE_BOUNCES)
         pr.bounce_damp = 0.8
+        # ONE movement modifier and no more: enemy shots pick a verb, the player
+        # is the only side that stacks them (see docs/concepts/projectile.md).
+        pr.on_update.append(bounce)
         game.spawn_projectile(pr)
     game.fx.spark_burst(mouth, (255, 255, 80), 14, 240)
     audio.play('w_spit', 0.4)
