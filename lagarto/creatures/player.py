@@ -545,40 +545,47 @@ class Player(Lizard):
             self.health = min(self.max_health, self.health + self.regen * dt)
 
     def _roll_pose(self, dt):
-        """Fake roll: the joints collapse onto each other into a spinning disc.
+        """Squash on the launch, stretch on the release -- a spring, not a ball.
 
-        Not a real coil, because a real one cannot close: 11 joints at the
-        spine's ``bend=26`` limit is ~286 degrees of curvature, so the ball
-        stays an arc. Shrinking ``spine.link`` closes it instead, and needs no
-        rebuild -- ``Spine.resolve`` reads the link fresh every frame (the
-        ``orbital`` body plan does the same trick permanently, at ``maxr*0.3``).
-        Legs come in with ``leg_pull``, the body compresses with ``squat_bias``.
+        This started life as a *fake roll*: shrink ``spine.link`` so the joints
+        collapse into a disc, then spin that disc. It worked as an effect and
+        failed as a read -- the lizard curled up and the gesture disappeared
+        into a blob, which is exactly what a dodge must not do, since the whole
+        point is seeing which way you went.
 
-        Eased in AND out, same contract as ``squat_bias``: an instant collapse
-        teleports the body. The spin is a per-frame rotation of every joint
-        around the head -- ``resolve`` derives each direction from the previous
-        frame's positions, so the rotation persists rather than being undone
-        (the same reason ``_whip_arc`` survives to draw time).
+        Two beats instead:
+
+        * **compress** while the roll is live -- ``squat_bias`` down to
+          ``C.ROLL_SQUAT``, legs tucked out of the way.
+        * **relax** when it ends -- ``squat_bias`` releases *past* neutral to
+          ``C.ROLL_STRETCH`` and settles back. The overshoot is the difference
+          between a spring letting go and a value returning to 1.0.
+
+        ``roll_f`` is the same eased envelope as before (in AND out, never
+        snapped), so the same knob still governs how sharp the whole thing is.
+        The spine keeps its link, so the body stays a body.
         """
+        # Fast in, slow out: the compression has to arrive inside a 0.15 s roll,
+        # but the release is the half anyone actually watches, and letting it
+        # decay at the same rate starves the overshoot (see ROLL_RELEASE_EASE).
         self.roll_f = approach(self.roll_f, 1.0 if self.rolling else 0.0,
-                               C.ROLL_EASE, dt)
+                               C.ROLL_EASE if self.rolling else C.ROLL_RELEASE_EASE,
+                               dt)
         if self.roll_f < 1e-3:
             self.roll_f = 0.0
-            self.spine.link = self.spine.link0
             return
         f = self.roll_f
-        self.spine.link = self.spine.link0 * (1.0 - f * (1.0 - C.ROLL_LINK))
-        self.squat_bias = 1.0 - f * (1.0 - C.ROLL_SQUAT)
+        if self.rolling:
+            self.squat_bias = 1.0 - f * (1.0 - C.ROLL_SQUAT)
+        else:
+            # releasing: f now decays 1 -> 0, so the stretch decays with it
+            self.squat_bias = 1.0 + f * (C.ROLL_STRETCH - 1.0)
         self.leg_pull = 1.0 - f * (1.0 - C.ROLL_LEG_PULL)
-        js = self.spine.joints
-        spin = C.ROLL_SPIN * f * dt
-        for i in range(1, len(js)):
-            js[i] = js[0] + (js[i] - js[0]).rotate(spin)
         # ``leg_pull`` alone is not enough: a foot is PLANTED and only takes a
         # step once the body has dragged its rest spot ``step_len`` away, which
-        # over a 0.15 s roll never completes -- the legs stayed behind the disc
-        # as four straight sticks. Reel the feet in with the body instead, on
-        # the same ease, and cancel any step in flight so the two don't fight.
+        # over a 0.15 s roll never completes -- the legs trailed behind as four
+        # straight sticks. Reel the feet in on the same ease, and cancel any
+        # step in flight so the two don't fight.
         gather = min(1.0, C.ROLL_EASE * dt * f)
         for leg in self.legs:
             leg.stepping = False
