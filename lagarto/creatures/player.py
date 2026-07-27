@@ -413,21 +413,28 @@ class Player(Lizard):
             game.shake(5)
 
         # --- rolamento: the second dodge (issue #103) ---------------------- #
-        # Invulnerable like the investida, but it wins on FREQUENCY instead of
-        # impact: no damage, no set of hits, and no launch impulse -- steer stays
-        # live, so a roll is steerable, while the investida commits you forward
-        # (in bullet hell, usually toward whoever is shooting).
+        # Invulnerable like the investida, and it LAUNCHES like it too -- the
+        # point of the roll is escaping a bullet, and escaping means covering
+        # ground. It first shipped as a steer multiplier with no impulse; at
+        # 1.9x for 0.15 s that moved the lizard about a third of its own body
+        # and read as "tried to roll and did not dash".
+        # What is left of the asymmetry is the part that matters: the roll deals
+        # NO damage, hits nobody, costs a quarter of the energy and comes back
+        # roughly twice as often. The investida is the attack, the roll is the
+        # exit.
         self.roll_cd = decay(self.roll_cd, dt)
         self.roll_time = decay(self.roll_time, dt)
         if c.roll_edge and self.roll_cd <= 0 and self.energy >= C.ROLL_COST:
             c.consume('roll')
+            move = c.move if c.move.length_squared() > 0.1 else self.facing
+            self.vel = safe_norm(move) * self.max_speed * C.ROLL_SPEED
             self.roll_time = C.ROLL_TIME
             self.roll_cd = C.ROLL_TIME + C.ROLL_CD    # cd starts when the roll ends
             self.energy -= C.ROLL_COST
             audio.play('dash', 0.45)
             game.fx.dust(self.pos)
+            game.fx.burst(self.pos, self.color, 8, 150)
         if self.rolling:
-            speed_mul *= C.ROLL_SPEED
             game.fx.trail(self.pos, self.color)
         self._roll_pose(dt)
 
