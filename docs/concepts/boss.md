@@ -61,10 +61,16 @@ personality × mood, not `random.choice`. Mood also scales
 `tail_spring.stiffness` — calm bosses look loose, cornered bosses look
 tense. Zero draw code new.
 
-## Two things you must set for a boss
+## Three things you must set for a boss
 
 - **`gen.knockback = 0`** — projectiles used to punt bosses out of their
   own approach, effectively interrupting the fight for free.
+- **`boss.is_boss = True`** — not just a HUD flag. It is what buys resistance
+  to interruption: a floor under `apply_slow` (a slow stack can no longer
+  switch the movement patterns off) and a damped body reaction to being hit, so
+  the boss reads as massive instead of staggering. Both rules are in
+  [Combat](./combat.md); a boss body without this flag is a big mook that any
+  Feromônio can park.
 - Body scale of ~2.3× (2.3 × 1.35 for the final tier). "4×" mentioned in
   design docs is flavour text — the numbers on the wire.
 
