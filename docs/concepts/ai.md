@@ -1,7 +1,22 @@
 # AI
 
-`AILizard` dispatches per `genome.behavior`. Each branch is a small
+`AILizard` dispatches twice: on `kind` (which side it is on) and, for enemies,
+on `genome.behavior` (what it does with the frame). Each branch is a small
 steer/attack loop — no state machine class hierarchy.
+
+## Kinds
+
+`AILizard.update` picks one of four branches by `self.kind`:
+
+- **`prey`** — flees the nearest threat (player or predator), else wanders.
+- **`enemy`** — walks at its target and runs the `genome.behavior` tick below.
+  Its target is `self.aggro` if something taunted it, else the nearest player.
+- **`friend`** — the egg-hatched ally: fights the nearest enemy, steals its
+  aggro on a landed hit, otherwise follows the player. Temporary (`life`).
+- **`turret`** — a [Deployable](./deployable.md), and the only kind that does
+  not move: no steering branch at all (its genome has `speed = 0`), just aim,
+  taunt and fire `genome.shot` through the emitter. It is planted by the
+  Torreta [Weapon](./weapon.md) and lives in `game.friends` with the allies.
 
 ## Behavior branches
 
@@ -78,5 +93,6 @@ stay on `_apply_mood_pose`.
 - [Enemy behaviors](./enemy-behaviors.md) — phase-2 branches.
 - [Body plan](./body-plan.md) — plan-specific behaviors.
 - [Combat](./combat.md) — how AI hits and gets hit.
+- [Deployable](./deployable.md) — the `turret` kind and what plants it.
 - [Procedural animation](./procedural-animation.md) — where posing sits in
   the Intent / Action / Reaction / Follow-through chain.

@@ -37,6 +37,11 @@ def _launch(pr, game, dials):
     dials instead of a new function. One and no more: the player is the only
     side that stacks modifiers (see ``docs/concepts/projectile.md``).
     """
+    # The SIDE is a dial too, and it belongs to the shot rather than to the
+    # pattern: the Torreta (#111) fires the same fan an enemy does, only its
+    # bullets have to hit creatures and read as friendly (ADR-0014). Defaults to
+    # whatever the pattern built, i.e. hostile -- no existing caller changes.
+    pr.hostile = dials.get('hostile', pr.hostile)
     mod = dials.get('mod')
     if mod is not None:
         pr.bounces_left = dials.get('bounces', 0)
