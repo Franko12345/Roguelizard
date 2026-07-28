@@ -37,6 +37,11 @@ def _launch(pr, game, dials):
     dials instead of a new function. One and no more: the player is the only
     side that stacks modifiers (see ``docs/concepts/projectile.md``).
     """
+    # The SIDE is a dial too, and it belongs to the shot rather than to the
+    # pattern: the Torreta (#111) fires the same fan an enemy does, only its
+    # bullets have to hit creatures and read as friendly (ADR-0014). Defaults to
+    # whatever the pattern built, i.e. hostile -- no existing caller changes.
+    pr.hostile = dials.get('hostile', pr.hostile)
     mod = dials.get('mod')
     if mod is not None:
         pr.bounces_left = dials.get('bounces', 0)
@@ -479,23 +484,34 @@ def bouncing_bullets(shooter, game, target, dials):
 
 
 def grid_of_fire(shooter, game, target, dials):
-    """Grid of fire cells on the ground with small gaps. Creates Puddle hazards."""
+    """Grid of fire cells on the ground with small gaps. Creates Puddle hazards.
+
+    The grid is anchored to the ACTIVE ARENA (``game.arena_bounds``), never to
+    the world origin: the arena is centred on the boss, so a grid measured from
+    (0, 0) lands in the map's top-left corner and hits nobody. Any shooter
+    without an arena (the emitter is shared -- see ADR-0012) gets a box around
+    itself of the same size as A Muralha's arena.
+    """
     from . import weapons
     cell = dials.get('cell', C.MURALHA_GRID_CELL)
     dmg = dials.get('dmg', C.MURALHA_GRID_DMG)
     tick = dials.get('tick', C.MURALHA_GRID_TICK)
     life = dials.get('life', C.MURALHA_GRID_LIFE)
-    # Arena is 700x500, wall on right. Grid covers left portion
-    cols = 700 // cell
-    rows = 500 // cell
+    if game.arena_bounds:
+        x0, y0, x1, y1 = game.arena_bounds
+    else:
+        x0, y0 = shooter.pos.x - 450, shooter.pos.y - 320
+        x1, y1 = shooter.pos.x + 450, shooter.pos.y + 320
+    cols = int((x1 - x0) // cell)
+    rows = int((y1 - y0) // cell)
     for cx in range(cols):
         for cy in range(rows):
             # Leave small gaps - skip some cells
             if (cx + cy) % 3 == 0:  # 1/3 are gaps
                 continue
-            x = cx * cell + cell // 2
-            y = cy * cell + cell // 2
-            pos = Vector2(x, y)
-            game.spawn_puddle(weapons.Puddle(pos, cell * 0.45, dmg, life, 180,
+            pos = Vector2(x0 + cx * cell + cell // 2, y0 + cy * cell + cell // 2)
+            # hue 18 = the magma orange of sky_slam's puddle; it read cyan for
+            # as long as nobody could see it
+            game.spawn_puddle(weapons.Puddle(pos, cell * 0.45, dmg, life, 18,
                                              hostile=True, tick=tick))
     game.fx.burst(shooter.pos, (255, 80, 40), 30, 200)

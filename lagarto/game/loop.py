@@ -513,7 +513,6 @@ class Game:
         back = copy.copy(proj)
         back.vel = -Vector2(proj.vel)
         back.pos = Vector2(proj.pos)
-        back.trail = []
         self.spawn_projectile(back, mirror=False)      # mirror=False: no recursion
 
     def spawn_puddle(self, puddle):

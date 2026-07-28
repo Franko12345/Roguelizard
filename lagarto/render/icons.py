@@ -619,6 +619,7 @@ ICONS = {
     'cuspe': _drop, 'ferrao': _arrow, 'ferrao_charm': _arrow,  # issue #25: charm vs weapon
     'teia': _star, 'esporos': _bubbles,
     'feromonio': _rings, 'sopro': _fan, 'enxame': _orbit, 'acido': _puddle,
+    'torreta': _volley,          # the fan it plants, reusing the salva's darts
     # mutations / passives
     'health': _heart, 'speed': _bolt, 'dash': _arrow, 'energy': _bolt,
     'regen': _heart, 'xp': _star, 'tongue': _tongue, 'thorns': _spikes_icon,

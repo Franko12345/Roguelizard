@@ -12,7 +12,12 @@ import pygame
 
 from ..core import config as C
 from ..core import palette
-from ..core.mathutil import vfrom_angle, random_dir
+from ..core.mathutil import vfrom_angle, random_dir, angle_of
+
+# Half-angle of a directional spark burst. Small on purpose: the whole point of
+# a directional burst is that the angle IS the information, and a wide cone
+# reads as the same puff the omnidirectional call already makes.
+_CONE = 22.0
 
 
 class FX:
@@ -39,13 +44,22 @@ class FX:
             self._add(pos.x, pos.y, v.x, v.y, random.uniform(0.3, 0.6),
                       random.uniform(3, 6), color, 240, glow=True)
 
-    def spark_burst(self, pos, color, n, speed):
+    def spark_burst(self, pos, color, n, speed, direction=None, life=0.5):
+        """Sparks out of ``pos``. Omnidirectional by default -- an impact has no
+        heading. Pass ``direction`` (a Vector2) and the burst becomes a narrow
+        cone around it, which is what makes a bullet's backward sparks read as
+        motion instead of a puff. ``life`` is the longest one lives; they die
+        anywhere from half of it to all of it.
+        """
+        ang = angle_of(direction) if direction is not None else None
         for _ in range(n):
             if len(self.sparks) >= self.MAX_SPARKS:
                 self.sparks.pop(0)
-            v = random_dir(random.uniform(0.4, 1.0) * speed)
+            mag = random.uniform(0.4, 1.0) * speed
+            v = (random_dir(mag) if ang is None else
+                 vfrom_angle(ang + random.uniform(-_CONE, _CONE), mag))
             self.sparks.append([pos.x, pos.y, v.x, v.y,
-                                random.uniform(0.25, 0.5), 0.5, color])
+                                random.uniform(life * 0.5, life), life, color])
 
     def dust(self, pos):
         for _ in range(3):

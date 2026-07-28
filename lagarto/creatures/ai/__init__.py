@@ -1,4 +1,4 @@
-"""AI lizards: prey / enemy / friend, and the behaviour dispatch.
+"""AI lizards: prey / enemy / friend / turret, and the behaviour dispatch.
 
 ``AILizard`` owns the state every AI creature shares (aggro, wander, poison,
 slow, champion/boss hooks) and the drawing that only enemies need. What each
@@ -235,6 +235,26 @@ class AILizard(Lizard):
             else:
                 posing.apply_state_pose(self, self._pose_now('idle'), dt)
                 d = self.wander_dir(dt); speed = 0.45
+        elif self.kind == 'turret':
+            # A Deployable (docs/concepts/deployable.md): the one kind that does
+            # not move. There is no steering branch to write -- its genome has
+            # speed 0, so the `steer` below is already a no-op -- only aim, taunt
+            # and fire, and WHAT it fires is `genome.shot`, the same emitter
+            # pattern + dials every shooter uses (ADR-0012).
+            dials = self.genome.shot or {}
+            foe = game.nearest_enemy(self.pos, dials.get('range', 320))
+            posing.apply_state_pose(self, self._pose_now('attack' if foe else 'idle'), dt)
+            if foe is not None:
+                self.aggro = foe               # the pupils track what it shoots
+                self.aggro_t = C.AGGRO_TIME
+                if self.shoot_cd <= 0:
+                    self.shoot_cd = dials.get('gap', 1.2)
+                    dials['fn'](self, game, foe, dials)
+                    # the same taunt the ally does when it lands a hit: what the
+                    # turret buys is not damage, it is the horde walking at the
+                    # body you planted instead of at you
+                    foe.aggro = self
+                    foe.aggro_t = C.AGGRO_TIME
         elif self.kind == 'friend':
             leader = game.nearest_player(self.pos)
             foe = game.nearest_enemy(self.pos, 360)

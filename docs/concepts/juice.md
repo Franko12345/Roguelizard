@@ -56,8 +56,35 @@ Two of those are worth naming as general rules:
 Cost of all of it: 0.066 ms/frame while the tongue is out, 0.0002 ms when it
 is not.
 
+## Sparks: omnidirectional by default, a cone on request
+
+`FX.spark_burst(pos, color, n, speed, direction=None, life=0.5)` is the one
+spark primitive and about forty call sites share it. Left alone it throws
+sparks in every direction, which is what an impact wants — an impact has no
+heading.
+
+Pass `direction` (a Vector2) and the same call becomes a narrow cone around it.
+That exists for the [bullet](./projectile.md)'s backward sparks, where the angle
+*is* the information: it is what replaced the trail line, so a spread wide
+enough to look like a burst would say nothing. The cone half-angle is fixed at
+22° in `fx._CONE` rather than being a fifth argument — there is one directional
+caller, and a knob nobody turns is a knob that drifts.
+
+`life` is the longest a spark lives (they die anywhere from half of it to all of
+it). It is a parameter because it is half of the bullets' spark budget: bullet
+sparks go out at 0.2 s against the generic 0.5 s, and the difference is what
+keeps a hundred bullets from filling `MAX_SPARKS` and evicting everything else.
+The arithmetic and the measurements are in [Projectile](./projectile.md).
+
+**The pool is shared and it is capped.** `MAX_SPARKS = 260`, oldest dropped on
+overflow. Anything that emits *continuously* rather than on an event has to
+budget its occupancy against that, or it silently starves every other effect on
+screen.
+
 ## Related
 
+- [Projectile](./projectile.md) — the only directional caller of `spark_burst`,
+  and where the pool budget is worked out.
 - [UI screens](./ui-screens.md) — where drop-in + absorption compose.
 - [Combat](./combat.md) — where hit-stop is called, and the tongue's beats.
 - [Boss](./boss.md) — the 0.22 s freeze on boss death.
