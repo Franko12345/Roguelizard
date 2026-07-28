@@ -18,6 +18,7 @@ regression is visible rather than merely detected.
 |---|---|
 | `check_issues.py` | Walks every open issue and asserts a concrete marker for it. The index. |
 | `check_bosses.py` | Every `BOSS_POOL` entry, driven through all its phases and drawn. |
+| `check_sandbox_boss_bar.py` | A hand-spawned boss is mirrored onto `rounds.boss`, so its health bar paints real pixels and tracks HP; without the mirror both bars draw nothing, which is the control. Cleanup clears it, and the real wave path leaves the same observable. |
 | `check_camera.py` | The cached `w2s` transform equals the naive one after every mutation path. |
 | `check_tongue.py` | The drawn tongue tip IS the kinematic tip, at every phase. |
 | `check_tail_chain.py` | The tail ring-out travels base → tip; one write to `tail_spring` scales the whole chain. |
