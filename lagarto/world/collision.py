@@ -35,7 +35,12 @@ def _samples(creatures):
         # getting stuck behind it. Dropping them here (rather than filtering in
         # the pair loop) also keeps them out of the player's `clog` drag, which
         # is right -- you cannot be slowed by wading through something airborne.
-        if getattr(c, 'flying', False) or getattr(c, 'burrowed', False):
+        # A turret is absent for the opposite reason: it is planted (#111). If it
+        # took a push it would drift, and a Deployable that slides is no longer
+        # the thing the player chose a spot for -- so nothing shoves it and it
+        # shoves nothing, exactly like the flyers above.
+        if getattr(c, 'flying', False) or getattr(c, 'burrowed', False) \
+                or c.kind == 'turret':
             continue
         js = c.spine.joints
         rs = c.spine.radii

@@ -36,6 +36,13 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.combat import weapons as weplib
+chk(111, "deployable torreta", 'torreta' in weplib.WEAPONS
+    and "'turret'" in src(__import__('lagarto.creatures.ai', fromlist=['x']))
+    and _tu.returncode == 0,
+    "" if _tu.returncode == 0 else _tu.stderr.decode()[-90:])
 _ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.creatures.ai import BEHAVIORS as _beh
@@ -54,6 +61,12 @@ from lagarto.combat import projectile as projlib
 chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
     and _pj.returncode == 0,
     "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
+_ss = subprocess.run([sys.executable, 'tools/check_sandbox_store.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto import sandbox as _sb
+chk(107, "loja do sandbox", 'catalog = state_camp._roll_shop(g)' in src(_sb)
+    and 'catalog = g._roll_shop()' not in src(_sb) and _ss.returncode == 0,
+    "" if _ss.returncode == 0 else _ss.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)

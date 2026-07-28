@@ -39,7 +39,8 @@ wrong.
 - [Combat](./combat.md) — dash, whip, tongue, soft contact
 - [Dodge](./dodge.md) — the two dodge verbs and the fake roll
 - [Projectile](./projectile.md) — the one shot class and its three hooks
-- [Weapon](./weapon.md) — the 8 automatic attacks
+- [Weapon](./weapon.md) — the 9 automatic attacks
+- [Deployable](./deployable.md) — the body you plant: Torreta today
 - [Item](./item.md) — actives + mechanic-changing passives
 - [Charm](./charm.md) — permanent camp slot
 - [Synergy](./synergy.md) — named combos with Synergy Factor
