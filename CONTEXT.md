@@ -221,6 +221,16 @@ the halo, bosses included (see
 _Avoid_: bullet, shot, bala (fine in speech, but the field and the docs say
 projectile).
 
+**Slow**:
+A timed speed multiplier on a creature (`slow_mul` / `slow_t`), applied only
+through `Lizard.apply_slow` — Feromônio, the slow projectile, hostile puddles,
+a sting. Strongest source wins, longest timer wins. A [Boss](docs/concepts/boss.md)
+has a **slow floor** (`BOSS_SLOW_FLOOR`) and a cut duration, so a stack can
+never switch its movement patterns off; nobody else is capped. Distinct from the
+contact `clog` brake ([Combat](docs/concepts/combat.md)), which is pressure from
+bodies and not a status.
+_Avoid_: lentidão, debuff, stun (there is no stun in this game).
+
 **Hook**:
 A plain function appended to one of a Projectile's three lists — `on_update`
 (movement), `on_hit`, `on_death`. No base class, no registry: a modifier IS the

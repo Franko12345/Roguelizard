@@ -267,6 +267,57 @@ that reapplies it" — Ácido, venom puddle, sting. See
   to "buried in ~3 bodies". Measured after: 1 enemy ≈ 90%, 4 ≈ 68%,
   6 ≈ 65%.
 
+## Slow, and the boss floor
+
+`Lizard.apply_slow(mul, dur)` is the **only** entry point for a speed debuff,
+whoever casts it: Feromônio's aura, the slow projectile, a hostile `Puddle`'s
+`slow=` dials, a scorpion's sting, Rei Lagarto's scar. The stack rule is
+"strongest source wins, longest timer wins" (`min` on the multiplier, `max` on
+the timer), and `_speed_scale` multiplies the result straight into `steer`.
+
+A **boss** gets a floor, not immunity. `apply_slow` clamps each source to
+`C.BOSS_SLOW_FLOOR` (0.7) and cuts its duration by `C.BOSS_SLOW_TIME_MULT`
+(0.5) whenever `is_boss` is set. Clamping each source is enough: the stack
+combines with `min`, so the effective multiplier can never dip under the floor
+however many sources pile on.
+
+Why a floor and not immunity: Feromônio and the slow projectile have to stay a
+valid answer to a boss, so those builds must keep an effect you can feel. Why
+0.7: an uncapped stack (Feromônio level 4 plus a slow projectile) took a boss
+to 0.40, and a boss orbiting at 40% speed is not orbiting — the movement
+pattern stops being readable, which is the thing a boss fight is made of.
+Measured through the real `steer`/`integrate` path: 1.5 s of approach covers
+70% of the clean distance at the floor and 40% without it
+(`tools/check_boss_resist.py`).
+
+**The cap lives in the shared function, not in the callers.** Five call sites,
+and no reason for any of them to know what a boss is — three guards in three
+weapons is exactly how one gets forgotten when the fourth slow source ships.
+The check asserts the callers stay dumb.
+
+Slow was the last thing that could still interrupt a boss: `gen.knockback = 0`
+(see [Boss](./boss.md)) had already removed the shove, and there is no stun,
+stagger or hitstun in this game at all.
+
+### The boss body reaction is damped
+
+Cosmetic half of the same problem. Two things were selling "it took a shove"
+on a creature that takes none:
+
+- `take_hit` did `vel = direction * 200 * genome.knockback`, and a boss's
+  `knockback` is **0** — so every chip hit **zeroed the boss's velocity**. A
+  free interrupt mid-approach or mid-charge, the exact opposite of what zeroing
+  `knockback` was for. A boss now keeps its velocity and finishes the move (a
+  boss under continuous fire traces the same path an unhit one traces); a
+  common enemy is still shoved, value for value as before.
+- `hit_flash = 1.0` pinned under continuous fire kept the body whitewashed and,
+  off the boss FSM path, held it in the `'hurt'` slump pose
+  (`posing.POSE_STATES`). A boss peaks at `C.BOSS_HIT_FLASH` (0.45) instead —
+  still a flash per hit, deliberately under the 0.5 threshold that pose reads.
+
+Damage, [Hitbox](./hitbox.md) and `hit_test` are untouched: the head is still
+the weak point and 25 damage still costs 25 HP.
+
 ## Related
 
 - [Weapon](./weapon.md) — the automatic core.
