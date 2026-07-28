@@ -203,6 +203,13 @@ class Sandbox:
         if kind == 'boss':
             ent = make_boss(g, key, SANDBOX_BOSS_TIER, pos)
             g.enemies.append(ent)
+            # Mirror onto rounds.boss, exactly as RoundManager._spawn_boss does.
+            # Without this a hand-spawned boss has NO health bar at all: the big
+            # top bar reads rounds.boss, and the small over-head bar refuses to
+            # draw for anything with is_boss set (it assumes the big one is up).
+            # ``_kill_all`` and the scene clear already reset this, and
+            # ``start_round`` nulls it, so nothing leaks.
+            g.rounds.boss = ent
         elif kind == 'champion':
             champ_id, species_key = key.split(':')
             ent = species.make(species_key, pos)

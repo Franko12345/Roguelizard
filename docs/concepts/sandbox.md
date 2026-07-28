@@ -39,6 +39,12 @@ until you cancel with right-click or `Esc`. A HUD line names what is
 armed. A Champion needs two clicks: the champion first, then a species to
 apply it to.
 
+A hand-spawned Boss is mirrored onto `rounds.boss`, the same field
+`RoundManager._spawn_boss` sets, because that is what the big health bar at
+the top reads. Skipping the mirror leaves the boss with **no** bar at all —
+the small over-head bar declines to draw for anything with `is_boss` set, on
+the assumption that the big one is already up.
+
 ## Round control
 
 The **Rnd** category picks a [Round](./round.md) theme and scrolls a wave
