@@ -73,9 +73,11 @@ A bullet used to cost ~11 primitives: up to 7 trail circles, each with a
 circles. At the ~100 bullets a bullet-hell round puts on screen, that was the
 most expensive thing being drawn.
 
-- **The trail is one line**, from the oldest of 3 kept positions to the
-  current one. At 100 bullets a seven-circle fading tail reads as noise
-  anyway.
+- **There is no trail primitive at all.** The line that replaced the seven
+  circles is gone too; direction is told by sparks the shot drops into the
+  shared [FX](./juice.md) pool, which costs the bullet draw nothing. What the
+  sparks cost instead is *pool occupancy*, and that budget is worked out in
+  [Projectile](./projectile.md).
 - **The body is a cached sprite**, keyed on `(even radius, side)` and capped at
   `_BODY_MAX = 96` with `clear()` on overflow. Two colour variants exist in
   total, because the body colour encodes the side and not the creature
@@ -95,6 +97,12 @@ Bullets were then made bigger and brighter on purpose (`C.BULLET_SCALE` /
 that: **0.87 ms** at the same 92 bullets, against 0.42 ms with a single glow
 pass. The second, tight glow pass is what makes the centre blow out, and 0.45 ms
 for it was judged worth paying at 5% of the frame.
+
+Dropping the trail line took that back down to **0.43-0.59 ms** at 92 bullets
+(step 0.09-0.17 ms + draw 0.33-0.50 ms). Counting the whole spark pool — the
+bullets' emission plus `FX.update` and `FX.draw` for every spark on screen — the
+same 92 bullets cost **~1.1 ms**, so the sparks are roughly half a millisecond
+and the line they replaced was about a third of one.
 
 Two traps this surfaced, both worth remembering before optimising the glow
 again:

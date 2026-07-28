@@ -21,6 +21,12 @@ WORLD_W, WORLD_H = 3200, 3200
 # de nada. Cada chamador continua passando `radius=` como peso relativo.
 BULLET_SCALE = 1.45      # tamanho do corpo. 1.0 era o tamanho antigo
 BULLET_GLOW = 1.0        # intensidade do halo aditivo (era 0.75, fixo no draw)
+# As faiscas que saem pra tras da bala, no lugar do rastro em linha. Os dois
+# valores sao UM orcamento, nao duas preferencias: as faiscas vivas por bala sao
+# BULLET_SPARK_LIFE*0.75 / BULLET_SPARK_GAP, e a ~100 balas isso tem que caber
+# em FX.MAX_SPARKS com folga pro resto do jogo. Ver docs/concepts/projectile.md.
+BULLET_SPARK_GAP = 0.09  # segundos entre faiscas de uma mesma bala
+BULLET_SPARK_LIFE = 0.2  # a faisca de bala apaga rapido; a generica vive 0.5
 
 # --- timing (fixed simulation step, render decoupled) ---------------------- #
 SIM_HZ = 60

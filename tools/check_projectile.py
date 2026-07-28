@@ -1,6 +1,7 @@
-"""Assert the projectile hooks, the side colour rule and the bullet budget (#102).
+"""Assert the projectile hooks, the side colour rule and the bullet budget
+(#102, #116).
 
-Four things have to hold or the issue is decoration:
+Six things have to hold or the issue is decoration:
 
 1. **The hooks fire.** ``on_update`` / ``on_hit`` / ``on_death`` all run through
    the real ``Game._update_projectiles``, and they are the ONLY path: the same
@@ -13,6 +14,11 @@ Four things have to hold or the issue is decoration:
    can produce and the entry count never passes the cap.
 4. **~100 bullets fit the frame.** Measured, not asserted: step + draw for a
    hundred live projectiles, against the 16.6 ms budget at 60 Hz.
+5. **No streak behind the bullet.** The draw is symmetric along the direction of
+   travel -- a solid trail would pile pixels behind the body and nowhere else.
+6. **The backward sparks fit the pool.** A hundred live bullets for two seconds
+   never fill ``FX.MAX_SPARKS``; if they did, every other spark in the game
+   (tongue, dash, impact) would start getting evicted by gunfire.
 
 Run:  python tools/check_projectile.py
 """
@@ -136,7 +142,6 @@ def render(hostile, hue):
     """Draw one bullet alone; return (body mean, halo mean) as RGB triples."""
     surf.fill((0, 0, 0))
     s = P.Projectile(MID, Vector2(200, 0), palette.vibrant(hue), hostile=hostile)
-    s.trail = []                              # the streak would pollute the samples
     s.draw(surf, cam)
     cx, cy = cam.w2s(MID)
     r = max(4, int(s.radius * cam.zoom) & ~1)
@@ -235,4 +240,68 @@ print(f"  budget: {live} bullets -> step {step_ms:.2f} ms + draw {draw_ms:.2f} m
       f"= {step_ms + draw_ms:.2f} ms of the 16.6 ms frame")
 assert step_ms + draw_ms < 4.0, \
     f"{live} bullets cost {step_ms + draw_ms:.2f} ms, a quarter of the frame budget"
+
+# --------------------------------------------------------------------------- #
+# 7. no streak: the draw is symmetric along the direction of travel           #
+# --------------------------------------------------------------------------- #
+cam.pos = Vector2(MID)
+surf.fill((0, 0, 0))
+fast = P.Projectile(MID, Vector2(900, 0), (200, 200, 200), hostile=True)
+for _ in range(6):                           # far enough in that a streak had a tail
+    fast.update(DT)                          # game=None -> no sparks in this sample
+fast.draw(surf, cam)
+cx, cy = cam.w2s(fast.pos)
+r = max(4, int(fast.radius * cam.zoom) & ~1)
+
+
+def band(sign):
+    """Ink in the halo band on one side of the body, along the travel axis.
+
+    Every sprite here is an even-sided square blitted at ``sp - half``, so its
+    true centre is half a pixel up and left of ``sp``; the mirror is about
+    ``cx - 0.5``, not ``cx``, or the halo alone reads as 7% of a streak.
+    """
+    tot = 0
+    for dx in range(int(1.4 * r), int(4.0 * r)):
+        x = cx + dx if sign > 0 else cx - dx - 1
+        for dy in range(-r // 2, r // 2 + 1):
+            tot += sum(surf.get_at((x, cy + dy))[:3])
+    return tot
+
+
+ahead, behind = band(1), band(-1)
+assert ahead > 0, "the sample band is empty -- the check is measuring nothing"
+assert abs(behind - ahead) <= ahead * 0.02, \
+    f"something is drawn behind the bullet: {behind} ink back vs {ahead} ahead"
+print(f"  no streak: {behind} ink behind the body vs {ahead} ahead -- symmetric")
+
+# --------------------------------------------------------------------------- #
+# 8. the backward sparks fit the pool, with room for the rest of the game     #
+# --------------------------------------------------------------------------- #
+g, p = fresh()
+for i in range(100):
+    ang = i * 3.6
+    pos = far + vfrom_angle(ang, 60 + (i % 40) * 5)
+    shot = P.spit(pos, pos + vfrom_angle(ang, 100), palette.vibrant(i * 7 % 360),
+                  hostile=(i % 2 == 0))
+    shot.life = 99
+    g.projectiles.append(shot)
+g.fx.sparks = []
+peak = 0
+for _ in range(120):                         # 2 s of a full bullet-hell screen
+    g._update_projectiles(DT)
+    g.fx.update(DT)
+    peak = max(peak, len(g.fx.sparks))
+live = len(g.projectiles)
+assert live >= 90, f"only {live} of 100 bullets survived the spark run"
+assert peak > 0, "the bullets stopped emitting sparks entirely"
+assert peak < g.fx.MAX_SPARKS, \
+    f"{live} bullets filled the spark pool ({peak}/{g.fx.MAX_SPARKS}) -- gunfire " \
+    f"is now evicting the tongue, the dash and every impact in the game"
+sides = {tuple(s[6]) for s in g.fx.sparks}
+assert sides <= {P.HOSTILE[1], P.FRIENDLY[1]}, \
+    f"a bullet spark stopped carrying the side colour (ADR-0014): {sides}"
+print(f"  sparks: {live} bullets peak at {peak}/{g.fx.MAX_SPARKS} sparks "
+      f"({g.fx.MAX_SPARKS - peak} left for the rest of the game), "
+      f"both sides in `mid`")
 print("ALL OK")
