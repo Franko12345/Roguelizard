@@ -8,4 +8,6 @@ claude-agendado.sh
 .env
 *.envooo/
 .claude/worktrees/
+.claude/skills/
+.opencode/
 *.zip
