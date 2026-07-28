@@ -349,6 +349,19 @@ class Lizard:
 
     # ---- status --------------------------------------------------------- #
     def apply_slow(self, mul, dur):
+        """Stack a speed multiplier: the strongest source wins, the longest timer wins.
+
+        A boss resists it (issue #119). The cap lives HERE, in the one function
+        every source funnels through -- Feromonio, the slow projectile, hostile
+        puddles -- because three guards in three callers is how one of them ends
+        up forgotten. Clamping each source to the floor is enough: the stack
+        combines with ``min``, so the effective multiplier can never dip under it
+        either. Not immunity -- slowing a boss still has to be worth building
+        for; it just may not switch its movement patterns off.
+        """
+        if getattr(self, 'is_boss', False):
+            mul = max(mul, C.BOSS_SLOW_FLOOR)
+            dur *= C.BOSS_SLOW_TIME_MULT
         self.slow_mul = min(self.slow_mul, mul) if self.slow_t > 0 else mul
         self.slow_t = max(self.slow_t, dur)
 
