@@ -56,7 +56,10 @@ the test, so they are left alone.
 - **Loja** stages the real [Camp](./camp.md) shop: a catalog of the native
   offers plus any weapon/item/charm you select (specific ids or a random
   N), with [Pollen](../../CONTEXT.md) set sky-high so the real buy path
-  never blocks on cost. Buying then runs the untouched camp flow.
+  never blocks on cost. Buying then runs the untouched camp flow. The
+  native offers come from `state_camp._roll_shop(game)`, a module
+  function taking the game — the sandbox is one more caller of it, not a
+  second way to roll a shop.
 
 ## Debug menu
 

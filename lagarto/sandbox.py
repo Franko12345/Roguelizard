@@ -44,6 +44,7 @@ from .render import ui
 from .combat import weapons
 from .world.pickups import Bug, Fruit, Egg
 from .flow.rounds import BOSS_POOL, THEMES, THEME_KEYS, make_boss
+from .game import state_camp
 
 
 # Keys that toggle the panel open/closed. Backtick is the classic dev-console key;
@@ -373,8 +374,8 @@ class Sandbox:
     def _wrap_entry(self, pool, pid):
         """Wrap a weapon/item/charm as a camp shop entry dict (plans/04 §9).
 
-        Shape matches ``Game._roll_shop``'s native offers: ``fn(game)`` runs the
-        REAL grant on every player, so ``_apply_buy`` calls it unchanged.
+        Shape matches ``state_camp._roll_shop``'s native offers: ``fn(game)`` runs
+        the REAL grant on every player, so ``_apply_buy`` calls it unchanged.
         """
         if pool == 'weapon':
             w = weapons.WEAPONS[pid]
@@ -400,7 +401,9 @@ class Sandbox:
     def _generate_store(self, sources):
         """Stage the REAL camp shop from ``(pool, id)`` sources; infinite money on.
 
-        Catalog = the five native ``_roll_shop`` offers + our wrapped entries.
+        Catalog = the five native ``state_camp._roll_shop`` offers + our wrapped
+        entries. ``_roll_shop`` is a module function taking the game, not a
+        ``Game`` method -- calling it as ``g._roll_shop()`` raises AttributeError.
         We reuse ``_enter_camp`` (it builds every camp field the shop UI needs),
         then override the shop list, open it in ``shop`` mode, and set pollen far
         above any price. From there the untouched camp path (app.main -> camp_buy
@@ -413,7 +416,7 @@ class Sandbox:
         sources = list(sources)
         self.store_entries = sources
         entries = [self._wrap_entry(pool, pid) for pool, pid in sources]
-        catalog = g._roll_shop() + entries
+        catalog = state_camp._roll_shop(g) + entries
         g._enter_camp()
         g.camp['shop'] = catalog
         g.camp['shop_sel'] = 0
