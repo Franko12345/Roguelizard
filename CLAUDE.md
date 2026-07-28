@@ -60,6 +60,8 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
   (`on_update` / `on_hit` / `on_death`).
 - [Weapon](docs/concepts/weapon.md) · [Item](docs/concepts/item.md) ·
   [Charm](docs/concepts/charm.md) · [Synergy](docs/concepts/synergy.md).
+- [Deployable](docs/concepts/deployable.md) — corpo que se planta e age
+  sozinho; hoje só a Torreta.
 - [Hitbox](docs/concepts/hitbox.md) — corpo inteiro + cabeça é ponto
   fraco. [Damage](docs/concepts/damage.md) — modelo de vida.
 - [ADR-0006](docs/adr/0006-soft-player-contact.md) — contato macio.
