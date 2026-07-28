@@ -18,6 +18,7 @@ regression is visible rather than merely detected.
 |---|---|
 | `check_issues.py` | Walks every open issue and asserts a concrete marker for it. The index. |
 | `check_bosses.py` | Every `BOSS_POOL` entry, driven through all its phases and drawn. |
+| `check_boss_resist.py` | A stack of every slow source never puts a boss under the floor, in any order, and its duration is the cut one; the same stack on a common enemy still matches the pre-cap formula value for value; a maximally slowed boss still covers 70% of its ground through the real `steer`; a hit no longer touches a boss's velocity or trips the `'hurt'` pose. `--shot` writes the before/after body comparison. |
 | `check_camera.py` | The cached `w2s` transform equals the naive one after every mutation path. |
 | `check_tongue.py` | The drawn tongue tip IS the kinematic tip, at every phase. |
 | `check_tail_chain.py` | The tail ring-out travels base → tip; one write to `tail_spring` scales the whole chain. |

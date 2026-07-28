@@ -30,6 +30,12 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_br = subprocess.run([sys.executable, 'tools/check_boss_resist.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(119, "chefe resiste a slow", 'BOSS_SLOW_FLOOR' in src(cbase.Lizard.apply_slow)
+    and C.BOSS_SLOW_FLOOR > 0 and C.BOSS_SLOW_TIME_MULT < 1.0
+    and _br.returncode == 0,
+    "" if _br.returncode == 0 else _br.stderr.decode()[-90:])
 _ct = subprocess.run([sys.executable, 'tools/check_content.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.creatures.ai import BEHAVIORS as _beh
