@@ -667,12 +667,21 @@ MURALHA_BOUNCE_SPEED = 280
 MURALHA_BOUNCE_DMG = 14
 MURALHA_BOUNCE_BOUNCES = 3
 MURALHA_BOUNCE_SPREAD = 70      # degrees the ricochet volley fans out over
-# Grid of fire (ground hazard)
+# Grid of fire (ground hazard). The grid is anchored to the arena
+# (900x640), so the cell size decides how many puddles one cast asks for --
+# and Game.spawn_puddle caps the world at 40. At cell 80 the arena wanted 59
+# and the last 19 were silently dropped, leaving the right third of the box
+# dark; 120 asks for 23 and fits with room for the player's own puddles.
 MURALHA_GRID_WINDUP = 0.8
-MURALHA_GRID_CELL = 80
+MURALHA_GRID_CELL = 120
 MURALHA_GRID_DMG = 8
 MURALHA_GRID_TICK = 0.3
-MURALHA_GRID_LIFE = 4.0
+# Tem que ser MENOR que o intervalo que reaplica o padrao (recover 0.5 +
+# BOSS_CD_MIN * cd_mul da fase 3 + windup encurtado pelo mood = 1.4 s), senao
+# duas grades se sobrepoem e o dano empilha -- a mesma regra do Acido, da poca
+# de veneno e do slow do ferrao. Era 4.0 enquanto o ataque errava a arena
+# inteira e portanto nunca empilhou de fato. Ver tools/check_muralha.py.
+MURALHA_GRID_LIFE = 1.2
 # Arena fire pushes player
 MURALHA_FIRE_PUSH = 350        # px/s push toward wall
 MURALHA_FIRE_DMG = 6           # dps from ground fire

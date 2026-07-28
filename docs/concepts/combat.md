@@ -200,11 +200,23 @@ start) enforces one hit per target per dash; damage is `C.DASH_DAMAGE`
 **When you touch contact damage, always check if the source is
 per-frame.**
 
+## Aggro: what the horde walks at
+
+An enemy targets `self.aggro` if it has one, else the nearest player
+(`AILizard.update`). Two things write it, with the same two lines
+(`foe.aggro = self; foe.aggro_t = C.AGGRO_TIME`): the egg-hatched ally when it
+lands a hit, and the **Torreta** when it fires — see
+[Deployable](./deployable.md). That is the taunt, and it is the whole point of
+planting a turret: the body you left behind is a target you offered in place of
+your own, which buys the space the [Rolamento](./dodge.md) then spends.
+
 ## Collision: allies do not collide
 
 `kind ∈ {player, friend}` never collide with each other
 (`collision.FRIENDLY`) — fluid battles. Enemy ↔ enemy still separates
-hard.
+hard. `kind == 'turret'` is absent from separation entirely (like flyers and
+burrowers): a Deployable that gets shoved is no longer standing where the
+player planted it.
 
 ## Soft player↔enemy contact
 
@@ -258,6 +270,7 @@ that reapplies it" — Ácido, venom puddle, sting. See
 ## Related
 
 - [Weapon](./weapon.md) — the automatic core.
+- [Deployable](./deployable.md) — the Torreta: a body that takes the aggro.
 - [Projectile](./projectile.md) — every shot, and its three hooks.
 - [Hitbox](./hitbox.md) — body sampling + head crit.
 - [Damage model](./damage.md) — player HP flow.

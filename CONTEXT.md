@@ -106,7 +106,7 @@ _Avoid_: wave, sine, wobbler.
 
 **Weapon**:
 An automatic attack the player owns at a level (`Player.weapons[id] = level`).
-Each ticks every frame; there are 8 weapons and a cap of 6 equipped. Cards
+Each ticks every frame; there are 9 weapons and a cap of 6 equipped. Cards
 raise level; global stats (Might, Area, Cooldown, Amount) scale every weapon.
 _Avoid_: skill, ability.
 
@@ -172,6 +172,24 @@ The single active-item slot on the player (`Player.ability`/`ability_cd`).
 Charged by kills, fired on E. Not the same as a Weapon (weapons are
 automatic).
 _Avoid_: active, ultimate.
+
+**Deployable**:
+Something the player leaves on the ground that acts on its own — a creature
+with a position, health and a tick, so it is an `AILizard` and not a new entity
+type. Three presentations of the one concept: **Torreta** (fires where it
+stands), trap (fires on a trigger), persistent pet (walks). Only the Torreta
+exists. See [Deployable](docs/concepts/deployable.md).
+_Avoid_: summon, minion, pet (that word is the third cut), placeable.
+
+**Torreta**:
+The first Deployable and the only one built. A **Weapon**
+(`lagarto/combat/weapons/torreta.py`) that spends its cooldown planting an
+`AILizard` of the stationary `turret` kind at the player's own position. It
+fires an **Emitter** Pattern from its **Shot**, has hp and dies to enemy
+contact, and steals the aggro of what it shoots at — its job is space, not
+damage.
+_Avoid_: torre, tower, sentinela, and "turret" in prose — that string is only
+the `kind` in code.
 
 **Pattern**:
 One attack arrangement, as a plain function
