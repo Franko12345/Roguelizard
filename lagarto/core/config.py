@@ -552,6 +552,9 @@ BOSS_SUMMON_CD = 6.0         # separado do cd normal -- nao pode invocar toda ve
 BOSS_SLOW_FLOOR = 0.7        # 30% mais lento da pra sentir; 0.4 (Feromonio nivel
                              # 4) deixava a orbita ilegivel
 BOSS_SLOW_TIME_MULT = 0.5    # metade da duracao pedida, seja qual for a fonte
+BOSS_HIT_FLASH = 0.45        # pico de hit_flash num acerto em chefe: continua
+                             # sendo feedback de acerto, mas fica abaixo do
+                             # limiar de 0.5 da pose 'hurt' (creatures/ai/posing)
 
 # --- BossAI 2.0 (plans/02_sistema_chefes.md): mood + novos padroes ---------- #
 BOSS_CORNERED_DIST = 120     # jogador mais perto que isso -> mood 'cornered'

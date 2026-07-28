@@ -532,8 +532,22 @@ class AILizard(Lizard):
             if self.spine.head_dir().dot(-safe_norm(direction)) > 0.25:
                 dmg = dmg * (1.0 - self.front_armor)
                 game.fx.spark_burst(self.spine.joints[0], (215, 225, 255), 5, 180)
-        self.hit_flash = 1.0
-        self.vel = direction * 200 * self.genome.knockback   # heavy bruisers barely budge
+        if getattr(self, 'is_boss', False):
+            # Issue #119, cosmetic only: a boss has to read as massive, not
+            # staggering. Two things were selling "it took a shove" on a creature
+            # that takes none. (1) `knockback = 0` turned the line below into
+            # `vel = zero`, so every chip hit KILLED the boss's momentum -- a free
+            # interrupt mid-approach/charge, the opposite of what zeroing
+            # knockback was for. A boss keeps its velocity and finishes the move.
+            # (2) hit_flash pinned at 1.0 under continuous fire kept the body
+            # whitewashed and (off the boss FSM path) held it in the 'hurt' slump
+            # pose. A softer peak still flashes per hit and stays under that
+            # threshold. Damage, hitbox and hit_test are untouched -- the head is
+            # still the weak point.
+            self.hit_flash = max(self.hit_flash, C.BOSS_HIT_FLASH)
+        else:
+            self.hit_flash = 1.0
+            self.vel = direction * 200 * self.genome.knockback   # heavy bruisers barely budge
         game.fx.burst(self.pos, self.color, 10, 180)
         game.fx.spark_burst(self.pos, C.COL_FX_SPARK, 9, 300)
         self.hp -= dmg
