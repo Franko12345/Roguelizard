@@ -541,6 +541,18 @@ BOSS_SUMMON_WINDUP = 0.9
 BOSS_SUMMON_COUNT = 2
 BOSS_SUMMON_CD = 6.0         # separado do cd normal -- nao pode invocar toda vez
 
+# --- Resistencia a interrupcao (issue #119) --------------------------------- #
+# `knockback = 0` (flow/rounds.py) ja tirou o empurrao do chefe. O que sobrou
+# atrapalhando era o `slow`, que passava por `Lizard.apply_slow` sem nenhuma
+# resistencia: uma pilha de Feromonio + projetil-lento levava o chefe a 40% da
+# velocidade e desligava a leitura dos padroes de movimento. Nao e imunidade --
+# Feromonio e projetil-lento precisam continuar sendo escolha valida contra
+# chefe -- e um piso: o multiplicador nunca desce disso, empilhe quantas fontes
+# empilhar, e a duracao de cada fonte e cortada. Ver docs/concepts/combat.md.
+BOSS_SLOW_FLOOR = 0.7        # 30% mais lento da pra sentir; 0.4 (Feromonio nivel
+                             # 4) deixava a orbita ilegivel
+BOSS_SLOW_TIME_MULT = 0.5    # metade da duracao pedida, seja qual for a fonte
+
 # --- BossAI 2.0 (plans/02_sistema_chefes.md): mood + novos padroes ---------- #
 BOSS_CORNERED_DIST = 120     # jogador mais perto que isso -> mood 'cornered'
 BOSS_FRUSTRATION_SEC = 5.0   # sem acertar por tanto tempo -> mood 'frustrated'
