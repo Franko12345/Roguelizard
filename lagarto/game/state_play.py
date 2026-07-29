@@ -253,9 +253,14 @@ def _draw_hud(game, surf):
         gland_pitch = bar_w // 3
         gland_cx = bar_x + gland_pitch // 2
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
+        # Dash cost matches player.py:407 -- wings equipped pays C.DASH_COST
+        # (14), wingless pays C.DASH_COST + 4 (18). The HUD ready state must
+        # use the same formula as the spend path, otherwise the gland glows
+        # 'ready' on a press the player can afford to start but not to land.
+        dash_cost = C.DASH_COST if p.wings else C.DASH_COST + 4
         hud.gland(surf, (gland_cx, cd_inner_y + 14), 11, dash_frac, p.colorset[0],
                   icons._legs_icon, game.time,
-                  enabled=p.energy >= C.DASH_COST)
+                  enabled=p.energy >= dash_cost)
         t_frac = 0.0 if p.tongue_t > 0 else 1.0
         hud.gland(surf, (gland_cx + gland_pitch, cd_inner_y + 14), 11, t_frac,
                   (235, 90, 120), icons._tongue, game.time,
