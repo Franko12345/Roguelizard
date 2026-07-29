@@ -486,11 +486,21 @@ print(f"[11] gland size: OK -- frac 0..1 -> {sizes[0]}..{sizes[-1]} px; same "
 
 # ---- 12. gland: three states visually distinct for every icon ---------- #
 # Each state must look different -- the issue's three thresholds:
-# charging, ready-but-no-energy, ready. We compare pixel histograms for
-# ALL THREE icons (legs / tongue / club): two states that look the same
-# collapse to one histogram. The tongue check exists because _tongue
-# previously hardcoded its colour (icons.py review) and broke the
-# three-state contract for one of the three abilities.
+# charging, ready-but-no-energy, ready. Two states that look the same
+# collapse to the same image and would let the player mistake 'cooling
+# down' for 'ready'. We test the contrast on ALL THREE icons (legs /
+# tongue / club); the tongue check exists because _tongue previously
+# hardcoded its colour (icons.py review) and broke the three-state
+# contract for one of the three abilities.
+#
+# The three pairs separate by different signals:
+# - charging vs ready: SIZE + COLOR + GLOW (huge pixel delta)
+# - no-energy vs ready: COLOR + GLOW (huge pixel delta)
+# - charging vs no-energy: SIZE only -- the silhouettes are both grey.
+#   We test this pair with a bounding-box check instead of a histogram
+#   distance: the tongue icon is sparse enough that the size-only delta
+#   has a small pixel histogram (~26) but the bounding box still grows
+#   from r=7 to r=11, which is what the eye reads.
 import collections
 def _hist(surf):
     counter = collections.Counter()
@@ -504,40 +514,64 @@ def _hist_distance(a, b):
     keys = set(a) | set(b)
     return sum(abs(a.get(k, 0) - b.get(k, 0)) for k in keys)
 
-def _states_hist(fn, color):
+def _render_state(fn, color, frac, enabled):
     gland_state = pygame.Surface((50, 50), 0, 24)
     gland_state.fill((9, 11, 18))
-    hud.gland(gland_state, (25, 25), 11, 0.4, color, fn, 0.0, enabled=True)
-    h_charging = _hist(gland_state)
-    gland_state.fill((9, 11, 18))
-    hud.gland(gland_state, (25, 25), 11, 1.0, color, fn, 0.0, enabled=False)
-    h_no_energy = _hist(gland_state)
-    gland_state.fill((9, 11, 18))
-    hud.gland(gland_state, (25, 25), 11, 1.0, color, fn, 0.0, enabled=True)
-    h_ready = _hist(gland_state)
-    return h_charging, h_no_energy, h_ready
+    hud.gland(gland_state, (25, 25), 11, frac, color, fn, 0.0, enabled=enabled)
+    return gland_state
 
-# Tolerances tuned for 50x50 with the icon's translucent glow on ready;
-# we want the assertion to fail loudly if two states collapse.
+def _silhouette_bbox(surf, bg=(9, 11, 18)):
+    min_x = min_y = 10**9
+    max_x = max_y = -1
+    for x in range(surf.get_width()):
+        for y in range(surf.get_height()):
+            if surf.get_at((x, y))[:3] != bg:
+                if x < min_x: min_x = x
+                if y < min_y: min_y = y
+                if x > max_x: max_x = x
+                if y > max_y: max_y = y
+    if max_x < 0:
+        return (0, 0, 0, 0)
+    return (min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+
 ICON_CASES = (("legs", icons._legs_icon, (78, 236, 126)),
               ("tongue", icons._tongue, (235, 90, 120)),
               ("club", icons._club, (250, 190, 90)))
+HIST_THRESHOLD = 30         # colour / glow pairs (huge pixel deltas)
+BBOX_DELTA = 4              # size-only pair: 11 vs 7 -> bbox grows by ~4
 for name, fn, col in ICON_CASES:
-    hc, hn, hr = _states_hist(fn, col)
-    pairs = (("charging", "no-energy", hc, hn),
-             ("charging", "ready", hc, hr),
-             ("no-energy", "ready", hn, hr))
-    for label_a, label_b, ha, hb in pairs:
+    surf_c = _render_state(fn, col, 0.4, enabled=True)
+    surf_n = _render_state(fn, col, 1.0, enabled=False)
+    surf_r = _render_state(fn, col, 1.0, enabled=True)
+    hc, hn, hr = _hist(surf_c), _hist(surf_n), _hist(surf_r)
+    # colour / glow pairs: histogram distance must clear the threshold
+    for label_a, label_b, ha, hb in (("charging", "ready", hc, hr),
+                                     ("no-energy", "ready", hn, hr)):
         d = _hist_distance(ha, hb)
-        assert d > 30, \
+        assert d > HIST_THRESHOLD, \
             f"{name} gland states {label_a} vs {label_b} too similar (distance {d})"
-# Pick the legs pair for the headline numbers (the other two icons print
-# the same distance pattern)
-legs_c, legs_n, legs_r = _states_hist(icons._legs_icon, (78, 236, 126))
-print(f"[12] gland states: OK -- legs pair: charging vs no-energy "
-      f"{_hist_distance(legs_c, legs_n)}, charging vs ready "
-      f"{_hist_distance(legs_c, legs_r)}, no-energy vs ready "
-      f"{_hist_distance(legs_n, legs_r)} (legs / tongue / club all pass)")
+    # size-only pair: bounding-box area must grow (silhouette is bigger)
+    bb_c = _silhouette_bbox(surf_c)
+    bb_n = _silhouette_bbox(surf_n)
+    area_c = bb_c[2] * bb_c[3]
+    area_n = bb_n[2] * bb_n[3]
+    assert area_n - area_c >= BBOX_DELTA, \
+        f"{name} gland charging vs no-energy bounding box did not grow: " \
+        f"charging {bb_c} area {area_c}, no-energy {bb_n} area {area_n}"
+# Headline numbers from the legs pair (other two icons print the same
+# pattern: charging-vs-ready / no-energy-vs-ready in the thousands,
+# charging-vs-no-energy bounded by the icon's own size delta).
+legs_c = _render_state(icons._legs_icon, (78, 236, 126), 0.4, enabled=True)
+legs_n = _render_state(icons._legs_icon, (78, 236, 126), 1.0, enabled=False)
+legs_r = _render_state(icons._legs_icon, (78, 236, 126), 1.0, enabled=True)
+hc, hn, hr = _hist(legs_c), _hist(legs_n), _hist(legs_r)
+bb_c = _silhouette_bbox(legs_c)
+bb_n = _silhouette_bbox(legs_n)
+print(f"[12] gland states: OK -- legs histogram: charging vs no-energy "
+      f"{_hist_distance(hc, hn)}, charging vs ready "
+      f"{_hist_distance(hc, hr)}, no-energy vs ready "
+      f"{_hist_distance(hn, hr)}; bbox charging {bb_c[2]}x{bb_c[3]} -> "
+      f"no-energy {bb_n[2]}x{bb_n[3]}; legs / tongue / club all pass")
 
 # ---- 13. gland: three glands fit inside the cooldowns capsule ---------- #
 # The pitch is bar_w // 3, each gland is r px wide. Singleplayer and coop
