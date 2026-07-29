@@ -1,9 +1,13 @@
 # HUD anatomy
 
-The HUD is the lizard's anatomy seen from the inside. Every readout is an
-organ sitting inside a framed **capsule**; the capsule is "massa rigida"
-with its own low-frequency rhythm, while each organ inside has its own
-faster rhythm. One visual language, six places to read.
+The HUD is the lizard's anatomy seen from the inside — for the rodape.
+Every readout there is an organ sitting inside a framed **capsule**;
+the capsule is "massa rigida" with its own low-frequency rhythm, while
+each organ inside has its own faster rhythm. The top-centre column
+runs on a **separate** visual language, the **lingua do mundo**, that
+the rodape metaphor does not cover (see [ADR-0016](../adr/0016-topo-e-mundo.md)
+and the "O que o topo e" section below). Two declared languages, each
+with its own rule, mixed on purpose.
 
 ## Why a metaphor
 
