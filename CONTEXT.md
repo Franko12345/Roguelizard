@@ -354,6 +354,27 @@ while it grows.
 _Avoid_: warning, tell (informal — `tell` is fine in casual speech, but the
 noun is `telegraph` in prose and code comments).
 
+**Ambiente**:
+The darkening layer (`LightingLayer` in `lagarto/render/lighting.py`): a
+screen-space `Surface` that fills with an ambient colour, gets additive light
+blits from registered Fontes de luz, and is composited back into the scene
+with `BLEND_RGB_MULT` between the world pass and the danger pass. Drawn once
+per frame from `Game.draw`; skip on day frames. See [Lighting][1].
+_Avoid_: ambient (the noun is `Ambiente` in PT prose; "ambient" is fine in
+English code comments).
+
+**Fonte de luz**:
+One registered light source read by the [Ambiente][1] layer each frame. Three
+flavours share the `Light` shape: `kind='player'` (warm aura tied to a
+player), `kind='prop'` (static mushroom / flower / lily / reed / bush
+registered at world construction), `kind='fx'` (one-frame spill from
+`fx.burst` / `fx.spark_burst`, aged out by `C.FX_EMISSION_LIFE`). The data
+needed to draw one additive blit -- no per-kind subclass.
+_Avoid_: light, light source (the noun is `Fonte de luz` in PT prose; "light
+source" is fine in English code comments).
+
+[1]: ./docs/concepts/lighting.md
+
 **Squat / Anticipation**:
 `Lizard.squat_bias` — a multiplier on the squash target that a wind-up sets
 to <1 for a frame, decaying back to 1 on its own. Ranged/lunge/hop AIs and
