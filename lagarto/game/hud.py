@@ -314,27 +314,53 @@ def draw_skull(surf, rect, level, xp_fraction, fluid):
     pygame.draw.ellipse(surf, bone, skull, 2)
 
 
-def dial(surf, center, r, frac, color, font, label, t, enabled=True):
-    """Radial cooldown dial: fills as the ability recharges, pulses when ready.
+def gland(surf, center, r, frac, color, fn, t, enabled=True):
+    """Cooldown gland: an anatomical organ whose silhouette inflates as the
+    ability recharges. Replaces the old radial ``dial`` (and its text label).
 
-    ``enabled=False`` (not enough energy) greys the whole thing out.
+    The three states the player has to read:
+
+    - **charging** (``frac < 1``): the silhouette is shrunk to
+      ``r * (0.4 + 0.6 * frac)`` and drawn grey. **Size is a function of
+      the recharge fraction alone** -- ``enabled`` does not enter it. A
+      glandula cheia com habilidade em cooldown is a mentira (issue #133
+      review): the silhouette is the recharge read, not the budget read.
+    - **ready-but-no-energy** (``frac >= 1`` and ``not enabled``): full
+      radius, grey. The charge is back but the budget is not; the grey
+      colour (no glow) is the difference vs. ``ready``.
+    - **ready** (``frac >= 1`` and ``enabled``): full radius, full colour,
+      slow pulse glow. This is the only state where ``palette.glow`` fires
+      on the silhouette, so the read survives without a label.
+
+    ``fn`` is a procedural icon drawer from ``lagarto.render.icons`` -- the
+    silhouette is the body part that performs the action (dash = leg muscle,
+    tongue = throat sac, whip = coiling tail). Reuse, not new art.
+
+    No ``ui.text`` is emitted by this primitive. Issue #133 explicitly traded
+    scan speed for identity: three free silhouettes read as three separate
+    things, not as one row of the same shape. The capsule (foundation #130)
+    is the only element that still groups them.
     """
+    frac = max(0.0, min(1.0, frac))
     ready = frac >= 0.999 and enabled
-    if not enabled:
-        color = (78, 82, 104)
-    pygame.draw.circle(surf, (34, 38, 54), center, r)
-    if frac > 0:
-        pts = [center]
-        steps = max(3, int(frac * 22))
-        for i in range(steps + 1):
-            pts.append(center + vfrom_angle(-90 + 360 * frac * (i / steps), r))
-        if len(pts) >= 3:
-            pygame.draw.polygon(surf, color, pts)
+    grey = (78, 82, 104)
+    # Size is purely a function of frac. It reaches the full radius exactly
+    # at frac == 1.0 (with int truncation the curve plateaus at 10 px for
+    # 0.909 < frac < 1.0 and snaps to 11 at frac == 1.0, which is the
+    # visible "almost ready -> ready" beat).
+    if frac >= 1.0:
+        size = r
+    else:
+        size = max(3, int(r * (0.4 + 0.6 * frac)))
+    # Colour and glow carry the energy check (the threshold question the
+    # bellows #132 deliberately leaves out). Grey while cooling down OR
+    # ready but unaffordable; full colour + pulse glow when both true.
     if ready:
-        palette.glow(surf, center, r * 2.2, color, 0.35 + 0.25 * pulse(t, 6))
-    pygame.draw.circle(surf, (96, 102, 136) if not ready else color, center, r, 2)
-    ui.text(surf, font, label, (center[0] + r + 6, center[1] - font.get_height() // 2),
-            (232, 234, 250) if ready else (146, 150, 178))
+        palette.glow(surf, center, int(r * 2.0), color, 0.30 + 0.25 * pulse(t, 6))
+        draw_color = color
+    else:
+        draw_color = grey
+    fn(surf, center, size, draw_color)
 
 
 _VIGNETTE = None

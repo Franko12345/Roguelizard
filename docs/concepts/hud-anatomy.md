@@ -34,9 +34,10 @@ Follow-through; the same applies here:
 - **Capsule** = the container. Mass. Low frequency. Overshoots on entry,
   trembles when something inside changes, swings when damage lands.
   Frequencies around 1-2 Hz, amplitudes around 3-12 px.
-- **Organs** = the bars, dials, item icon. Each on its own rhythm (the
-  flagella wave at ~3 Hz, the leading-edge bulge of `bio_bar` at ~3 Hz,
-  the dial ready-pulse at ~6 Hz). They never share a phase clock.
+- **Organs** = the bars, glands, bellows, skull, item icon. Each on
+  its own rhythm (the flagella wave at ~3 Hz, the leading-edge bulge of
+  `bio_bar` at ~3 Hz, the gland ready-pulse at ~6 Hz). They never share
+  a phase clock.
 
 If everything bounces together the panel reads as gelatin and the player
 loses **which** medidor moved. Two layers read as "a container holding
@@ -94,6 +95,50 @@ cap and later growth becomes denser rather than escaping the skull. Each level
 adds two folds. The fluid surface is a damped 16-point wave stepped at 30 Hz;
 the renderer allocates no `Surface` per frame.
 
+### Cooldown glands
+
+A cooldown is a **gland**: a silhouette of the body part that performs the
+action, sized by the recharge fraction. Dash = leg muscle, tongue = throat
+sac, whip = coiling tail — all three are drawers that already exist in
+`lagarto.render.icons` (`_legs_icon`, `_tongue`, `_club`). Reuse, not new
+art. The silhouette is the read; the cooldown row emits no text.
+
+Three states have to be visually distinct, because the bellows #132
+deliberately leaves the cost-threshold question out:
+
+| state | silhouette | colour | glow |
+|---|---|---|---|
+| charging | shrunk with frac (0.4 → 1.0 of max r) | grey | no |
+| ready-but-no-energy | full | grey | no |
+| ready | full | ability colour | yes (pulse) |
+
+Size, colour and pulse together. No pair of states is allowed to look the
+same; `tools/check_hud_anatomy.py` compares pixel histograms and refuses
+to let two of them collide.
+
+**Why no ring.** An uniform ring with a symbol inside would scan faster —
+three same-looking frames, three same-shaped glyphs, the eye learns the
+beat in one second. The cost is identity: three free silhouettes read as
+three separate things, not as one row of the same shape. **Identity was
+chosen over scan speed**, and the trade is paid in two places:
+
+- The row takes longer to parse on the first second of a run (the player
+  has to learn which silhouette is which).
+- The grouping is now structural. Without the ring, the **capsule is
+  the only element that says "these three are a set"** — the previous
+  doc already paid for that by being the only framed panel around
+  readouts that would otherwise look like a stack.
+
+If a future playtest says the row doesn't read as one set, the fix is
+**not** to bring the ring back; it's to tighten the capsule or to give
+the three a shared trait (common border, same fill direction). Adding
+text next to each silhouette would undo the trade.
+
+The charging curve is monotonic and bottoms out exactly at `frac == 1`
+— a glandula cheia com habilidade em cooldown is a mentira. The pulse
+glow is the *only* signal that the ability is ready; the energy bellows
+#132 is the budget check, not the readiness check.
+
 ## Layout
 
 - **P1 block** in the bottom-left corner, **P2** in the bottom-right.
@@ -103,11 +148,12 @@ the renderer allocates no `Surface` per frame.
   — that's the gain the move to the bottom bought.
 - Inside each player's block, **two framed capsules stack vertically**:
   the vitais capsule (header `P1`/`Nv` + 3 bars — health, energy, XP)
-  on top, the cooldowns capsule (3 dials — DASH / LING / RABO) below.
+  on top, the cooldowns capsule (3 glands — DASH / LING / RABO) below.
   Each capsule has its own spring; a fast organ (energy) inside a slow
   container (capsule spring) would otherwise read as one block, not two.
   The vitais organs are #131/#132's sacs + bellows + skull (not the
-  bars the issue sketch first named).
+  bars the issue sketch first named); the cooldowns organs are #133's
+  glands.
 - **Weapon + item strip** lives below the cooldowns capsule, unframed.
   Weapons march toward the centre, the active item owns the opposite
   corner, so a six-weapon build never collides with the item sphere.
@@ -135,6 +181,9 @@ With the capsule in the bottom and three rows of room (header / bars /
 dials / strip), the three now have distinct corners:
 
 - **Dials** stay in their row inside the capsule.
+  *(Replaced in #133 by glands: same row, three silhouettes instead of
+  three rings + labels. The row's identity comes from the capsule frame,
+  not from a uniform shape.)*
 - **Weapons** march along the bottom strip toward the centre.
 - **Active item** owns the opposite corner — for P1 the right side of
   the strip, for P2 the left. In coop each player gets the same corner
@@ -161,6 +210,14 @@ inside the ceiling. The levers, in order:
 [ADR-0009](../adr/0009-glow-cache-quantized-keys.md)), `bio_bar`
 stays per-frame and rule-of-thumb stays: no per-frame `Surface`
 allocations.
+
+The gland's pulse glow rides the same cache; the silhouette itself is
+one call to a procedural icon drawer (`lagarto.render.icons`) per
+gland per frame — six calls in coop, all under the same 1 ms budget.
+Reusing the icon drawers instead of inventing a new silhouette for the
+cooldown row is what keeps the gland work inside the budget: the art
+already had to draw on the screen for mutations and charms, the HUD
+just pays for the existing path.
 
 ## Verification
 
@@ -195,6 +252,17 @@ overshoot, and a two-skull draw stays under the 1 ms budget. They
 were added into the same file (rather than a separate script) so a
 broken HUD never passes one check and fails another -- the whole
 anatomy fails or the whole anatomy passes.
+
+The gland specifics from #133 ride the same file (sections 11-15):
+the silhouette inflates monotonically with frac and reaches the max
+radius exactly at `frac == 1`; the three states (charging,
+ready-but-no-energy, ready) have pairwise pixel histograms that do not
+collide; the three glands fit inside the 196-px cooldowns capsule in
+both singleplayer and coop; the cooldown row of `state_play._draw_hud`
+emits zero `ui.text` calls (the silhouette is the only signal); six
+glands in coop stay under the 1 ms HUD frame budget. `--shot` writes
+`hud-glands-states.bmp` with a 3×3 grid so the three states of each
+gland can be inspected without running the game.
 
 `tools/check_hud_anatomy.py` was broken on purpose during writing to
 confirm both halves of the spring and the bottom anchor are checked.

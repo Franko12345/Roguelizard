@@ -140,6 +140,12 @@ chk(132, "fole e cranio",
     hasattr(_hudlib, 'Bellows') and hasattr(_hudlib, 'CranialFluid')
     and _ha.returncode == 0,
     "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
+chk(133, "cooldowns sao glandulas",
+    hasattr(_hudlib, 'gland')
+    and 'hud.gland' in src(__import__('lagarto.game.state_play', fromlist=['x']))
+    and 'hud.dial(' not in src(__import__('lagarto.game.state_play', fromlist=['x']))
+    and _ha.returncode == 0,
+    "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
 _t = subprocess.run([sys.executable, 'tools/check_tongue.py'], capture_output=True,
                     env={**os.environ, 'PYTHONPATH': '.'})
 chk(21, "IK tongue", hasattr(Player, 'tongue_path') and _t.returncode == 0,

@@ -10,6 +10,12 @@ id, centre, radius, colour)`. IDs match `weapons.WEAPONS`,
 `evolution.MUTATIONS` (`Mutation.icon`), and `charms.CHARMS`. Fallback =
 disc, so a new ID never breaks rendering.
 
+The same drawers are reused by the HUD cooldown glands (issue #133):
+`_legs_icon` for dash, `_tongue` for the tongue, `_club` for the whip.
+The HUD calls them directly through `hud.gland(surf, centre, r, frac,
+colour, fn, t, enabled=True)` -- no `ui.text`, no per-frame `Surface`,
+just the icon scaled by the recharge fraction. Reuse, not new art.
+
 Assets (Phase 7): if `assets/<id>.png` exists, `lagarto/render/assets.py`
 prefers the pixel-art PNG; otherwise the procedural drawer runs. Sound
 and music stay 100% synthesised.

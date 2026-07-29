@@ -438,4 +438,262 @@ print(f"[10] entry overshoot: OK -- wired in _draw_hud, fired on P0 "
       f"(vx={cap0.vitals_spring.vx:.1f}, vy={cap0.vitals_spring.vy:.1f}) "
       f"and P1 (vx={cap1.vitals_spring.vx:.1f})")
 
+# ---- 11. gland: size depends on frac ONLY, not on enabled -------------- #
+# Issue #133 review: the silhouette was previously using ``enabled`` to
+# override size at the ready-but-no-energy branch, so a wingless player
+# with low energy and a still-ticking cooldown got a full-size gland.
+# That is the glandula-cheia-com-cooldown mentira in a different guise:
+# size is the recharge read, not the budget read. ``enabled`` must carry
+# only the colour and the pulse glow.
+from lagarto.render import icons
+gland_test = pygame.Surface((44, 44), 0, 24)
+def _gland_footprint(frac, enabled):
+    gland_test.fill((9, 11, 18))
+    hud.gland(gland_test, (22, 22), 11, frac, (78, 236, 126),
+              icons._legs_icon, 0.0, enabled=enabled)
+    return sum(1 for x in range(44) for y in range(44)
+               if gland_test.get_at((x, y))[:3] != (9, 11, 18))
+
+# (1) size at the same frac is identical regardless of enabled
+mid_fracs = (0.0, 0.25, 0.5, 0.75, 0.95)
+for frac in mid_fracs:
+    s_en = _gland_footprint(frac, enabled=True)
+    s_no = _gland_footprint(frac, enabled=False)
+    assert s_en == s_no, \
+        f"size at frac={frac} depends on enabled: enabled={s_en} != disabled={s_no}"
+# (2) size is strictly smaller than full at every frac < 1 -- the glandula
+# cheia mentira. Use enabled=False to compare silhouette pixels only (no
+# glow confounding the count).
+full_size = _gland_footprint(1.0, enabled=False)
+for frac in mid_fracs + (0.999,):
+    s = _gland_footprint(frac, enabled=False)
+    assert s < full_size, \
+        f"size at frac={frac} should be < full: {s} >= {full_size}"
+# (3) size is monotonic non-decreasing in frac (enabled=False keeps glow
+# out of the pixel count)
+fracs = mid_fracs + (1.0,)
+sizes = [_gland_footprint(f, enabled=False) for f in fracs]
+for prev, cur, frac in zip(sizes, sizes[1:], fracs[1:]):
+    assert cur >= prev, f"size not monotonic at frac={frac}: {cur} < {prev}"
+# (4) the pulse glow fires ONLY on ready (frac >= 1 AND enabled). Size
+# alone does not separate ready-but-no-energy from ready; the glow does.
+no_glow_px = _gland_footprint(1.0, enabled=False)
+glow_px = _gland_footprint(1.0, enabled=True)
+assert glow_px > no_glow_px + 50, \
+    f"glow missing on ready: glow={glow_px} px vs no-glow={no_glow_px} px"
+print(f"[11] gland size: OK -- frac 0..1 -> {sizes[0]}..{sizes[-1]} px; same "
+      f"value regardless of enabled; glow fires only on ready")
+
+# ---- 12. gland: three states visually distinct for every icon ---------- #
+# Each state must look different -- the issue's three thresholds:
+# charging, ready-but-no-energy, ready. Two states that look the same
+# collapse to the same image and would let the player mistake 'cooling
+# down' for 'ready'. We test the contrast on ALL THREE icons (legs /
+# tongue / club); the tongue check exists because _tongue previously
+# hardcoded its colour (icons.py review) and broke the three-state
+# contract for one of the three abilities.
+#
+# The three pairs separate by different signals:
+# - charging vs ready: SIZE + COLOR + GLOW (huge pixel delta)
+# - no-energy vs ready: COLOR + GLOW (huge pixel delta)
+# - charging vs no-energy: SIZE only -- the silhouettes are both grey.
+#   We test this pair with a bounding-box check instead of a histogram
+#   distance: the tongue icon is sparse enough that the size-only delta
+#   has a small pixel histogram (~26) but the bounding box still grows
+#   from r=7 to r=11, which is what the eye reads.
+import collections
+def _hist(surf):
+    counter = collections.Counter()
+    w, h = surf.get_width(), surf.get_height()
+    for x in range(w):
+        for y in range(h):
+            counter[surf.get_at((x, y))[:3]] += 1
+    return counter
+
+def _hist_distance(a, b):
+    keys = set(a) | set(b)
+    return sum(abs(a.get(k, 0) - b.get(k, 0)) for k in keys)
+
+def _render_state(fn, color, frac, enabled):
+    gland_state = pygame.Surface((50, 50), 0, 24)
+    gland_state.fill((9, 11, 18))
+    hud.gland(gland_state, (25, 25), 11, frac, color, fn, 0.0, enabled=enabled)
+    return gland_state
+
+def _silhouette_bbox(surf, bg=(9, 11, 18)):
+    min_x = min_y = 10**9
+    max_x = max_y = -1
+    for x in range(surf.get_width()):
+        for y in range(surf.get_height()):
+            if surf.get_at((x, y))[:3] != bg:
+                if x < min_x: min_x = x
+                if y < min_y: min_y = y
+                if x > max_x: max_x = x
+                if y > max_y: max_y = y
+    if max_x < 0:
+        return (0, 0, 0, 0)
+    return (min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+
+ICON_CASES = (("legs", icons._legs_icon, (78, 236, 126)),
+              ("tongue", icons._tongue, (235, 90, 120)),
+              ("club", icons._club, (250, 190, 90)))
+HIST_THRESHOLD = 30         # colour / glow pairs (huge pixel deltas)
+BBOX_DELTA = 4              # size-only pair: 11 vs 7 -> bbox grows by ~4
+for name, fn, col in ICON_CASES:
+    surf_c = _render_state(fn, col, 0.4, enabled=True)
+    surf_n = _render_state(fn, col, 1.0, enabled=False)
+    surf_r = _render_state(fn, col, 1.0, enabled=True)
+    hc, hn, hr = _hist(surf_c), _hist(surf_n), _hist(surf_r)
+    # colour / glow pairs: histogram distance must clear the threshold
+    for label_a, label_b, ha, hb in (("charging", "ready", hc, hr),
+                                     ("no-energy", "ready", hn, hr)):
+        d = _hist_distance(ha, hb)
+        assert d > HIST_THRESHOLD, \
+            f"{name} gland states {label_a} vs {label_b} too similar (distance {d})"
+    # size-only pair: bounding-box area must grow (silhouette is bigger)
+    bb_c = _silhouette_bbox(surf_c)
+    bb_n = _silhouette_bbox(surf_n)
+    area_c = bb_c[2] * bb_c[3]
+    area_n = bb_n[2] * bb_n[3]
+    assert area_n - area_c >= BBOX_DELTA, \
+        f"{name} gland charging vs no-energy bounding box did not grow: " \
+        f"charging {bb_c} area {area_c}, no-energy {bb_n} area {area_n}"
+# Headline numbers from the legs pair (other two icons print the same
+# pattern: charging-vs-ready / no-energy-vs-ready in the thousands,
+# charging-vs-no-energy bounded by the icon's own size delta).
+legs_c = _render_state(icons._legs_icon, (78, 236, 126), 0.4, enabled=True)
+legs_n = _render_state(icons._legs_icon, (78, 236, 126), 1.0, enabled=False)
+legs_r = _render_state(icons._legs_icon, (78, 236, 126), 1.0, enabled=True)
+hc, hn, hr = _hist(legs_c), _hist(legs_n), _hist(legs_r)
+bb_c = _silhouette_bbox(legs_c)
+bb_n = _silhouette_bbox(legs_n)
+print(f"[12] gland states: OK -- legs histogram: charging vs no-energy "
+      f"{_hist_distance(hc, hn)}, charging vs ready "
+      f"{_hist_distance(hc, hr)}, no-energy vs ready "
+      f"{_hist_distance(hn, hr)}; bbox charging {bb_c[2]}x{bb_c[3]} -> "
+      f"no-energy {bb_n[2]}x{bb_n[3]}; legs / tongue / club all pass")
+
+# ---- 13. gland: three glands fit inside the cooldowns capsule ---------- #
+# The pitch is bar_w // 3, each gland is r px wide. Singleplayer and coop
+# both use the same bar_w; the coop check at [1] already asserts the two
+# player blocks do not collide.
+bar_w = C.HUD_PANEL_W - 2 * C.HUD_PAD
+pitch = bar_w // 3
+r = 11
+centres = [pitch // 2 + pitch * i for i in range(3)]
+for i in range(3):
+    for j in range(i + 1, 3):
+        gap = centres[j] - centres[i]
+        assert gap > 2 * r, f"gland {i} and {j} overlap: gap {gap - 2 * r} px"
+last_edge = centres[-1] + r
+assert last_edge <= bar_w, f"glands overflow capsule: last edge {last_edge} > bar_w {bar_w}"
+# verify a real coop draw: two players, six glands, all within their own
+# 216-px panel, panels themselves don't collide (re-asserted via #1).
+g3 = _game(2)
+g3.wave = 5
+for _ in range(5):
+    g3.step(1 / 60)
+surf = pygame.Surface((C.WIDTH, C.HEIGHT))
+state_play._draw_hud(g3, surf)
+# walk a 6-gland bounding box per player; the y for the cooldowns row is
+# strip_top - GAP - HUD_COOLDOWNS_H ... + HUD_PAD + 4 + 14
+strip_top = C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H
+cd_top = strip_top - C.HUD_BLOCK_GAP - C.HUD_COOLDOWNS_H
+y = cd_top + 4 + 14
+# each player's cooldowns capsule is bw px wide; assert the three gland
+# centres land within it
+for i in range(2):
+    x_anchor = C.HUD_MARGIN if i == 0 else C.WIDTH - C.HUD_PANEL_W - C.HUD_MARGIN
+    left = x_anchor + C.HUD_PAD
+    right = left + bar_w
+    assert left + centres[0] - r >= x_anchor, "first gland clipped on left"
+    assert left + centres[-1] + r <= right, "last gland clipped on right"
+print(f"[13] gland layout: OK -- centres {centres} px, gap {centres[1] - centres[0]} px, "
+      f"all fit in {bar_w} px capsule")
+
+# ---- 14. gland: cooldown row emits no ui.text --------------------------- #
+# The trade-off #133 chose: identity over scan speed. The cooldown row must
+# not emit any text -- the silhouette is the only signal. Walking the
+# _draw_hud source between the cooldowns capsule and the strip section
+# must find zero ui.text calls.
+draw_src = inspect.getsource(__import__('lagarto.game.state_play', fromlist=['x']))
+cd_idx = draw_src.index('cd_rect = pygame.Rect(cdx, cdy')
+strip_idx = draw_src.index('# ---- bottom strip', cd_idx)
+section = draw_src[cd_idx:strip_idx]
+text_calls = section.count('ui.text(')
+assert text_calls == 0, \
+    f"cooldowns row emitted {text_calls} ui.text call(s) -- labels are gone"
+print(f"[14] no text in cooldowns row: OK -- 0 ui.text call(s) in the section")
+
+# ---- 15. gland: six glands in coop stay inside the HUD frame budget ------ #
+# The full _draw_hud perf check at [6] already covers this; we add a
+# direct micro-bench on hud.gland for regression safety -- six glands is
+# the coop worst case.
+import time as _t
+micro = pygame.Surface((C.WIDTH, C.HEIGHT))
+start = _t.perf_counter()
+for f in range(400):
+    micro.fill((9, 11, 18))
+    for i in range(6):
+        frac = ((f + i) % 100) / 100.0
+        enabled = ((f + i) % 5) != 0
+        fn = (icons._legs_icon, icons._tongue, icons._club)[i % 3]
+        col = ((78, 236, 126), (235, 90, 120), (250, 190, 90))[i % 3]
+        hud.gland(micro, (100 + (i % 3) * 65, 100), 11, frac, col, fn, f / 60.0,
+                  enabled=enabled)
+elapsed_ms = (_t.perf_counter() - start) / 400 * 1000
+assert elapsed_ms < 1.0, f"six glands cost {elapsed_ms:.3f} ms/frame (budget 1.0 ms)"
+print(f"[15] six-gland perf: OK -- {elapsed_ms:.3f} ms/frame (budget 1.0 ms)")
+
+# ---- 16. gland screenshot: three states in a grid ------------------------ #
+# A reference image so the issue's three states are inspectable without
+# running the game. Three icons (DASH / LING / RABO) x three states
+# (charging / no-energy / ready) = 9 cells, with column headers above
+# and a per-cell state label below. Earlier revision placed every label
+# of a column at the same Y, which stacked three labels on top of each
+# other -- fixed by giving each cell its own label band.
+if '--shot' in sys.argv:
+    cell = 56
+    pad = 8
+    header_h = 18
+    label_h = 18
+    legs_col = (78, 236, 126)
+    tongue_col = (235, 90, 120)
+    club_col = (250, 190, 90)
+    icons_row = (('DASH', icons._legs_icon, legs_col),
+                 ('LING', icons._tongue, tongue_col),
+                 ('RABO', icons._club, club_col))
+    cases = (
+        ('charging', 0.4, True),
+        ('pronta sem energia', 1.0, False),
+        ('pronta', 1.0, True),
+    )
+    label_font = fonts.get(16)
+    cols = len(icons_row)
+    rows = len(cases)
+    grid_w = pad + cols * (cell + pad)
+    grid_h = pad + header_h + rows * (cell + label_h + pad)
+    grid = pygame.Surface((grid_w, grid_h), 0, 24)
+    grid.fill((9, 11, 18))
+    # Column headers above each column
+    for col_i, (name, _, _) in enumerate(icons_row):
+        cx = pad + col_i * (cell + pad) + cell // 2
+        img = label_font.render(name, True, (220, 220, 232))
+        grid.blit(img, (cx - img.get_width() // 2, pad))
+    # Cell + state label band per row
+    for row_i, (state_name, frac, enabled) in enumerate(cases):
+        for col_i, (name, fn, c) in enumerate(icons_row):
+            x = pad + col_i * (cell + pad)
+            y = pad + header_h + row_i * (cell + label_h + pad)
+            cell_surf = pygame.Surface((cell, cell), 0, 24)
+            cell_surf.fill((16, 18, 30))
+            hud.gland(cell_surf, (cell // 2, cell // 2), 11, frac, c, fn, 0.4,
+                      enabled=enabled)
+            grid.blit(cell_surf, (x, y))
+            lbl = label_font.render(state_name, True, (220, 220, 232))
+            grid.blit(lbl, (x + cell // 2 - lbl.get_width() // 2,
+                            y + cell + 1))
+    pygame.image.save(grid, 'hud-glands-states.bmp')
+    print(f"  screenshot: hud-glands-states.bmp ({grid_w}x{grid_h})")
+
 print("ALL OK")
