@@ -498,32 +498,52 @@ TAU = math.tau
 
 # --- HUD anatomico (issue #130) ---------------------------------------------- #
 # Layout moved from the top corners to the bottom corners so the TopStack owns
-# the full top column. Each player block is now wrapped in an `ui.panel` (the
-# `capsula` in the HUD-anatomy doc) with its own low-frequency spring that
-# trembles on damage and on value changes -- the organs inside stay on their
-# own, faster rhythms.
-HUD_PANEL_W = 216
+# the full top column. Each player block is now TWO framed `ui.panel`s (the
+# `capsulas` in the HUD-anatomy doc) -- vitais e cooldowns -- each with its own
+# low-frequency spring. The weapon/item strip lives below them, unframed.
+# Issue #130 requires the two capsules be visually distinct: a fast organ
+# (energy) inside the same frame as a slow container (the capsule spring) MUST
+# NOT share the same border, or the eye reads the two as one.
+# The vitais capsule owns three organs: health sacs (#131), energy bellows +
+# XP skull (#132). Each organ owns its own height, and the vitais capsule is
+# the sum of those heights + header + the gaps between organs.
+HUD_PANEL_W = 216            # vitais + cooldowns share width
+HUD_HEAD_H = 20              # header band (P1/Nv + level)
+# Per-organ heights. Sum + gaps + header = HUD_VITALS_H below.
+HUD_HEALTH_H = 40            # health sacs (2 rows of 18 + gap)
+HUD_BELLOWS_H = 18           # energy bellows
+HUD_SKULL_H = 46             # XP skull (visually heaviest organ)
+HUD_ORGAN_GAP = 4            # gap between organs inside the vitais capsule
+# Two-capsule structure (issue #130 foundation): vitais + cooldowns each own
+# their own spring and their own ui.panel frame. Cooldowns holds the three
+# dials; its height equals HUD_DIALS_H so the dials row fits cleanly.
+HUD_DIALS_H = 34
+HUD_VITALS_H = (HUD_HEAD_H + HUD_HEALTH_H + HUD_ORGAN_GAP + HUD_BELLOWS_H
+                + HUD_ORGAN_GAP + HUD_SKULL_H)
+HUD_COOLDOWNS_H = HUD_DIALS_H
+HUD_STRIP_H = 28             # weapons + item row, no frame
+HUD_BLOCK_GAP = 8            # vertical gap between vitais / cooldowns / strip
 HUD_MARGIN = 12              # panel inset from screen edge
 HUD_PAD = 10                 # interior left/right padding
-HUD_HEAD_H = 20              # header band (P1/Nv + level)
-# Organ bands, top to bottom. Each organ owns its own height so the capsule
-# height is a sum, not a magic number: health sacs (2 rows of 18 + gap),
-# energy bellows, XP skull, dial row, weapon/item strip.
-HUD_HEALTH_H = 40            # sac rows grow upward from the baseline
-HUD_BELLOWS_H = 18
-HUD_SKULL_H = 46
-HUD_DIALS_H = 34
-HUD_STRIP_H = 30
-HUD_PANEL_H = (HUD_HEAD_H + HUD_HEALTH_H + 4 + HUD_BELLOWS_H + 4
-               + HUD_SKULL_H + 4 + HUD_DIALS_H + HUD_STRIP_H)
-# Spring under the capsule: low frequency, mildly overdamped. The capsule is
-# "massa rigida" -- the overshoot on entry and the tremble on damage both come
+HUD_PLAYER_H = HUD_VITALS_H + HUD_COOLDOWNS_H + HUD_STRIP_H + 2 * HUD_BLOCK_GAP
+# Spring under each capsule: low frequency, mildly overdamped. The capsule is
 # from this one mass-spring-damper. k and c were chosen so a 1-px step input
-# settles below 0.05 px in ~20 frames (no perpetual wobble -- see the doc).
+# settles below 0.05 px in ~40 frames (no perpetual wobble -- see the doc).
 HUD_SPRING_K = 38.0
 HUD_SPRING_C = 9.0
-# Damage impulse (px) given to the spring on a hit. Cumulative per frame so a
-# stack of small hits still visibly shakes without flipping the capsule.
+# Simulation rate for the capsule springs. 30 Hz (not the 60 Hz sim) is the
+# lever the issue calls out: a spring amortecido on a slow container is
+# invisivel abaixo de 30 fps, and halving the rate also halves the integration
+# cost. Render-side interpolation between sub-steps keeps it smooth at 60 fps.
+HUD_SIM_HZ = 30
+# Impulses (px/s) on the spring. Velocity impulses are integrated, not absolute
+# position offsets, so stacking multiple sources in one frame sums naturally.
+HUD_IMPULSE_ENTRY_X = 90.0   # right-to-left slide on entry (P1), -90 for P2
+HUD_IMPULSE_ENTRY_Y = -30.0  # up motion on entry, eases back to rest
+HUD_IMPULSE_DMG = 320.0      # large hit: the loudest spring kick
+HUD_IMPULSE_VALUE = 160.0    # energy/xp change: noticeable but quieter
+# Damage shake envelope (px) on top of the spring displacement. Two distinct
+# amplitudes so the player can tell a damage event from a value-change event.
 HUD_SHAKE_HP = 6.0
 HUD_SHAKE_VALUE = 3.0       # on any non-damage change inside the panel
 HUD_SHAKE_DUR = 0.55        # seconds the sine lingers before fully fading
