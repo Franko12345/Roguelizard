@@ -315,6 +315,17 @@ def wave_budget(wave, theme_budget):
     return int(base)
 
 
+def tier_price_mult(wave):
+    """Multiplicador de preco do estagio. Cresce por tier, nao por wave, entao
+    o preco salta na wave do boss e fica estavel entre bosses.
+
+    Vale para a loja do camp (state_camp.shop_price) e para o bonus de rota
+    "polen", que precisa acompanhar a inflacao ou vira a rota obviamente pior
+    no late.
+    """
+    return 1.0 + C.SHOP_TIER_STEP * (wave // BOSS_EVERY)
+
+
 def wave_cap(wave, theme_cap):
     """How many enemies may be alive at once, before the boss-round halving."""
     bonus = 0
