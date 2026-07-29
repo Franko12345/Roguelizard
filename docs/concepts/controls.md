@@ -38,6 +38,20 @@ On the raw-joystick fallback the triggers are only read on a 6-axis pad: with
 four axes, axis 2/3 *are* the right stick, so trusting axis 2 would make aiming
 roll.
 
+## Global keys
+
+Not player actions — preferences, so they are read in `app.py` before the
+per-state handlers and work in any state.
+
+- **TAB** — toggle the [stat grid](./stat-grid.md). A latch, not a hold;
+  default on; persisted in `core/settings.py`. One toggle for the whole
+  game, not one per player.
+- **F3** — cycle the perf meter. **F11** — fullscreen. **ESC** — pause.
+
+TAB was the free key: P1 and P2 between them take WASD, the arrows, IJKL,
+space, both shifts, both ctrls, RALT, Q/E/U/O, and the sandbox overlay
+takes backquote / F1.
+
 ## Window (`display.py`)
 
 Everything is drawn on a fixed logical surface (`C.WIDTH × C.HEIGHT`) and
@@ -58,5 +72,7 @@ navigates menu, level-up cards, and camp.
 
 - [Input buffer](./input-buffer.md) — grace window for actions.
 - [Dodge](./dodge.md) — what the new button does.
-- [Pause](./pause.md) — controls text is shared with the pause menu.
+- [Pause](./pause.md) — controls text is shared with the pause menu
+  (`menu.CONTROLS`, which lists the global keys too).
+- [Stat grid](./stat-grid.md) — what TAB shows and hides.
 - [Camp](./camp.md) — walk-in-shop input model.
