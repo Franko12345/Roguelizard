@@ -22,6 +22,18 @@ from ..world.pickups import Bug
 from . import hud
 
 
+_HUD_ANATOMY = {}
+
+
+def _anatomy_state(player):
+    key = id(player)
+    state = _HUD_ANATOMY.get(key)
+    if state is None:
+        state = (hud.Bellows(player.energy / player.max_energy), hud.CranialFluid())
+        _HUD_ANATOMY[key] = state
+    return state
+
+
 def update(game, dt):
     # a queued level-up pauses the action for a card pick
     for p in game.players:
@@ -129,15 +141,17 @@ def _draw_hud(game, surf):
         ui.text(surf, game.font, f"{int(p.health)}/{int(p.max_health)}",
                 (x + bw // 2, hy), (255, 255, 255), align='center')
 
-        # energy + xp: slim sacs (no flagella -- too short to read)
+        bellows, fluid = _anatomy_state(p)
+        energy_fraction = clamp(p.energy / p.max_energy, 0, 1)
+        xp_fraction = clamp(p.xp / p.xp_to_next, 0, 1)
+        bellows.update(energy_fraction, 1 / C.SIM_HZ)
+        fluid.update(xp_fraction, 1 / C.SIM_HZ)
         ey = hy + 22
-        hud.bio_bar(surf, x, ey, bw, 8, p.energy / p.max_energy, (96, 206, 240),
-                    game.time)
-        xy = ey + 12
-        hud.bio_bar(surf, x, xy, bw, 6, clamp(p.xp / p.xp_to_next, 0, 1),
-                    (245, 205, 84), game.time + 1.7)
+        hud.draw_bellows(surf, (x, ey, bw, 18), bellows)
+        xy = ey + 22
+        hud.draw_skull(surf, (x, xy, bw, 46), p.level, xp_fraction, fluid)
         # ability cooldown dials (dash / tongue) -> readable "can I act?" feedback
-        dy = xy + 16
+        dy = xy + 50
         # three dials in a 216px panel: 78px pitch overflowed, so 11px radius
         # on a 68px pitch, with short labels
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
