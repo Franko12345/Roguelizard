@@ -348,6 +348,14 @@ The organic HUD element (membrane + meniscus + inner glow + flagella) used
 for health/energy/xp. Not a rectangle.
 _Avoid_: stat bar, gauge.
 
+**Stat grid**:
+The per-player column in the HUD that shows the run's numbers — `might`,
+health, `cooldown_mult`, `speed_mult`, `area_mult` — plus a row of icons for
+the items and charms owned (`hud.stat_grid`). Glued under that player's bio
+bar, one column per player. TAB toggles it (latch, default on, persisted);
+cached through `Game._panel` keyed on the displayed strings.
+_Avoid_: stat panel, stats HUD, character sheet, loadout.
+
 **TopStack**:
 The reservation-based layout for the top-of-screen HUD (score, wave, combo,
 banner, boss name, boss bar). Elements call `top.take(h)`; order of draw =
