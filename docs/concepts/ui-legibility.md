@@ -49,6 +49,27 @@ it needs (`top.take(h)`) and gets the next free strip.
 - The **HUD is hidden in `levelup` / `camp`** — those screens have their
   own header, and the HUD under the veil only competed with the panels.
 
+### The top stack owns the lingua do mundo
+
+The `TopStack` is **the centrepiece of the HUD's second language**, the
+lingua do mundo. The rule is set in [HUD anatomy](./hud-anatomy.md) and
+ratified by #134:
+
+- Every element here is *the run* (score, wave), *the world's
+  announcement* (banner), or *the other body* (boss name, boss bar).
+  None is an organ of the player.
+- The `TopStack` is therefore the **only place** the lingua do mundo
+  is allowed to grow. The seed for adding a new element is "is this
+  about the world, or about me?" — about-me goes to the capsule in
+  the rodape; about-world goes to the `TopStack`.
+- The `TopStack` keeps its own reservation rule (draw order = priority,
+  banner last, banners are transient) because the column would jam
+  otherwise. That reservation does **not** need to know about the
+  rodape's spring — the two layers are independent by design.
+- The `TopStack` is **NOT** to be retrofitted with the rodape capsule
+  or organ metaphor. The split is the decision; unifying them would
+  force anatomy on the score and the wave, which has no honest answer.
+
 ## Related
 
 - [Health HUD](./health-hud.md) — reads through this stack.

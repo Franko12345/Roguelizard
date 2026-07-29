@@ -392,3 +392,18 @@ The reservation-based layout for the top-of-screen HUD (score, wave, combo,
 banner, boss name, boss bar). Elements call `top.take(h)`; order of draw =
 priority.
 _Avoid_: HUD (HUD is broader).
+
+**Lingua do corpo**:
+The HUD's anatomy metaphor — every readout in the rodape is an organ inside
+a capsule. Lives in the two capsules per player, vitais + cooldowns. The
+metaphor is enforced by [ADR-0015](docs/adr/0015-hud-anatomy.md) and the rodape
+is the only place it applies.
+_Avoid_: HUD style, HUD look, HUD theme.
+
+**Lingua do mundo**:
+The HUD's second language — the lingua do mundo covers the top-centre
+column and the things that aren't the body: the run's score, the wave's
+progress, the boss's name, the boss's bar, the friends' count. It is the
+default language for the `TopStack` and is **not** anatomy. Ratified by
+#134 and [ADR-0016](docs/adr/0016-topo-e-mundo.md).
+_Avoid_: HUD chrome, HUD chrome style, HUD chrome language.
