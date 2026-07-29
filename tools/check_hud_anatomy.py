@@ -194,4 +194,80 @@ if amp_dmg <= amp_heal:
 print(f"[5] detect_changes: OK -- damage shake={amp_dmg:.1f} px louder "
       f"than value shake={amp_heal:.1f} px")
 
+# ---- 6. XP skull: brain grows monotonically, folds accumulate ------------- #
+# Issue #132: brain size and folds encode *level* and must never shrink, so a
+# player who levelled up can never read the HUD as a regression.
+DT = 1 / 60
+sizes = []
+previous = hud.brain_size(1)
+for level in range(1, 101):
+    size = hud.brain_size(level)
+    assert size >= previous, f"brain shrank at level {level}: {size} < {previous}"
+    sizes.append(size)
+    previous = size
+    if level > 1:
+        gained = hud.brain_folds(level) - hud.brain_folds(level - 1)
+        assert 1 <= gained <= 2, f"level {level} gained {gained} folds"
+assert sizes[-1] > sizes[0], "brain did not grow across the run"
+print(f"[6] brain: OK -- {sizes[0]:.3f} -> {sizes[-1]:.3f}, never shrank")
+
+# ---- 7. cranial fluid drains at level-up and then settles ---------------- #
+# The fluid is XP *inside* the level: it must hit zero on level-up (Action) and
+# its wave must stop ringing (Follow-through).
+fluid = hud.CranialFluid()
+fluid.update(0.96, DT)
+for _ in range(12):
+    fluid.update(0.96, DT)
+peak = fluid.amplitude
+fluid.update(0.0, DT)
+assert fluid.last_fraction == 0.0, "cranial fluid did not drain on level-up"
+for _ in range(300):
+    fluid.update(0.0, DT)
+assert fluid.amplitude < 0.002, f"fluid never settled: {fluid.amplitude:.5f}"
+print(f"[7] fluid: OK -- peak {peak:.4f}, settled {fluid.amplitude:.5f}, drained")
+
+# ---- 8. energy bellows collapses on the spend frame ---------------------- #
+bellows = hud.Bellows(1.0)
+values = []
+for _ in range(90):
+    bellows.update(0.5, DT)
+    values.append(bellows.fraction)
+assert values[0] < 1.0, "bellows did not collapse on the spend frame"
+assert min(values) >= 0.44, "bellows spring overshot too far"
+for _ in range(90):
+    bellows.update(0.9, DT)
+assert bellows.fraction > values[-1], "bellows did not inflate with energy"
+print(f"[8] bellows: OK -- spend frame {values[0]:.4f}, settled {values[-1]:.4f}, "
+      f"refilled {bellows.fraction:.4f}")
+
+# ---- 9. two skulls stay inside the HUD frame budget --------------------- #
+budget_surf = pygame.Surface((960, 540))
+import time
+start = time.perf_counter()
+for frame in range(600):
+    for player in range(2):
+        f = hud.CranialFluid()
+        f.update((frame % 100) / 100, DT)
+        hud.draw_skull(budget_surf, (16 + player * 728, 470, 216, C.HUD_SKULL_H),
+                       8, 0.7, f)
+elapsed_ms = (time.perf_counter() - start) * 1000 / 600
+assert elapsed_ms < 1.0, f"two skulls cost {elapsed_ms:.3f} ms/frame"
+print(f"[9] perf: OK -- two skulls {elapsed_ms:.3f} ms/frame")
+
+if '--shot' in sys.argv:
+    shot = pygame.Surface((720, 150), 0, 24)
+    shot.fill((9, 11, 18))
+    cases = ((1, 0.12, "LEVEL 1 / LOW XP"),
+             (1, 0.92, "LEVEL 1 / NEAR LEVEL"),
+             (8, 0.12, "LEVEL 8"))
+    label_font = fonts.get(18)
+    for i, (level, xp, label) in enumerate(cases):
+        state = hud.CranialFluid()
+        state.update(xp, DT)
+        sx = 14 + i * 238
+        hud.draw_skull(shot, (sx, 22, 216, 72), level, xp, state)
+        shot.blit(label_font.render(label, True, (232, 234, 250)), (sx, 112))
+    pygame.image.save(shot, 'hud-anatomy-comparison.bmp')
+    print("  screenshot: hud-anatomy-comparison.bmp")
+
 print("ALL OK")

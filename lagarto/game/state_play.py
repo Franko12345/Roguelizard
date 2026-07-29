@@ -28,6 +28,18 @@ from ..world.pickups import Bug
 from . import hud
 
 
+_HUD_ANATOMY = {}
+
+
+def _anatomy_state(player):
+    key = id(player)
+    state = _HUD_ANATOMY.get(key)
+    if state is None:
+        state = (hud.Bellows(player.energy / player.max_energy), hud.CranialFluid())
+        _HUD_ANATOMY[key] = state
+    return state
+
+
 def update(game, dt):
     # a queued level-up pauses the action for a card pick
     for p in game.players:
@@ -145,40 +157,49 @@ def _draw_hud(game, surf):
         ui.panel(surf, panel_rect)
 
         # explicit vertical layout: each band is laid out from py, so the
-        # header / bars / dials / strip never collide even when the spring
+        # header / organs / dials / strip never collide even when the spring
         # is trembling. Sum of heights + gaps = HUD_PANEL_H.
         head_y = py + 4                         # P1 / Nv (18 px tall)
         bar_x = px + C.HUD_PAD
         bar_w = bw - 2 * C.HUD_PAD
-        hy = py + C.HUD_HEAD_H + 6              # health (16)
-        ey = hy + 22                            # energy (8)
-        xy = ey + 12                            # xp (6)
-        dy = xy + 18                            # dials row (~30)
+        health_top = py + C.HUD_HEAD_H
+        # draw_health_sacs takes a baseline: the bottom row sits on it and the
+        # rows above grow upward, so the band spans health_top..+HUD_HEALTH_H
+        hy = health_top + C.HUD_HEALTH_H - 18
+        ey = health_top + C.HUD_HEALTH_H + 4    # energy bellows
+        xy = ey + C.HUD_BELLOWS_H + 4           # xp skull
+        dy = xy + C.HUD_SKULL_H + 4             # dials row
+        dial_cx = bar_x + 12
+        dial_pitch = 68
 
         # ---- header band: P1/P2 + level ---------------------------------
         col = p.colorset[0]
         ui.text(surf, game.font, f"P{i+1}", (bar_x, head_y), col)
         ui.text(surf, game.font, f"Nv {p.level}",
                 (px + bw - C.HUD_PAD, head_y), (226, 228, 244), align='right')
+        # HP number rides the header, not the sacs: the sac row is centred in
+        # the capsule and any corner label collided with it.
+        ui.text(surf, game.smallfont,
+                f"{int(p.health)}/{int(p.max_health)}",
+                (px + bw // 2, head_y + 3), (230, 210, 216), align='center')
 
-        hy = y + 26
+        # ---- health: the sac row (organ reaction on the hit frame) ------
         previous_health = getattr(p, '_hud_health', p.health)
         impact = min(1.0, abs(previous_health - p.health) / hud.HEALTH_SAC_HP)
         p._hud_health = p.health
-        hud.draw_health_sacs(surf, x, hy, bw, p.health, p.max_health, game.time,
-                             impact=impact)
-        ui.text(surf, game.smallfont, f"{int(p.health)}/{int(p.max_health)}",
-                (x + bw, hy + 2), (230, 210, 216), align='right')
+        hud.draw_health_sacs(surf, bar_x, hy, bar_w, p.health, p.max_health,
+                             game.time, impact=impact)
 
-        # energy + xp: slim sacs (no flagella -- too short to read)
-        ey = hy + 42
-        hud.bio_bar(surf, x, ey, bw, 8, p.energy / p.max_energy, (96, 206, 240),
-                    game.time)
-        xy = ey + 12
-        hud.bio_bar(surf, x, xy, bw, 6, clamp(p.xp / p.xp_to_next, 0, 1),
-                    (245, 205, 84), game.time + 1.7)
+        # ---- energy bellows + XP skull: one organ each ------------------
+        bellows, fluid = _anatomy_state(p)
+        energy_fraction = clamp(p.energy / p.max_energy, 0, 1)
+        xp_fraction = clamp(p.xp / p.xp_to_next, 0, 1)
+        bellows.update(energy_fraction, 1 / C.SIM_HZ)
+        fluid.update(xp_fraction, 1 / C.SIM_HZ)
+        hud.draw_bellows(surf, (bar_x, ey, bar_w, C.HUD_BELLOWS_H), bellows)
+        hud.draw_skull(surf, (bar_x, xy, bar_w, C.HUD_SKULL_H), p.level,
+                       xp_fraction, fluid)
         # ability cooldown dials (dash / tongue) -> readable "can I act?" feedback
-        dy = xy + 16
         # three dials in a 216px panel: 78px pitch overflowed, so 11px radius
         # on a 68px pitch, with short labels
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)

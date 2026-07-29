@@ -60,7 +60,7 @@ wrong.
 - [UI legibility](./ui-legibility.md) — text rendering + top stack
 - [Health HUD](./health-hud.md) — player, enemy, boss, friend bars
 - [HUD anatomy](./hud-anatomy.md) — capsule + organ + four beats applied
-  to the player HUD
+  to the player HUD (sacs, bellows, skull)
 - [Juice](./juice.md) — hit-stop, transitions, menu drop-in
 - [Icons & audio](./icons-audio.md) — code-generated art and sound
 

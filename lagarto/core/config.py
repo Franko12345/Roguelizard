@@ -503,10 +503,19 @@ TAU = math.tau
 # trembles on damage and on value changes -- the organs inside stay on their
 # own, faster rhythms.
 HUD_PANEL_W = 216
-HUD_PANEL_H = 140            # fits header + 3 bars + dials + weapons/item strip
 HUD_MARGIN = 12              # panel inset from screen edge
 HUD_PAD = 10                 # interior left/right padding
 HUD_HEAD_H = 20              # header band (P1/Nv + level)
+# Organ bands, top to bottom. Each organ owns its own height so the capsule
+# height is a sum, not a magic number: health sacs (2 rows of 18 + gap),
+# energy bellows, XP skull, dial row, weapon/item strip.
+HUD_HEALTH_H = 40            # sac rows grow upward from the baseline
+HUD_BELLOWS_H = 18
+HUD_SKULL_H = 46
+HUD_DIALS_H = 34
+HUD_STRIP_H = 30
+HUD_PANEL_H = (HUD_HEAD_H + HUD_HEALTH_H + 4 + HUD_BELLOWS_H + 4
+               + HUD_SKULL_H + 4 + HUD_DIALS_H + HUD_STRIP_H)
 # Spring under the capsule: low frequency, mildly overdamped. The capsule is
 # "massa rigida" -- the overshoot on entry and the tremble on damage both come
 # from this one mass-spring-damper. k and c were chosen so a 1-px step input

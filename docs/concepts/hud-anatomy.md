@@ -67,6 +67,32 @@ The thing the old HUD was missing was **follow-through on the
 container**: the flagella waved (organ reaction), but the panel they
 lived in was a static rectangle. Two rhythms in series is the answer.
 
+## The organs, one by one
+
+Each vital gets a distinct anatomical motion, so the player never has to read
+a label to know *which* readout moved. Health pulses, energy inflates, XP
+fills a cavity.
+
+### Energy bellows
+
+Energy is a bellows: its inflation follows `energy / max_energy`. Spending
+energy collapses it on the same frame; its damped spring supplies reaction and
+follow-through. Ability dials remain the source of cost-threshold information,
+so the bellows has no cost notches.
+
+### XP skull
+
+The skull separates two progression signals:
+
+- cerebrospinal fluid represents XP inside the current level and drains to
+  zero at level-up;
+- brain size and folds represent level, grow at level-up, and never shrink.
+
+Brain size grows with the square root of level, so there is no reachable hard
+cap and later growth becomes denser rather than escaping the skull. Each level
+adds two folds. The fluid surface is a damped 16-point wave stepped at 30 Hz;
+the renderer allocates no `Surface` per frame.
+
 ## Layout
 
 - **P1 capsule** in the bottom-left corner, **P2** in the bottom-right.
@@ -74,12 +100,17 @@ lived in was a static rectangle. Two rhythms in series is the answer.
 - **Top-centre column** is owned by `TopStack` (score, wave, combo,
   boss name, boss bar, banner). Player blocks no longer compete with it
   — that's the gain the move to the bottom bought.
-- Inside each capsule, top to bottom: header (P1/Nv), health, energy,
-  XP, dial row (DASH / LING / RABO), bottom strip (weapons + active
-  item in their own corners).
+- Inside each capsule, top to bottom: header (P1/Nv + HP number), health
+  sacs, energy bellows, XP skull, dial row (DASH / LING / RABO), bottom
+  strip (weapons + active item in their own corners).
 
-Width and height of the capsule live in `config.HUD_PANEL_W` /
-`HUD_PANEL_H` so the layout maths stays in one place.
+Width lives in `config.HUD_PANEL_W`; the height is a **sum**, not a magic
+number: `HUD_PANEL_H` adds `HUD_HEAD_H`, `HUD_HEALTH_H`, `HUD_BELLOWS_H`,
+`HUD_SKULL_H`, `HUD_DIALS_H` and `HUD_STRIP_H` plus the gaps. Add an organ
+and the capsule grows to fit it instead of the bands colliding.
+
+The HP number rides the header band, centred, because the sac row is
+centred in the capsule width — a corner label collided with it.
 
 ## Active item, weapons, item corner
 
@@ -119,7 +150,7 @@ allocations.
 
 ## Verification
 
-`tools/check_hud_anatomy.py` pins four claims with teeth:
+`tools/check_hud_anatomy.py` pins these claims with teeth:
 
 1. Capsule lives at the bottom — no player block's `y` is above the
    screen mid-line in either singleplayer or coop.
@@ -130,9 +161,17 @@ allocations.
 4. The spring settles — one impulse drives the capsule back to
    `(|x|, |y|) < 0.05 px` within ~1 s of 60 Hz ticks. A spring that
    rings forever is nausea, not feel.
+5. `detect_changes` fires the right shakes — damage louder than a
+   plain value change, and a no-op frame fires nothing.
+6. Brain growth is monotonic and folds accumulate one or two per level.
+7. Cranial fluid drains to zero at level-up and its wave settles.
+8. The bellows collapses on the spend frame without overshooting, and
+   inflates again when energy returns.
+9. Two skulls stay under the 1.0 ms HUD frame budget.
 
 `tools/check_hud_anatomy.py` was broken on purpose during writing to
 confirm both halves of the spring and the bottom anchor are checked.
+`--shot` writes `hud-anatomy-comparison.bmp` with three skull states.
 
 ## Related
 

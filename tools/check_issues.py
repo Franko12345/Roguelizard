@@ -136,6 +136,10 @@ chk(130, "anatomia do HUD",
     hasattr(_hudlib, 'CapsuleSpring') and hasattr(_hudlib, 'PlayerCapsule')
     and _ha.returncode == 0,
     "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
+chk(132, "fole e cranio",
+    hasattr(_hudlib, 'Bellows') and hasattr(_hudlib, 'CranialFluid')
+    and _ha.returncode == 0,
+    "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
 _t = subprocess.run([sys.executable, 'tools/check_tongue.py'], capture_output=True,
                     env={**os.environ, 'PYTHONPATH': '.'})
 chk(21, "IK tongue", hasattr(Player, 'tongue_path') and _t.returncode == 0,
