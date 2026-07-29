@@ -20,6 +20,11 @@ from ...combat import projectile as proj
 from .personality import BossPersonality
 
 PATTERNS = {
+    # Issue #118: each pattern row may carry a ``move`` field -- the
+    # Movement Trail binding for that attack. None means the phase's
+    # ``moves`` slot drives the boss instead. Charge / burrow / grapple
+    # veto by being ``None`` AND short-circuiting the FSM (their own
+    # state machines own the motion).
     'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
     'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
     'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
@@ -27,8 +32,9 @@ PATTERNS = {
     'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
     'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
-    # reach via the dials -- no new logic for a longer arm
-    'swipe': dict(fn=emitter.pincha_bite, windup=0.5, telegraph='line', reach=2.4, dmg=19),
+    # reach via the dials -- no new logic for a longer arm. Bumped 0.5 -> 0.7
+    # so the enraged (0.65) multiplier still leaves the windup at 0.455s.
+    'swipe': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line', reach=2.4, dmg=19),
     'arms_rain': dict(fn=emitter.arms_rain, select=emitter._select_arms_rain,
                       windup=C.BOSS_ARMS_RAIN_WINDUP, telegraph='rain'),
     'sky_slam': dict(fn=emitter.sky_slam, select=emitter._select_arms_rain,
@@ -44,10 +50,15 @@ PATTERNS = {
     'web_dome': dict(fn=emitter.web_trap, select=emitter._select_arms_rain, windup=0.8,
                      telegraph='rain', count=5, spread=180, radius=70, life=9.0),
     # Aranha-Rei's poison bite: same pincha_bite, roots instead of poisoning
-    # (the player has no poison status -- see pincha_bite's docstring)
-    'poison_bite': dict(fn=emitter.pincha_bite, windup=0.3, telegraph='line',
+    # (the player has no poison status -- see pincha_bite's docstring). Bumped
+    # 0.3 -> 0.7 for the 27-frame rule; the bite is still a bite, just with
+    # the floor respected.
+    'poison_bite': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line',
                         reach=1.6, dmg=15, slow=(0.5, 1.4)),
-    'deathroll': dict(fn=emitter.spiral_pattern, windup=0.5, telegraph='spiral',
+    # deathroll: bumped 0.5 -> 0.7 so the floor holds in enraged. The dense
+    # spiral still reads as "bullet hell" -- the windup is the same as the
+    # basic spiral, but the SHOTS dial is what makes it dense.
+    'deathroll': dict(fn=emitter.spiral_pattern, windup=0.7, telegraph='spiral',
                       shots=C.BOSS_DEATHROLL_SHOTS, turn=C.BOSS_DEATHROLL_TURN,
                       gap=C.BOSS_DEATHROLL_GAP, shot_speed=260, shot_dmg=12),
     # burrow has no `fn`/instant fire -- BossAI.tick special-cases `burrow=True`
@@ -116,11 +127,16 @@ PATTERNS = {
 
 def king_phases():
     """3 fases (66/33 -- doc's own thresholds for this boss). Fase 2 adds
-    Radial Burst (1 thing); fase 3 swaps Fan for Spiral + faster cd (2 things)."""
+    Radial Burst (1 thing); fase 3 swaps Fan for Spiral + faster cd (2 things).
+
+    ``moves`` is the MOVES trail (issue #118) -- the BACKGROUND movement
+    between attacks. The rich per-boss signatures (#121-#125) fill these
+    in; today the slot exists so every phase kit compiles.
+    """
     return [
-        dict(hp_frac=1.0, patterns=['fan', 'shockwave', 'charge'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'], cd_mul=1.0),
-        dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'], cd_mul=0.7),
+        dict(hp_frac=1.0, patterns=['fan', 'shockwave', 'charge'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'], cd_mul=0.7, moves=['orbit']),
     ]
 
 
@@ -132,9 +148,9 @@ def king_phases():
 
 def centipede_phases():
     return [
-        dict(hp_frac=1.0, patterns=['burrow', 'spiral', 'pincha'], cd_mul=1.0),
-        dict(hp_frac=0.6, patterns=['burrow', 'spiral', 'pincha', 'radial'], cd_mul=0.85),
-        dict(hp_frac=0.3, patterns=['spiral', 'pincha', 'radial', 'deathroll'], cd_mul=0.7),
+        dict(hp_frac=1.0, patterns=['burrow', 'spiral', 'pincha'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.6, patterns=['burrow', 'spiral', 'pincha', 'radial'], cd_mul=0.85, moves=['orbit']),
+        dict(hp_frac=0.3, patterns=['spiral', 'pincha', 'radial', 'deathroll'], cd_mul=0.7, moves=['orbit']),
     ]
 
 
@@ -154,9 +170,9 @@ def centipede_on_phase(boss, phase_i):
 
 def kraken_phases():
     return [
-        dict(hp_frac=1.0, patterns=['grapple', 'fan', 'swipe'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['grapple', 'fan', 'swipe', 'arms_rain'], cd_mul=1.0),
-        dict(hp_frac=0.33, patterns=['grapple', 'spiral', 'swipe', 'arms_rain'], cd_mul=0.75),
+        dict(hp_frac=1.0, patterns=['grapple', 'fan', 'swipe'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.66, patterns=['grapple', 'fan', 'swipe', 'arms_rain'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['grapple', 'spiral', 'swipe', 'arms_rain'], cd_mul=0.75, moves=['orbit']),
     ]
 
 
@@ -168,11 +184,11 @@ def kraken_phases():
 
 def primordial_phases():
     return [
-        dict(hp_frac=1.0, patterns=['massive_fan', 'shockwave'], cd_mul=1.0),
+        dict(hp_frac=1.0, patterns=['massive_fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon'],
-             cd_mul=0.85),
+             cd_mul=0.85, moves=['orbit']),
         dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon',
-                                     'deathroll', 'homing_fan'], cd_mul=0.5),
+                                     'deathroll', 'homing_fan'], cd_mul=0.5, moves=['orbit']),
     ]
 
 
@@ -183,9 +199,9 @@ def primordial_phases():
 
 def beetle_phases():
     return [
-        dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9),
-        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial'], cd_mul=0.65),
+        dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial'], cd_mul=0.65, moves=['orbit']),
     ]
 
 
@@ -195,9 +211,9 @@ def beetle_phases():
 
 def spider_king_phases():
     return [
-        dict(hp_frac=1.0, patterns=['charge', 'web_trap', 'summon'], cd_mul=1.0),
-        dict(hp_frac=0.6, patterns=['charge', 'web_trap', 'summon', 'web_dome'], cd_mul=0.85),
-        dict(hp_frac=0.3, patterns=['poison_bite', 'web_trap', 'summon', 'web_dome'], cd_mul=0.6),
+        dict(hp_frac=1.0, patterns=['charge', 'web_trap', 'summon'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.6, patterns=['charge', 'web_trap', 'summon', 'web_dome'], cd_mul=0.85, moves=['orbit']),
+        dict(hp_frac=0.3, patterns=['poison_bite', 'web_trap', 'summon', 'web_dome'], cd_mul=0.6, moves=['orbit']),
     ]
 
 
@@ -212,12 +228,12 @@ def spider_king_phases():
 
 def crystal_phases():
     return [
-        dict(hp_frac=1.0, patterns=['barrage', 'fan'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['barrage', 'fan', 'spiral'], cd_mul=1.0),
+        dict(hp_frac=1.0, patterns=['barrage', 'fan'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.66, patterns=['barrage', 'fan', 'spiral'], cd_mul=1.0, moves=['orbit']),
         # "nao acelera, fica mais precisa" -- cd_mul quase intocado de proposito
         # (os outros chefes cortam pra 0.5-0.75; este so ganha 1 padrao a mais).
         # radial_wall e literalmente isso: mais denso, mais LENTO (issue #104).
-        dict(hp_frac=0.33, patterns=['fan', 'spiral', 'radial_wall'], cd_mul=0.85),
+        dict(hp_frac=0.33, patterns=['fan', 'spiral', 'radial_wall'], cd_mul=0.85, moves=['orbit']),
     ]
 
 
@@ -230,11 +246,11 @@ def crystal_phases():
 
 def wasp_phases():
     return [
-        dict(hp_frac=1.0, patterns=['charge', 'fan'], cd_mul=0.9),
-        dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85),
+        dict(hp_frac=1.0, patterns=['charge', 'fan'], cd_mul=0.9, moves=['orbit']),
+        dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85, moves=['orbit']),
         # 'mergulha e mira onde voce VAI estar': lead_fan e o mesmo lead do
         # barrage aberto em leque -- so dials (issue #104)
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan'], cd_mul=0.6),
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan'], cd_mul=0.6, moves=['orbit']),
     ]
 
 
@@ -246,11 +262,15 @@ def wasp_phases():
 
 def eye_phases():
     return [
-        dict(hp_frac=1.0, patterns=['gaze', 'tentacle_swipe', 'spawn_orb'], cd_mul=1.0),
+        # Olho-Sismico: hovers. The mood_speed already drops to 0.2-0.3 in
+        # the calm/agitated states, so even an orbit reads as an observer;
+        # 'hover' is the explicit signal that the body should not seek
+        # distance -- the position is the threat, the pose is the tell.
+        dict(hp_frac=1.0, patterns=['gaze', 'tentacle_swipe', 'spawn_orb'], cd_mul=1.0, moves=['hover']),
         # 66%: mantem gaze+spawn_orb, adiciona shockwave (=seismic_pulse) -- 2 mudancas
-        dict(hp_frac=0.66, patterns=['gaze', 'spawn_orb', 'shockwave'], cd_mul=0.9),
+        dict(hp_frac=0.66, patterns=['gaze', 'spawn_orb', 'shockwave'], cd_mul=0.9, moves=['hover']),
         # 33%: mantem shockwave, adiciona bullet_hell + gaze simultaneo -- 2 mudancas
-        dict(hp_frac=0.33, patterns=['gaze', 'shockwave', 'bullet_hell'], cd_mul=0.7),
+        dict(hp_frac=0.33, patterns=['gaze', 'shockwave', 'bullet_hell'], cd_mul=0.7, moves=['hover']),
     ]
 
 
@@ -305,11 +325,16 @@ def eye_setup(boss):
 def muralha_phases():
     """3 fases (66/33). Fase 1: fire_breath, hand_slam, eye_laser.
     Fase 2: + bouncing_bullets, fire_breath mais frequente.
-    Fase 3: + grid_of_fire, fire_breath+hand_slam simultaneos."""
+    Fase 3: + grid_of_fire, fire_breath+hand_slam simultaneos.
+
+    ``moves=[]`` because A Muralha is ``plan='fixed'`` and ``speed=0``.
+    The slot is declared so the FSM's precedence chain can short-circuit
+    on the empty list and the framework doesn't special-case the wall.
+    """
     return [
-        dict(hp_frac=1.0, patterns=['fire_breath', 'hand_slam', 'eye_laser'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets'], cd_mul=0.85),
-        dict(hp_frac=0.33, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets', 'grid_of_fire'], cd_mul=0.7),
+        dict(hp_frac=1.0, patterns=['fire_breath', 'hand_slam', 'eye_laser'], cd_mul=1.0, moves=[]),
+        dict(hp_frac=0.66, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets'], cd_mul=0.85, moves=[]),
+        dict(hp_frac=0.33, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets', 'grid_of_fire'], cd_mul=0.7, moves=[]),
     ]
 
 
@@ -333,12 +358,12 @@ def ankh_phases():
     novo nenhum: ela devolve os que voce ja aprendeu a ler, sobrepostos.
     """
     return [
-        dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0),
-        dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95),
-        dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85),
+        dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95, moves=['orbit']),
+        dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85, moves=['orbit']),
         dict(hp_frac=0.25,
              patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral'],
-             cd_mul=0.6),
+             cd_mul=0.6, moves=['orbit']),
     ]
 
 
@@ -367,7 +392,7 @@ def default_phases():
     new thing); phase 3 adds 'barrage' and hands out shorter cooldowns (the
     other thing) -- never more than two changes per threshold."""
     return [
-        dict(hp_frac=1.0, patterns=['radial', 'fan'], cd_mul=1.0),
-        dict(hp_frac=0.66, patterns=['radial', 'fan', 'summon'], cd_mul=1.0),
-        dict(hp_frac=0.33, patterns=['fan', 'barrage', 'summon'], cd_mul=0.75),
+        dict(hp_frac=1.0, patterns=['radial', 'fan'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.66, patterns=['radial', 'fan', 'summon'], cd_mul=1.0, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['fan', 'barrage', 'summon'], cd_mul=0.75, moves=['orbit']),
     ]
