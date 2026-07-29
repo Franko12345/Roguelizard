@@ -369,8 +369,9 @@ _Avoid_: stat bar, gauge.
 The per-player column in the HUD that shows the run's numbers — `might`,
 health, `cooldown_mult`, `speed_mult`, `area_mult` — plus a row of icons for
 the items and charms owned (`hud.stat_grid`). Glued under that player's bio
-bar, one column per player. TAB toggles it (latch, default on, persisted);
-cached through `Game._panel` keyed on the displayed strings.
+bar in play, and one column per player flanking the shop cards in the camp.
+TAB toggles it (latch, default on, persisted); cached through `Game._panel`
+keyed on the displayed strings.
 _Avoid_: stat panel, stats HUD, character sheet, loadout.
 
 **TopStack**:

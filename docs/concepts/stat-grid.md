@@ -31,26 +31,45 @@ row has to read on its own without hovering anything.
 
 ## Where it sits
 
-One column per player, glued to that player's own health bar
+Two places, same block: the play HUD and the [camp](./camp.md)'s shop
+screen.
+
+**In play** — one column per player, glued to that player's own health bar
 (`state_play._GRID_Y`, under the dial row). Single-player and co-op are
 the same layout with no special case — only the anchor flips, because
-P2's panel is right-aligned and so is P2's column. It lives under the
-same rule as the rest of the HUD and is therefore hidden on the level-up
-and camp screens (see [UI legibility](./ui-legibility.md)).
+P2's panel is right-aligned and so is P2's column. The rest of the HUD is
+hidden on the level-up and camp screens (see
+[UI legibility](./ui-legibility.md)), and so is this.
+
+**In the camp's shop** — one column per player again, flanking the five
+shop cards, riding in on the card row's own drop-in offset so it lands
+with them. The purchase decision happens on that screen, so the numbers a
+purchase moves have to be on it. It is **two columns and not one
+aggregate** because in co-op the stats genuinely diverge: shop offers
+apply to every player, but level-up cards and charms are per player. An
+average would lie (1.4× damage when one player has 1.72× and the other
+1.10×), and showing only whoever touched the tent would leave the other
+blind to a purchase that spends shared pollen on them too.
+
+The cards make room, not the columns — `state_camp._shop_layout` and the
+regression it protects are described in
+[Camp](./camp.md#the-shop-row-shares-the-screen-with-the-stat-grid).
 
 ## Cached by value
 
 The block is redrawn every frame but its numbers change rarely, so it
 goes through `Game._panel` keyed on **the displayed strings themselves**.
 That is the quantisation [ADR-0009](../adr/0009-glow-cache-quantized-keys.md)
-requires, and the rounding happens in `state_play._stat_rows`, before the
-strings exist: the four multipliers are formatted to two decimals and
-`health` — the only continuous input — goes through `int`, which bounds
-the keyspace by `max_health`.
+requires, and the rounding happens in `hud.stat_rows`, before the strings
+exist: the four multipliers are formatted to two decimals and `health` —
+the only continuous input — goes through `int`, which bounds the keyspace
+by `max_health`.
 
-Rounding in the caller and not in `hud` is deliberate. If `hud` rounded,
-the key would be built from values the caller could still change without
-the block noticing.
+`hud.stat_rows` / `hud.stat_badges` are the one thing in `hud` that reads a
+player, against that module's own rule. They sit next to the primitive they
+key on purpose: the strings *are* the cache key, so two states formatting
+them separately would be two ways to key the same surface — the exact
+duplication the grid exists to avoid.
 
 ## The toggle
 
@@ -78,9 +97,15 @@ the cache hits, checks that 0.01 HP of drift does **not** rebuild the
 block while a whole HP does, and round-trips the TAB preference through
 `settings` including a `save_display` write.
 
+It then draws the camp's shop screen in both player counts and asserts, in
+pixels and in rects, that no column overlaps a `_shop_rect`, that neither
+the row nor a column leaves the screen, and that turning the grid off puts
+the row back at 176px cards from x=92.
+
 ## Related
 
 - [Health HUD](./health-hud.md) — the bars the column is glued to.
+- [Camp](./camp.md) — the shop screen the columns flank.
 - [UI legibility](./ui-legibility.md) — the text primitive and the HUD's
   hide rule.
 - [Item](./item.md) · [Charm](./charm.md) — what the icon row lists.
