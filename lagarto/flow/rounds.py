@@ -315,6 +315,22 @@ def wave_budget(wave, theme_budget):
     return int(base)
 
 
+def tier_price_mult(wave):
+    """Multiplicador de preco do estagio. Cresce por tier, nao por wave, entao
+    o preco salta na wave do boss e fica estavel entre bosses.
+
+    Vale para a loja do camp (state_camp.shop_price) e para o bonus de rota
+    "polen", que precisa acompanhar a inflacao ou vira a rota obviamente pior
+    no late.
+
+    O round() e contra o erro de ponto flutuante, nao arredondamento de design:
+    1.0 + 0.7*3 da 3.0999999999999996, o que cobrava 464 pelo Charm de tier 3
+    onde a curva pede 465. O truncamento intencional continua sendo o int() de
+    shop_price.
+    """
+    return round(1.0 + C.SHOP_TIER_STEP * (wave // BOSS_EVERY), 6)
+
+
 def wave_cap(wave, theme_cap):
     """How many enemies may be alive at once, before the boss-round halving."""
     bonus = 0

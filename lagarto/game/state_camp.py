@@ -18,6 +18,7 @@ from ..core import palette
 from ..core.mathutil import clamp, decay, pulse
 from ..creatures.ai import AILizard
 from ..flow import progression
+from ..flow import rounds
 from ..render import assets
 from ..render import icons
 from ..render import ui
@@ -79,6 +80,18 @@ def draw(game, surf):
         _draw_camp_field_ui(game, surf)   # walking the clearing
 
 
+def shop_price(base, perm, buys, wave):
+    """Preco de uma oferta da loja: base x estagio da run x inflacao por compra.
+
+    Os dois eixos sao ortogonais de proposito -- por isso o estado guardado e a
+    contagem de compras, e nao o preco absoluto. Guardar o preco embutiria o
+    multiplicador do tier em que a compra aconteceu e o comporia de novo no tier
+    seguinte.
+    """
+    mult = C.SHOP_PRICE_MULT_PERM if perm else C.SHOP_PRICE_MULT
+    return int(base * rounds.tier_price_mult(wave) * mult ** buys)
+
+
 def _roll_shop(game):
     def heal(g):
         for pl in g.players:
@@ -114,18 +127,30 @@ def _roll_shop(game):
                      and progression.unlocked(game.meta, 'charm', c.id)]
             if avail:
                 pl.gain_charm(random.choice(avail), g)
+    # ``base`` e o preco no tier 0 sem nenhuma compra; ``perm`` separa upgrade
+    # permanente (recompra mais caro) de consumivel; ``preview`` declara o delta
+    # numerico da oferta para a UI poder mostra-lo antes da compra -- Charm e Ovo
+    # nao tem, porque o efeito deles nao e um numero.
     items = [
-        dict(name='Nectar de Cura', desc='+40 vida', cost=12, hue=140, icon='health', fn=heal),
-        dict(name='Vitalidade', desc='+20 vida maxima', cost=28, hue=5, icon='health', fn=vitality),
-        dict(name='Vigor', desc='+15% dano das armas', cost=32, hue=0, icon='might', fn=might),
+        dict(name='Nectar de Cura', desc='+40 vida', base=12, perm=False, preview=None,
+             hue=140, icon='health', fn=heal),
+        dict(name='Vitalidade', desc='+20 vida maxima', base=28, perm=True,
+             preview=('max_health', 20, 'add'), hue=5, icon='health', fn=vitality),
+        dict(name='Vigor', desc='+15% dano das armas', base=32, perm=True,
+             preview=('might', 1.15, 'mul'), hue=0, icon='might', fn=might),
         # charms sao permanentes e fortes -> tem que doer no bolso (era 30)
-        dict(name='Charm', desc='adaptacao p/ um slot', cost=150, hue=280, icon='nectar', fn=charm),
-        dict(name='Ovo de Amigo', desc='aliado temporario', cost=40, hue=270, icon='legs', fn=egg),
+        dict(name='Charm', desc='adaptacao p/ um slot', base=150, perm=True, preview=None,
+             hue=280, icon='nectar', fn=charm),
+        dict(name='Ovo de Amigo', desc='aliado temporario', base=40, perm=False,
+             preview=None, hue=270, icon='legs', fn=egg),
     ]
-    # o dict do camp e descartado a cada camp; o preco nao. Game.shop_prices
-    # guarda o que ja encareceu nesta run (Game._apply_buy escreve nele).
+    # o dict do camp e descartado a cada camp; a contagem de compras nao.
+    # Game.shop_buys guarda quantas vezes cada oferta foi comprada nesta run
+    # (Game._apply_buy escreve nela), e o tier atual entra pelo multiplicador.
+    wave = game.rounds.wave
     for it in items:
-        it['cost'] = game.shop_prices.get(it['name'], it['cost'])
+        it['cost'] = shop_price(it['base'], it['perm'],
+                                game.shop_buys.get(it['name'], 0), wave)
     return items
 
 

@@ -17,10 +17,14 @@ Constrained by [ADR-0005](../adr/0005-camp-is-a-physical-clearing.md).
 ## POIs in the clearing
 
 - **Beetle tent** — the shop. Touching it opens `'shop'` mode.
-  Contents: heal, max-HP, might, [Charm](./charm.md), egg. Charm starts
-  at 150 pollen; the rest are cheap. See _Prices persist_ below.
+  Contents: heal, max-HP, might, [Charm](./charm.md), egg. Charm's base
+  is 150 pollen; the rest are cheap. See _The price has two axes_ below.
 - **Three doors** — each shows a theme + bonus (heal / pollen / card).
   Crossing one commits — `_apply_route` calls `rounds.request_next(theme)`.
+  The pollen bonus rides the same tier multiplier as the shop
+  (`int(25 * rounds.tier_price_mult(wave))` → 25 / 42 / 60 / 77): a flat
+  +25 was the obviously worst door in the late game, which cost the
+  clearing one of its three real choices.
 
 ## Drops from the sky
 
@@ -31,19 +35,47 @@ ground telegraphs where it will land. Interaction is locked until the
 POI touches the ground (`tent_landed` / `dr['landed']`) — entering a
 mid-air door was a real bug.
 
-## Prices persist for the whole run
+## The price has two axes
 
-Buying an item multiplies its price by `C.SHOP_PRICE_MULT` (1.25), and
-that price **stays raised in every later camp**. The camp dict is thrown
-away when you leave the clearing, so the raised price lives on
-`Game.shop_prices` (`{item name: cost}`, per run) and `_roll_shop` reads
-it back when it builds the next tent. Buying nothing keeps an item at
-its base price forever.
+Every offer in `_roll_shop` is a data row with a `base` price, a `perm`
+flag, and an optional `preview` (the offer's numeric delta, e.g.
+`('might', 1.15, 'mul')` — `Charm` and the egg have none, their effect is
+not a number). `state_camp.shop_price(base, perm, buys, wave)` turns that
+row into what the tent charges:
 
-It used to be 1.6× stored in the throwaway camp dict, which reset every
-clearing — Nectar was permanently 12 pollen and cheap healing was
-infinite. Persisting the price is why the step per purchase got gentler:
-it now compounds across a whole run instead of one visit.
+    price = int(base * rounds.tier_price_mult(wave) * mult ** buys)
+
+- **The run's stage** — `tier_price_mult` is `1 + SHOP_TIER_STEP * tier`,
+  so 1.0 / 1.7 / 2.4 / 3.1×. It steps on the boss wave and holds until
+  the next boss, so the player reads the jump as "the boss raised the
+  stakes", not as a slow creep. Tier 0 is 1.0× on purpose: the early
+  game is untouched. Why it exists at all is in
+  [Balance](./balance.md#4th-pass--shop-price-scales-with-the-run-stage-issue-137).
+- **How often you bought it** — `C.SHOP_PRICE_MULT_PERM` (1.45) for a
+  permanent upgrade (Vitalidade, Vigor, Charm), `C.SHOP_PRICE_MULT`
+  (1.25) for a consumable (Néctar, Ovo). Buying nothing keeps an offer at
+  its tier price forever.
+
+Neither axis is capped. In `endless` income keeps growing too, and an
+offer that priced itself out of reach is the anti-spam brake working.
+
+## The purchase count persists for the whole run
+
+The camp dict is thrown away when you leave the clearing, so what
+survives is `Game.shop_buys` (`{item name: purchase count}`, per run,
+in memory — no save to migrate). `_apply_buy` increments it and reprices
+from `base`; `_roll_shop` reads it back when it builds the next tent.
+
+It stores the **count**, not the price, because the two axes have to stay
+orthogonal: a stored price would already have the tier multiplier of the
+camp where the purchase happened baked in, and compose it a second time
+in the next tier. The desired side effect is that a tier jump also raises
+the price of something you already bought.
+
+Before issue #105 the raised price lived in the throwaway camp dict at
+1.6× and reset every clearing — Néctar was permanently 12 pollen and
+cheap healing was infinite. Persisting it is why the per-purchase step
+got gentler: it compounds across a whole run instead of one visit.
 
 ## Shop is choice, not toll
 
@@ -63,5 +95,7 @@ no stray creature frozen against a door. Prey are not updated in camp.
 - [ADR-0005](../adr/0005-camp-is-a-physical-clearing.md) — why camp is
   world state, not a menu.
 - [Round](./round.md) — cleared rounds enter camp.
-- [Charm](./charm.md) — the tent's only fixed-price item.
+- [Charm](./charm.md) — the tent's priciest offer.
+- [Balance](./balance.md) — the income-vs-price arithmetic behind
+  `SHOP_TIER_STEP`.
 - [Route](../../CONTEXT.md) — what a door commits to.
