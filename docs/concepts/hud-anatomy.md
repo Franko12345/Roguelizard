@@ -34,9 +34,10 @@ Follow-through; the same applies here:
 - **Capsule** = the container. Mass. Low frequency. Overshoots on entry,
   trembles when something inside changes, swings when damage lands.
   Frequencies around 1-2 Hz, amplitudes around 3-12 px.
-- **Organs** = the bars, dials, item icon. Each on its own rhythm (the
-  flagella wave at ~3 Hz, the leading-edge bulge of `bio_bar` at ~3 Hz,
-  the dial ready-pulse at ~6 Hz). They never share a phase clock.
+- **Organs** = the bars, glands, bellows, skull, item icon. Each on
+  its own rhythm (the flagella wave at ~3 Hz, the leading-edge bulge of
+  `bio_bar` at ~3 Hz, the gland ready-pulse at ~6 Hz). They never share
+  a phase clock.
 
 If everything bounces together the panel reads as gelatin and the player
 loses **which** medidor moved. Two layers read as "a container holding
