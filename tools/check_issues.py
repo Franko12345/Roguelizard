@@ -30,6 +30,13 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_hud = subprocess.run([sys.executable, 'tools/check_hud_anatomy.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.game import hud
+chk(132, "fole e cranio", hasattr(hud, 'CranialFluid') and hasattr(hud, 'Bellows')
+    and _hud.returncode == 0,
+    "" if _hud.returncode == 0 else _hud.stderr.decode()[-90:])
+
 _mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitter',
