@@ -1,3 +1,4 @@
+roguelizard: open-source-agentic-developed-roguelike about a lizard
 # Docs
 
 Documentation for Lagarto follows the Matt Pocock ecosystem: one concept
