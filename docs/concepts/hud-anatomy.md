@@ -58,9 +58,6 @@ the way the menu and level-up screens draw their frames.
 
 Every HUD element obeys the same four beats as the body:
 
-
-Every HUD element obeys the same four beats as the body:
-
 - **Intent** — the readout is *meant* to change. The bio bar's leading
   edge has a meniscus because the player reads "fluid under pressure",
   not "filling up a rectangle".
