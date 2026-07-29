@@ -40,3 +40,4 @@ from .personality import (
     crystal_personality, wasp_personality, eye_personality, wall_personality,
     ankh_personality,
 )
+from .moves import MOVES, move_orbit, move_strafe, move_retreat, move_hover, move_reposition

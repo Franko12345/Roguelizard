@@ -198,6 +198,26 @@ spray, a contact bite. Named by its id (`fan`, `spiral`, `web_trap`). Not a
 class, not an "attack object".
 _Avoid_: attack, move, ability (all taken).
 
+**Movement Pattern**:
+A boss's background movement function (`orbit`, `strafe`, `retreat`, `hover`,
+`reposition`) in `lagarto/flow/boss/moves.py`. Sits next to `PATTERNS`, with
+the same `(boss, game, target, dials) -> (direction, speed)` signature, but
+returns a velocity instead of a `None`. Bound by phase (the `moves` slot on
+each `*_phases()` kit) and by attack (`PATTERNS[pid]['move']`). The two
+bindings bind with precedence **attack > phase > none**. A Muralha declares
+`moves=[]` (the wall); Olho-Sismico declares `['hover']` (the observer).
+_Avoid_: movement AI, behaviour, sub-pattern.
+
+**Movement Trail**:
+The per-frame `(direction, speed)` `BossAI.tick` returns. Driven by the
+Movement Trail hierarchy above; charge / burrow / grapple keep their veto
+(the FSM's per-state branches return their own direction). The trail is the
+filed answer to "bosses are easy to dodge" — the old cycle was ~2.1s with
+~1.3s of dead breath; the new cycle is ~1.0s in calm and approaches 0.75s in
+enraged. The cadence comes from overlap, not from cutting the tell
+([ADR-0015](./docs/adr/0015-cadence-by-overlap-not-tell-cut.md)).
+_Avoid_: movement AI, background, wander.
+
 **Emitter**:
 `lagarto/combat/emitter.py` — the one place every Pattern is implemented,
 shared by [Boss](docs/concepts/boss.md) and common enemy alike. It never looks

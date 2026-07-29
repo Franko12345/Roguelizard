@@ -23,6 +23,48 @@ Related: [Boss](../../docs/concepts/boss.md), [Round](../../docs/concepts/round.
 from ...core import config as C
 
 
+def clamp_to_anchor(pos, direction, speed, max_r, bounds):
+    """Re-point ``direction`` toward the arena centre if the next step
+    would leave the box. Returns ``(direction, speed)`` ready to feed
+    ``Lizard.steer`` / ``integrate``.
+
+    The check is a one-frame lookahead so the clamp anticipates the
+    want rather than correcting after the fact. ``Lizard.integrate``
+    also clamps the position, so this is a guard against the boss
+    queuing a ghost move that points out of the arena; the body itself
+    never leaves the box.
+
+    Returns ``(direction, speed)`` unchanged when:
+
+    - there is no arena (``bounds`` is None);
+    - the boss cannot move (``max_r`` only matters for the wall, but
+      a creature with ``max_speed == 0`` will not steer in the first
+      place -- still passed through);
+    - the next step stays inside the box.
+
+    ``pos`` is the boss's current world position. ``direction`` is the
+    unit vector the move function returned. ``speed`` is the multiplier
+    the move function returned (0..1 of ``max_speed``).
+    """
+    if not bounds or speed <= 0:
+        return direction, speed
+    lookahead = direction * speed * max_r * 0.1
+    if lookahead.length_squared() < 1e-6:
+        return direction, speed
+    next_pos = (pos[0] + lookahead.x, pos[1] + lookahead.y)
+    lo_x, lo_y, hi_x, hi_y = bounds
+    if (next_pos[0] < lo_x + max_r or next_pos[0] > hi_x - max_r or
+            next_pos[1] < lo_y + max_r or next_pos[1] > hi_y - max_r):
+        cx = (lo_x + hi_x) * 0.5
+        cy = (lo_y + hi_y) * 0.5
+        from pygame import Vector2
+        from ...core.mathutil import safe_norm
+        inward = Vector2(cx - pos[0], cy - pos[1])
+        if inward.length_squared() > 1e-6:
+            return safe_norm(inward), speed
+    return direction, speed
+
+
 class BossArena:
     """Per-boss play-area modifiers. All fields optional; unset = no change.
 
