@@ -131,14 +131,17 @@ def _draw_hud(game, surf):
     """Draw each player's two HUD capsules + weapon strip + the top-centre column.
 
     The issue (#130) wants vitals and cooldowns in their own framed capsules
-    so a fast organ (energy) inside a slow container (capsule spring) reads
-    as two things, not one. Each capsule has its own spring.
+    so a fast organ (energy) inside a slow container (capsule spring) reads as
+    two things, not one. Each capsule has its own spring.
 
     Layout (bottom corner of the screen, per player):
-        [ vitals capsule  : header + 3 bars      ]
-        [ cooldowns capsule: 3 dials + labels    ]
+        [ vitals capsule  : header + 3 bars         ]
+        [ cooldowns capsule: 3 glands (silhouettes) ]
         [ strip          : weapons + item, no frame ]
 
+    The cooldowns row is three ``hud.gland`` calls -- one silhouette per
+    ability (dash, tongue, whip). No text is emitted from this row: the
+    silhouette is the only signal, identity over scan speed (issue #133).
     Downed prompt swaps into the vitals header right edge instead of dropping
     over the strip (which would have collided with the tap targets)."""
     bw = C.HUD_PANEL_W
@@ -243,23 +246,24 @@ def _draw_hud(game, surf):
         cd_rect = pygame.Rect(cdx, cdy, bw, C.HUD_COOLDOWNS_H)
         ui.panel(surf, cd_rect)
 
-        # 3 dials evenly spaced across the bar_w interior, with a single
-        # label row above
+        # 3 glands (one per ability) evenly spaced across bar_w. Each gland
+        # is the icon of the body part that performs the action, sized by the
+        # recharge fraction -- the silhouette IS the read; no label, no text.
         cd_inner_y = cdy + 4
-        dial_pitch = bar_w // 3
-        dial_cx = bar_x + dial_pitch // 2
+        gland_pitch = bar_w // 3
+        gland_cx = bar_x + gland_pitch // 2
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
-        hud.dial(surf, (dial_cx, cd_inner_y + 14), 11, dash_frac, p.colorset[0],
-                 game.smallfont, "DASH", game.time,
-                 enabled=p.energy >= C.DASH_COST)
+        hud.gland(surf, (gland_cx, cd_inner_y + 14), 11, dash_frac, p.colorset[0],
+                  icons._legs_icon, game.time,
+                  enabled=p.energy >= C.DASH_COST)
         t_frac = 0.0 if p.tongue_t > 0 else 1.0
-        hud.dial(surf, (dial_cx + dial_pitch, cd_inner_y + 14), 11, t_frac,
-                 (235, 90, 120), game.smallfont, "LING", game.time,
-                 enabled=p.energy >= C.TONGUE_COST)
+        hud.gland(surf, (gland_cx + gland_pitch, cd_inner_y + 14), 11, t_frac,
+                  (235, 90, 120), icons._tongue, game.time,
+                  enabled=p.energy >= C.TONGUE_COST)
         w_frac = 1.0 - clamp(p.whip_cd / max(0.001, p.whip_cooldown), 0, 1)
-        hud.dial(surf, (dial_cx + dial_pitch * 2, cd_inner_y + 14), 11, w_frac,
-                 (250, 190, 90), game.smallfont, "RABO", game.time,
-                 enabled=p.energy >= C.WHIP_COST)
+        hud.gland(surf, (gland_cx + gland_pitch * 2, cd_inner_y + 14), 11, w_frac,
+                  (250, 190, 90), icons._club, game.time,
+                  enabled=p.energy >= C.WHIP_COST)
 
         # ---- bottom strip: weapons + active item, each in its own corner
         # weapons step 28 -- with six weapons and the item circle (28 px wide)
