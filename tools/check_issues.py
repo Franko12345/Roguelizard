@@ -15,6 +15,7 @@ import pygame; pygame.init()
 from lagarto.core import config as C
 from lagarto.flow import rounds
 from lagarto.flow.boss import patterns as pat, arena as ar
+from lagarto.flow.boss import ai as bossai
 from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
@@ -112,6 +113,16 @@ chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
     and any('ankh' in ids for _, ids in rounds.BOSS_TIER_POOLS))
 chk(74, "A Muralha", rounds.BOSS_POOL.get('muralha', {}).get('species') == 'muralha'
     and species.SPECIES['muralha']['genome'].plan == 'fixed' and 'muralha' in ar.ARENAS)
+_muralha_sig = subprocess.run([sys.executable, 'tools/check_muralha_signature.py'],
+                              capture_output=True, env={**os.environ, 'PYTHONPATH': '.'})
+chk(121, "Muralha signature",
+    'phase_sizes' in src(ar.BossArena)
+    and 'muralha_on_phase' in src(pat)
+    and 'invuln_states' in src(bossai.BossAI)
+    and ('attack', 'recover') == tuple(rounds.BOSS_POOL['muralha'].get('invuln_states') or ())
+    and tuple(ph['cd_mul'] for ph in pat.muralha_phases()) == (1.0, 1.0, 1.0)
+    and _muralha_sig.returncode == 0,
+    "" if _muralha_sig.returncode == 0 else _muralha_sig.stderr.decode()[-90:])
 chk(73, "Olho-Sismico", 'olho_sismico' in rounds.BOSS_POOL
     and species.SPECIES['olho_sismico']['genome'].plan == 'orbital')
 chk(72, "probe_display + __all__", not hasattr(lagarto, '__all__')

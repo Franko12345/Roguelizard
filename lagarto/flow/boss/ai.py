@@ -54,12 +54,20 @@ def spawn_scar(boss, game):
 # --------------------------------------------------------------------------- #
 
 class BossAI:
-    def __init__(self, boss, phases=None, personality=None, name=None, on_phase=None):
+    def __init__(self, boss, phases=None, personality=None, name=None, on_phase=None,
+                 invuln_states=None):
         self.boss = boss
         self.phases = phases or default_phases()
         self.personality = personality or default_personality()
         self.name = name
-        self.on_phase = on_phase   # optional (boss, phase_i) hook -- per-boss mechanics
+        self.on_phase = on_phase   # optional (boss, phase_i, game) hook -- per-boss mechanics
+        # Issue #121: extra FSM states during which ``boss.boss_invuln`` is
+        # True. Empty by default (intro + transition are already invulnerable);
+        # a Muralha declares ``('attack', 'recover')`` so the windup stays
+        # punishable but the gap after the strike is not. ``windup`` is
+        # FORBIDDEN to appear here -- the windup is the player's only DPS
+        # window.
+        self.invuln_states = frozenset(invuln_states or ())
         self.phase_i = 0
         self.state = 'intro'
         self.t = C.BOSS_INTRO_TIME
@@ -71,6 +79,21 @@ class BossAI:
         self.scar_thresholds = None   # e.g. [0.75, 0.5, 0.25] -- opt-in (Rei Lagarto)
         self.scars = []
         boss.boss_invuln = True
+        self._last_game = None      # back-ref the per-frame hook keeps for on_phase
+
+    def _apply_invuln(self):
+        """Single source of truth for ``boss_invuln``. Called at every state
+        change so we never accumulate stale flags when the FSM transitions
+        and never set invuln on a state the per-boss slot wouldn't agree
+        with. Issue #121: a Muralha's ``invuln_states={'attack','recover'}``
+        keeps the windup punishable (the player's DPS window) but makes the
+        gap right after a strike invulnerable (the boss's authored "can't be
+        interrupted while it's recovering" slot).
+        """
+        self.boss.boss_invuln = (
+            self.state in ('intro', 'transition')
+            or self.state in self.invuln_states
+        )
 
     def phase(self):
         return self.phases[self.phase_i]
@@ -82,7 +105,7 @@ class BossAI:
             self.phase_i += 1
             self.state = 'transition'
             self.t = C.BOSS_TRANSITION_TIME
-            b.boss_invuln = True
+            self._apply_invuln()              # 'transition' is in the always-invuln set
             b.hit_flash = 1.0
             self.pattern_id = None
             if self.scars:                     # scars don't survive a phase change
@@ -90,7 +113,14 @@ class BossAI:
                     s.dead = True
                 self.scars = []
             if self.on_phase:
-                self.on_phase(b, self.phase_i)
+                # Backward compat: callbacks written before #121 take
+                # (boss, phase_i). Callbacks written for arena shrinkage
+                # take (boss, phase_i, game). Try the 3-arg form first;
+                # fall back if a legacy on_phase didn't get updated.
+                try:
+                    self.on_phase(b, self.phase_i, self._last_game)
+                except TypeError:
+                    self.on_phase(b, self.phase_i)
 
     def _update_mood(self, dt, target):
         if target is None:
@@ -186,6 +216,7 @@ class BossAI:
 
     def tick(self, dt, game):
         b = self.boss
+        self._last_game = game      # issue #121: back-ref for on_phase(game)
         game.dt_last = dt          # aimed_barrage's/spiral's per-frame tick reads this
         _tick_barrage(b, game)
         _tick_spiral(b, game)
@@ -206,14 +237,14 @@ class BossAI:
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
-                b.boss_invuln = False
+                self._apply_invuln()           # 'approach' is no longer invuln
             return Vector2(), 0.0
 
         if self.state == 'transition':
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
-                b.boss_invuln = False
+                self._apply_invuln()           # 'approach' is no longer invuln
                 self.cd = self._roll_cd()
             return safe_norm(target.pos - b.pos) * 0.1, 0.15
 
@@ -277,6 +308,7 @@ class BossAI:
                 else:
                     self.state = 'recover'
                     self.t = self._eff_recover(self.pattern_id)
+                self._apply_invuln()   # 'recover' may now be invuln (Muralha)
             # Movement trail: the active pattern's move (if any) overrides
             # the phase's. charge/burrow/grapple already returned above.
             return self._move(target, game)
@@ -291,11 +323,12 @@ class BossAI:
             elif self._burrow_seen_under and b.burrow_state == 'surface':
                 self.state = 'recover'
                 self.t = self._eff_recover('burrow')
+                self._apply_invuln()
             return d, speed
 
         if self.state == 'grappling':
             # delegates every frame to the regular octopus's OWN reach/snap
-            # cycle (creatures.ai.grapple) -- one windup-to-snap(or-miss)
+            # cycle (creatures/ai/grapple) -- one windup-to-snap(or-miss)
             # cycle, then back to the normal pattern rotation
             d, speed = grapple_ai.grapple_tick(b, game, dt, target)
             if b.grapple_t > 0:
@@ -303,6 +336,7 @@ class BossAI:
             elif self._grapple_seen_windup:
                 self.state = 'recover'
                 self.t = self._eff_recover('grapple')
+                self._apply_invuln()
             return d, speed
 
         if self.state == 'charging':
@@ -313,6 +347,7 @@ class BossAI:
             if self.t <= 0:
                 self.state = 'recover'
                 self.t = self._eff_recover('charge')
+                self._apply_invuln()
                 return Vector2(), 0.0
             return getattr(b, '_charge_dir', to), C.BOSS_CHARGE_SPEED_MULT
 
@@ -320,6 +355,7 @@ class BossAI:
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
+                self._apply_invuln()        # 'approach' clears the recover invuln
                 self.cd = self._roll_cd()
             # Movement trail: phase's move drives the boss during recover.
             return self._move(target, game)

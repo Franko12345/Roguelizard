@@ -130,6 +130,12 @@ BOSS_POOL = {
                      emblem='boss_muralha',
                      phases=lambda: bossai.muralha_phases(),
                      personality=lambda: bossai.wall_personality(),
+                     # Issue #121: each phase re-tightens the corridor (the
+                     # "wall closes in" mechanic) and the wall's
+                     # invulnerability covers ``attack``+``recover`` so a
+                     # strike can't be punished but the windup still can.
+                     on_phase=bossai.muralha_on_phase,
+                     invuln_states=('attack', 'recover'),
                      scar=None,
                      overrides=dict(hue=0, sat=0.3, val=0.45)),
     # ANKH (B11, tier 7): "A Eterna". A re-skin of the horned lizard is the
@@ -377,7 +383,8 @@ def make_boss(game, boss_id, tier, pos, is_final=False):
         boss.boss_ai = bossai.BossAI(boss, phases=named['phases'](),
                                      personality=named['personality'](),
                                      name=named['name'],
-                                     on_phase=named.get('on_phase'))
+                                     on_phase=named.get('on_phase'),
+                                     invuln_states=named.get('invuln_states'))
         if named.get('scar'):
             boss.boss_ai.scar_thresholds = list(named['scar'])
         for k, v in named.get('boss_attrs', {}).items():
@@ -484,11 +491,13 @@ class RoundManager:
         g.enemies.append(boss)
         self.boss = boss
         # Issue #26: per-boss arena (tighter bounds + screen tint) for the
-        # duration of the fight. Cleared in start_round / reset.
+        # duration of the fight. Issue #121: ``phase_i=0`` picks the
+        # spawn-phase size from ``BossArena.phase_sizes`` if present. The
+        # per-boss ``on_phase`` callback reapplies on every HP threshold.
         from .boss.arena import for_boss
         arena = for_boss(boss_id)
         if arena is not None:
-            arena.apply(g, pos)
+            arena.apply(g, pos, phase_i=0)
         g.fx.ring(pos, (255, 90, 90))
         g.fx.burst(pos, (255, 120, 90), 34, 320)
         g.shake(12)

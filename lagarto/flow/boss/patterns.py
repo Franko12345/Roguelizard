@@ -154,11 +154,16 @@ def centipede_phases():
     ]
 
 
-def centipede_on_phase(boss, phase_i):
+def centipede_on_phase(boss, phase_i, game=None):
     """Perde segmentos + acelera a cada transição (armadura quebra ao vivo,
     mesmo padrão de `champions.py`): menos corpo, mais velocidade, mais caos --
     e MENOS hitbox de corpo, então o jogador troca "mais perigoso" por "mais
-    fácil de acertar em cheio", a decisão que o doc descreve."""
+    fácil de acertar em cheio", a decisão que o doc descreve.
+
+    The ``game`` arg is reserved for the post-#121 callback contract
+    (some on_phase calls reapply the arena). Older callers that still
+    pass only two args are tolerated in the FSM via TypeError fallback.
+    """
     boss.genome.length = max(0.5, boss.genome.length - C.CENT_BOSS_SHRINK)
     boss.genome.speed *= C.CENT_BOSS_SPEED_BUMP
     boss.rebuild_body(keep_pose=True)
@@ -274,9 +279,12 @@ def eye_phases():
     ]
 
 
-def eye_on_phase(boss, phase_i):
+def eye_on_phase(boss, phase_i, game=None):
     """A cada fase o olho pisca mais rapido (entediado -> constante). O <33% e um
-    flip abrupto, nao uma rampa -- ver eye_personality (enraged salta o mood_speed)."""
+    flip abrupto, nao uma rampa -- ver eye_personality (enraged salta o mood_speed).
+
+    The ``game`` arg is reserved for the post-#121 callback contract.
+    """
     boss.blink_interval = C.EYE_BLINK_INTERVAL[min(phase_i, len(C.EYE_BLINK_INTERVAL) - 1)]
 
 
@@ -330,12 +338,42 @@ def muralha_phases():
     ``moves=[]`` because A Muralha is ``plan='fixed'`` and ``speed=0``.
     The slot is declared so the FSM's precedence chain can short-circuit
     on the empty list and the framework doesn't special-case the wall.
+
+    Issue #121: every ``cd_mul`` sits at 1.0 -- the wall NEVER has more
+    breath than the global ``BOSS_CD_FLOOR`` (0.15s). Phase 1 0.85 ->
+    1.0 and phase 2 0.7 -> 1.0 tighten the rhythm: "voce nao passa"
+    reads as relentless across all three phases, not just the last
+    one. No boss in BOSS_POOL ships with a smaller cd_mul than her
+    (smaller cd_mul is meaningless at the floor; what matters is that
+    she has the highest FLOOR, i.e. the LEAST breath, which means she
+    hugs the floor at every phase).
     """
     return [
         dict(hp_frac=1.0, patterns=['fire_breath', 'hand_slam', 'eye_laser'], cd_mul=1.0, moves=[]),
-        dict(hp_frac=0.66, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets'], cd_mul=0.85, moves=[]),
-        dict(hp_frac=0.33, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets', 'grid_of_fire'], cd_mul=0.7, moves=[]),
+        dict(hp_frac=0.66, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets'], cd_mul=1.0, moves=[]),
+        dict(hp_frac=0.33, patterns=['fire_breath', 'hand_slam', 'eye_laser', 'bouncing_bullets', 'grid_of_fire'], cd_mul=1.0, moves=[]),
     ]
+
+
+def muralha_on_phase(boss, phase_i, game=None):
+    """Issue #121: each phase NARROWS the arena. The wall closes in.
+
+    The boss is plan='fixed' and never moves, so the centre never
+    shifts -- only the (w, h) of the box changes. The arena still
+    re-applies itself every phase transition (not just at spawn), so a
+    grid_of_fire targeting ``game.arena_bounds`` fills the new box,
+    not the old one.
+
+    Game is required for the re-apply; the FSM's TypeError fallback
+    handles the case where an older test or runner calls the 2-arg
+    legacy form (regression test stays green).
+    """
+    if game is None:
+        return                          # legacy 2-arg caller -- nothing to shrink
+    from . import arena as arena_mod
+    a = arena_mod.ARENAS.get('muralha')
+    if a is not None:
+        a.apply(game, boss.pos, phase_i=phase_i)
 
 
 # --------------------------------------------------------------------------- #
