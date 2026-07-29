@@ -47,6 +47,12 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_lt = subprocess.run([sys.executable, 'tools/check_lighting.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.render import lighting as _ltmod
+chk(110, "ambient lighting", 'NIGHT_MAX' in src(C) and 'LightingLayer' in src(_ltmod)
+    and _lt.returncode == 0,
+    "" if _lt.returncode == 0 else _lt.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib
