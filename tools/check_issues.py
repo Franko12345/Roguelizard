@@ -33,6 +33,9 @@ def chk(num, name, ok, note=""):
 _sg = subprocess.run([sys.executable, 'tools/check_stat_grid.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.game import hud as _hud, state_play as _sply
+chk(139, "grid de stats no camp", 'hud.stat_grid' in src(state_camp)
+    and hasattr(state_camp, '_shop_layout') and _sg.returncode == 0,
+    "" if _sg.returncode == 0 else _sg.stderr.decode()[-90:])
 chk(138, "grid de stats no HUD", hasattr(_hud, 'stat_grid')
     and hasattr(gameloop.Game, 'toggle_stat_grid')
     and 'stat_grid' in __import__('lagarto.core.settings', fromlist=['x']).DEFAULTS

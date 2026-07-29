@@ -26,7 +26,7 @@ import pygame
 pygame.init()
 from lagarto.render import display
 from lagarto.core import fonts, settings, config as C
-from lagarto.game import hud, state_play
+from lagarto.game import hud, state_camp, state_play
 from lagarto.game.loop import Game
 from lagarto.input.controllers import make_controllers
 
@@ -69,7 +69,7 @@ for num in (1, 2):
     surf = pygame.Surface((C.WIDTH, C.HEIGHT))
     rects = []
     for i, p in enumerate(g.players):
-        rows, badges = state_play._stat_rows(p), state_play._stat_badges(p)
+        rows, badges = hud.stat_rows(p), hud.stat_badges(p)
         assert len(rows) == 5, f"expected 5 stat rows, got {len(rows)}"
         labels = [r[0] for r in rows]
         assert labels == ['DANO', 'VIDA', 'RECAR', 'VELOC', 'AREA'], labels
@@ -97,8 +97,8 @@ surf = pygame.Surface((C.WIDTH, C.HEIGHT))
 
 
 def draw_once():
-    hud.stat_grid(surf, g.smallfont, (16, 176), state_play._stat_rows(p),
-                  state_play._stat_badges(p), g._panel)
+    hud.stat_grid(surf, g.smallfont, (16, 176), hud.stat_rows(p),
+                  hud.stat_badges(p), g._panel)
 
 
 g._panels.clear()
@@ -160,5 +160,79 @@ state_play._draw_hud(g, blank)
 built = [k for k in g._panels if k[0] == 'statgrid']
 assert len(built) == 1, f"_draw_hud built {len(built)} grid blocks for 1 player"
 print("_draw_hud: skips the block when off, builds exactly one per player when on")
+
+# ---- 5. the camp draws the same block, flanking the shop row -------------- #
+# The shop screen is where a purchase is decided, so the columns have to be there
+# too -- and they have to share 1120px with five cards. What can silently rot is
+# the geometry: a card creeping under a column, or a column pushed off-screen.
+# Both are measured against the rects `_draw_camp` actually publishes.
+
+
+def open_shop(g):
+    """The camp with the tent's menu open, with the entry animation finished."""
+    g._enter_camp()
+    g.camp['mode'] = 'shop'
+    g.ui_t = 5.0                 # past every drop_in stagger -> full opacity
+    return g
+
+
+def camp_grid_rects(g):
+    """Where `_draw_camp` puts the columns, from its own constants."""
+    out = []
+    for i in range(len(g.players)):
+        r = pygame.Rect(0, 0, hud.GRID_W, 1)
+        r.top = state_camp._SHOP_Y
+        if i == 0:
+            r.left = state_camp._GRID_MARGIN
+        else:
+            r.right = C.WIDTH - state_camp._GRID_MARGIN
+        out.append(r)
+    return out
+
+
+def differs(surf, rect, bg):
+    """Pixels in ``rect`` that are not the veil -- the camp is drawn over a tinted
+    full-screen veil, so 'not black' would count the whole screen."""
+    sub = surf.subsurface(rect)
+    n = 0
+    for y in range(0, rect.height, 3):
+        for x in range(0, rect.width, 3):
+            if sub.get_at((x, y))[:3] != bg:
+                n += 1
+    return n
+
+
+for num in (1, 2):
+    g = open_shop(new_game(num))
+    surf = pygame.Surface((C.WIDTH, C.HEIGHT))
+    state_camp.draw(g, surf)
+    bg = surf.get_at((4, 4))[:3]          # veil only: nothing is drawn in the corner
+    cards = list(g._shop_rects)
+    assert len(cards) == 5, f"{num}P: {len(cards)} shop cards, expected 5"
+    assert cards[0].left >= 0 and cards[-1].right <= C.WIDTH, \
+        f"{num}P: the shop row leaves the screen ({cards[0].left}..{cards[-1].right})"
+    grids = camp_grid_rects(g)
+    assert len(grids) == num, f"{num}P: expected {num} column(s), got {len(grids)}"
+    for i, gr in enumerate(grids):
+        gr.height = 200                   # tall probe: the block is ~137px
+        assert 0 <= gr.left and gr.right <= C.WIDTH, f"{num}P column {i} off-screen: {gr}"
+        for c in cards:
+            assert not gr.colliderect(c), f"{num}P: column {i} {gr} overlaps card {c}"
+        ok = differs(surf, pygame.Rect(gr.left, gr.top, gr.width, 120), bg)
+        assert ok > 200, f"{num}P: column {i} drew almost nothing ({ok} px) at {gr}"
+    if num == 2:
+        assert grids[0].right < C.WIDTH // 2 < grids[1].left, \
+            "in co-op each column must sit on its own player's side"
+    print(f"{num}P camp: cards {cards[0].left}..{cards[-1].right} at {cards[0].width}px, "
+          f"columns {[(r.left, r.right) for r in grids]}")
+
+# with the grid off the row is exactly the layout that predates it
+g = open_shop(new_game(2))
+g.show_stat_grid = False
+g._panels.clear()
+state_camp.draw(g, pygame.Surface((C.WIDTH, C.HEIGHT)))
+assert [ (r.left, r.width) for r in g._shop_rects ][0] == (92, 176), \
+    f"grid off must restore the original row, got {tuple(g._shop_rects[0])}"
+print("camp: grid off -> shop row back to 176px cards at x=92 (no regression)")
 shutil.rmtree(_HOME, ignore_errors=True)
 print("ALL OK")

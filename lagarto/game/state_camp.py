@@ -23,6 +23,7 @@ from ..render import assets
 from ..render import icons
 from ..render import ui
 from ..render.fx import shadow
+from . import hud
 from . import state_levelup
 
 
@@ -189,9 +190,36 @@ def _update_camp_drop(game):
             _camp_impact(game, dr['pos'], big=False)
 
 
-def _shop_surface(game, it, i, focused):
+_SHOP_CW, _SHOP_CH = 176, 132   # a shop card at full width
+_SHOP_GAP = 14
+_SHOP_Y = 164                   # top of the card row, and of the stat columns
+# Side band reserved for one stat column: the block plus air on both sides of it.
+# The shop row is centred in what is left, and narrows if it has to, so the
+# columns never sit on top of a card.
+_GRID_GUTTER = hud.GRID_W + 20
+_GRID_MARGIN = 12               # screen edge -> stat column
+
+
+def _shop_layout(game, n):
+    """Card width and the row's left edge, given how many stat columns flank it.
+
+    Returned instead of hardcoded because the row has to share the screen with
+    the columns: 5 full-width cards plus two columns do not fit in 1120px, so the
+    cards give up the width. With the grid off the numbers come out exactly as
+    they were before it existed (176px cards, row centred on the screen).
+    """
+    cols = len(game.players) if game.show_stat_grid else 0
+    left = _GRID_GUTTER if cols >= 1 else 0
+    right = _GRID_GUTTER if cols >= 2 else 0
+    band = C.WIDTH - left - right
+    cw = min(_SHOP_CW, (band - (n - 1) * _SHOP_GAP) // n)
+    row_w = n * cw + (n - 1) * _SHOP_GAP
+    return cw, left + (band - row_w) // 2
+
+
+def _shop_surface(game, it, i, focused, cw):
     """One beetle-shop item, drawn at the origin (see _card_surface)."""
-    cw, chh = 176, 132
+    chh = _SHOP_CH
     s = pygame.Surface((cw, chh), pygame.SRCALPHA)
     box = pygame.Rect(0, 0, cw, chh)
     afford = game.pollen >= it['cost']
@@ -204,7 +232,12 @@ def _shop_surface(game, it, i, focused):
     icons.draw(s, it.get('icon'), (cw // 2, 34), 19, palette.vibrant(it['hue'], 0.8, 1.0))
     nm = game.font.render(ui.fit(game.font, it['name'], cw - 16), True, C.COL_WHITE)
     s.blit(nm, (cw // 2 - nm.get_width() // 2, 62))
-    ds = game.font.render(ui.fit(game.font, it['desc'], cw - 16), True, (190, 190, 210))
+    # A narrowed card (co-op, two stat columns) loses ~24px of text room, enough to
+    # start clipping "+20 vida maxima". The description is the one line that is
+    # already near the limit at full width, so it drops a font size instead of an
+    # ellipsis -- a shortened word says less than smaller text.
+    dfont = game.font if cw >= _SHOP_CW else game.smallfont
+    ds = dfont.render(ui.fit(dfont, it['desc'], cw - 16), True, (190, 190, 210))
     s.blit(ds, (cw // 2 - ds.get_width() // 2, 84))
     cc = C.COL_POLLEN if afford else (150, 120, 60)
     cost = game.font.render(f"{it['cost']}  polen", True, cc)
@@ -268,14 +301,13 @@ def _draw_camp(game, surf):
 
     # ---- shop (beetle merchant) ---- #
     shop = game.camp['shop']
-    cw, gap = 176, 14
-    x0 = cx - (len(shop) * cw + (len(shop) - 1) * gap) // 2
-    y = 164
+    cw, x0 = _shop_layout(game, len(shop))
+    gap, y = _SHOP_GAP, _SHOP_Y
     game._shop_rects = []
     soff, salpha = ui.drop_in(game.ui_t, 1, C.UI_STAGGER, C.UI_DROP, rise=40.0)
     _label(game, layer, "LOJA DO BESOURO  (1-5 ou clique)", cx - 300, 138, soff, salpha)
     for i, it in enumerate(shop):
-        rect = pygame.Rect(x0 + i * (cw + gap), y, cw, 132)
+        rect = pygame.Rect(x0 + i * (cw + gap), y, cw, _SHOP_CH)
         game._shop_rects.append(rect)
         if bought is not None and bought['index'] == i:
             continue                      # drawn last, mid-absorption
@@ -287,12 +319,33 @@ def _draw_camp(game, surf):
         if focused and alpha > 0.5:
             palette.glow(layer, (rect.centerx, int(rect.centery + off)), 90,
                          palette.vibrant(it['hue'], 0.8, 1.0), 0.3 * alpha)
-        src = game._panel(('shop', i, focused, it['cost'], game.pollen >= it['cost']),
-                          lambda it=it, i=i, f=focused: _shop_surface(game, it, i, f))
+        src = game._panel(('shop', i, focused, it['cost'], game.pollen >= it['cost'], cw),
+                          lambda it=it, i=i, f=focused: _shop_surface(game, it, i, f, cw))
         game._blit_card(layer, src, (rect.centerx, rect.centery + off), 1.0, alpha)
     if game.camp.get('msg') and bought is None and salpha > 0.9:
         m = game.font.render(f"comprado: {game.camp['msg']}", True, (120, 240, 140))
         layer.blit(m, (x0, y + 116))
+
+    # ---- stat grid: one column per player, flanking the shop row ---- #
+    # The purchase decision happens here, so the numbers a purchase moves have to
+    # be readable here. Same block and same rows as the play HUD (`hud.stat_grid`),
+    # never a second implementation.
+    #
+    # Two columns rather than one aggregate, because in co-op the stats really do
+    # diverge: shop offers apply to every player, but level-up cards and charms are
+    # per player. An average would lie (1.4x damage when one has 1.7x and the other
+    # 1.1x), and showing only whoever touched the tent would leave the other blind
+    # to a purchase that spends shared pollen on them too.
+    #
+    # It rides in on the shop row's own offset, so it lands with the cards instead
+    # of popping in over a screen that is still assembling.
+    if game.show_stat_grid and salpha > 0.01:
+        for i, p in enumerate(game.players):
+            hud.stat_grid(layer, game.smallfont,
+                          (_GRID_MARGIN if i == 0 else C.WIDTH - _GRID_MARGIN,
+                           int(y + soff)),
+                          hud.stat_rows(p), hud.stat_badges(p), game._panel,
+                          right=(i == 1))
 
     # ---- charms loadout ---- #
     p0 = game.players[0]
@@ -352,8 +405,8 @@ def _draw_camp(game, surf):
         pos, scale, alpha = state_levelup._pick_pose(game)
         it = shop[bought['index']]
         src = game._panel(('shop', bought['index'], True, it['cost'],
-                           game.pollen >= it['cost']),
-                          lambda: _shop_surface(game, it, bought['index'], True))
+                           game.pollen >= it['cost'], cw),
+                          lambda: _shop_surface(game, it, bought['index'], True, cw))
         palette.glow(layer, (int(pos.x), int(pos.y)), int(100 * scale + 30),
                      bought['color'], 0.30 + 0.30 * (1 - alpha))
         game._blit_card(layer, src, pos, scale, alpha)

@@ -77,6 +77,24 @@ Before issue #105 the raised price lived in the throwaway camp dict at
 cheap healing was infinite. Persisting it is why the per-purchase step
 got gentler: it compounds across a whole run instead of one visit.
 
+## The shop row shares the screen with the stat grid
+
+The tent's menu shows the [stat grid](./stat-grid.md) too — one column per
+player, flanking the five cards, because the purchase decision happens
+here and a price means nothing without the numbers it moves.
+
+Five 176px cards plus two 132px columns do not fit in 1120px, so **the
+cards give up the width, not the columns**: `_shop_layout` reserves a side
+band per column, centres the row in what is left, and narrows the card to
+152px in co-op. The card's description drops a font size instead of
+gaining an ellipsis at that width — a cut word says less than smaller
+text. With the grid off (TAB) the arithmetic returns the layout that
+predates it: 176px cards, row centred on the screen.
+
+Single-player reserves only the left band, so the row keeps full-width
+cards and simply sits further right — no hole where a second column would
+have gone.
+
 ## Shop is choice, not toll
 
 Walking straight to a door and skipping the tent is legal. The tent has
@@ -96,6 +114,7 @@ no stray creature frozen against a door. Prey are not updated in camp.
   world state, not a menu.
 - [Round](./round.md) — cleared rounds enter camp.
 - [Charm](./charm.md) — the tent's priciest offer.
+- [Stat grid](./stat-grid.md) — the columns beside the shop row.
 - [Balance](./balance.md) — the income-vs-price arithmetic behind
   `SHOP_TIER_STEP`.
 - [Route](../../CONTEXT.md) — what a door commits to.

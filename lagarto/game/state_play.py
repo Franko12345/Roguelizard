@@ -112,45 +112,6 @@ def draw(game, surf):
 _GRID_Y = 176        # under the dial row and, in co-op, under the item ring
 
 
-def _stat_rows(player):
-    """The five numbers the grid shows, already rounded to what is drawn.
-
-    Rounding here and not in ``hud`` is the point: these strings are the cache
-    key of the block, so every value has to be discrete before it is formatted
-    (ADR-0009). ``health`` is the only continuous one, and ``int`` bounds it by
-    ``max_health``.
-
-    Labels are short words rather than icons because they must read without a
-    tooltip -- a gamepad has no cursor to hover with.
-    """
-    hp, mx = int(player.health), int(player.max_health)
-    return (("DANO", f"{player.might:.2f}x", (255, 176, 120)),
-            ("VIDA", f"{hp}/{mx}", palette.health_color(hp / max(1, mx))),
-            ("RECAR", f"{player.cooldown_mult:.2f}x", (140, 208, 250)),
-            ("VELOC", f"{player.speed_mult:.2f}x", (150, 236, 180)),
-            ("AREA", f"{player.area_mult:.2f}x", (206, 172, 250)))
-
-
-def _stat_badges(player):
-    """Icons for everything owned: items in pickup order, then charms.
-
-    Unknown ids are dropped rather than drawn as the fallback disc -- a blank
-    disc in the grid would read as "you own something" and say nothing.
-    """
-    from ..combat import charms as charmlib
-    from ..combat import items as itemlib
-    out = []
-    for iid in player.items:
-        it = itemlib.ITEMS.get(iid)
-        if it is not None:
-            out.append((it.icon, it.color))
-    for cid in player.charms_owned:
-        ch = charmlib.CHARMS.get(cid)
-        if ch is not None:
-            out.append((ch.icon, ch.color))
-    return tuple(out)
-
-
 def _draw_hud(game, surf):
     bw = 216
     for i, p in enumerate(game.players):
@@ -236,7 +197,7 @@ def _draw_hud(game, surf):
         if game.show_stat_grid:
             hud.stat_grid(surf, game.smallfont,
                           (x if i == 0 else x + bw, _GRID_Y),
-                          _stat_rows(p), _stat_badges(p), game._panel,
+                          hud.stat_rows(p), hud.stat_badges(p), game._panel,
                           right=(i == 1))
 
         # equipped weapons live in the bottom corners so they never collide
