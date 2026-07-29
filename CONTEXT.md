@@ -373,9 +373,19 @@ apply to the HUD as well as to the body. See
 _Avoid_: HUD style, HUD look.
 
 **Organ**:
-A single readout inside a capsule — bio bar, dial, weapon icon, active item.
-Each organ has its own faster rhythm; the capsule holds them.
+A single readout inside a capsule — bio bar, gland, bellows, skull,
+weapon icon, active item. Each organ has its own faster rhythm; the
+capsule holds them.
 _Avoid_: HUD element (broader — it includes the capsule).
+
+**Gland**:
+A cooldown organ: the silhouette of the body part that performs the
+action (dash = leg muscle, tongue = throat sac, whip = coiling tail),
+sized by the recharge fraction. Three states — charging,
+ready-but-no-energy, ready — are distinct by size, colour and pulse
+glow. The cooldown row emits no text; the silhouette is the only signal.
+See [HUD anatomy](docs/concepts/hud-anatomy.md) and issue #133.
+_Avoid_: dial, ring, cooldown icon.
 
 **TopStack**:
 The reservation-based layout for the top-of-screen HUD (score, wave, combo,
