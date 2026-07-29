@@ -22,6 +22,7 @@ from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
+from lagarto.game import hud as _hud
 from lagarto.input.controllers import _ACTIONS
 import lagarto
 
@@ -29,6 +30,11 @@ src = lambda m: inspect.getsource(m)
 R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
+
+_hs = subprocess.run([sys.executable, 'tools/check_health_sacs.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(131, "sacos de vida", hasattr(_hud, 'draw_health_sacs') and _hs.returncode == 0,
+    "" if _hs.returncode == 0 else _hs.stderr.decode()[-90:])
 
 _mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
