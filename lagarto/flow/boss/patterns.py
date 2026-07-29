@@ -25,10 +25,18 @@ PATTERNS = {
     # ``moves`` slot drives the boss instead. Charge / burrow / grapple
     # veto by being ``None`` AND short-circuiting the FSM (their own
     # state machines own the motion).
-    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
+    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial',
+                    # issue #125: panic while spraying. The erratic_step move keeps
+                    # the body tumbling while the ring of shots leaves the mouth --
+                    # no graceful ring, a frantic scatter.
+                    move='erratic_step'),
     'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
     'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
-    'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
+    'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn',
+                    # issue #125: summons while moving. Adds spawn at one position,
+                    # she's already at another. The guard from #118 (never two windups
+                    # at once) is unchanged -- only the immobility is dropped.
+                    move='erratic_step'),
     'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
     'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
@@ -45,16 +53,26 @@ PATTERNS = {
                         count=12, spread=70, shot_speed=220, dmg=20),
     'web_trap': dict(fn=emitter.web_trap, select=emitter._select_arms_rain,
                      windup=C.BOSS_WEB_TRAP_WINDUP,
-                     telegraph='rain', count=1, spread=60),
-    # Aranha-Rei's Web Dome: same web_trap fn/select, just more/bigger patches
+                     telegraph='rain', count=1, spread=60,
+                     # issue #125: by-attack move = trap_and_shift. The trap fires
+                     # where the boss stands; the move leaves that spot for the
+                     # side with more free space.
+                     move='trap_and_shift'),
+    # Aranha-Rei's Web Dome: same web_trap fn/select, just more/bigger patches.
+    # ``move='trap_and_shift'`` again -- the centroid of the 5 rain points is
+    # the "trap" the boss leaves (it sits near the player), so the move drives
+    # around the blockage to the open side.
     'web_dome': dict(fn=emitter.web_trap, select=emitter._select_arms_rain, windup=0.8,
-                     telegraph='rain', count=5, spread=180, radius=70, life=9.0),
+                     telegraph='rain', count=5, spread=180, radius=70, life=9.0,
+                     move='trap_and_shift'),
     # Aranha-Rei's poison bite: same pincha_bite, roots instead of poisoning
     # (the player has no poison status -- see pincha_bite's docstring). Bumped
     # 0.3 -> 0.7 for the 27-frame rule; the bite is still a bite, just with
-    # the floor respected.
+    # the floor respected. ``move='erratic_step'`` keeps the nervous pacing even
+    # during the lunge windup.
     'poison_bite': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line',
-                        reach=1.6, dmg=15, slow=(0.5, 1.4)),
+                        reach=1.6, dmg=15, slow=(0.5, 1.4),
+                        move='erratic_step'),
     # deathroll: bumped 0.5 -> 0.7 so the floor holds in enraged. The dense
     # spiral still reads as "bullet hell" -- the windup is the same as the
     # basic spiral, but the SHOTS dial is what makes it dense.
@@ -210,11 +228,40 @@ def beetle_phases():
 # --------------------------------------------------------------------------- #
 
 def spider_king_phases():
+    """3 fases. Phase 1 learns the nervousness + the area-denial rhythm;
+    phase 2 adds ``web_dome`` and tightens the cd; phase 3 swaps the
+    commitment patterns (charge -> poison_bite) while keeping the
+    irregular cd jitter at the same wide band.
+
+    Per-phase ``moves`` is ``[erratic_step, trap_and_shift]`` -- the
+    pair emitted by the issue's "movement **by attack**" framing: a
+    short, frequent re-roll keeps the body moving between attacks,
+    and ``trap_and_shift`` takes over when a web is being placed
+    (see PATTERNS['web_trap']['move'] / 'web_dome' below). The two
+    moves walk a single precedence chain -- one active at a time,
+    whichever the FSM has higher precedence for.
+
+    ``cd_jitter`` (#125) widens the inter-attack interval above the
+    floor by drawing from [floor, floor + BOSS_CD_MAX * cd_mul] and
+    multiplying by ``uniform(1 - jitter, 1 + jitter)``. A jitter of
+    1.0 puts the per-roll cd across roughly [~0.15, ~0.40] s on phase
+    1 and a tighter band on phase 3 -- the variance stays a clear
+    first in ``BOSS_POOL``, which is the issue's "least predictable"
+    promise. Tighter than A Muralha's relentless floor, looser than
+    the Wasp's planned curves.
+    """
     return [
-        dict(hp_frac=1.0, patterns=['charge', 'web_trap', 'summon'], cd_mul=1.0, moves=['orbit']),
-        dict(hp_frac=0.6, patterns=['charge', 'web_trap', 'summon', 'web_dome'], cd_mul=0.85, moves=['orbit']),
-        dict(hp_frac=0.3, patterns=['poison_bite', 'web_trap', 'summon', 'web_dome'], cd_mul=0.6, moves=['orbit']),
+        dict(hp_frac=1.0, patterns=['charge', 'web_trap', 'summon'],
+             cd_mul=1.0, cd_jitter=1.0,
+             moves=['erratic_step', 'trap_and_shift']),
+        dict(hp_frac=0.6, patterns=['charge', 'web_trap', 'summon', 'web_dome'],
+             cd_mul=0.85, cd_jitter=1.0,
+             moves=['erratic_step', 'trap_and_shift']),
+        dict(hp_frac=0.3, patterns=['poison_bite', 'web_trap', 'summon', 'web_dome'],
+             cd_mul=0.6, cd_jitter=1.0,
+             moves=['erratic_step', 'trap_and_shift']),
     ]
+
 
 
 # --------------------------------------------------------------------------- #

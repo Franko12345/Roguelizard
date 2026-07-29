@@ -63,6 +63,10 @@ class BossAI:
         self.phase_i = 0
         self.state = 'intro'
         self.t = C.BOSS_INTRO_TIME
+        # Issue #118: initial cd uses the same MIN..MAX window as the rest of
+        # the cycle (NOT floored) -- the floor protects against later cycles
+        # that hit zero, not against the very first one. The actual fight
+        # cadence lands on the floor within one or two attacks anyway.
         self.cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX)
         self.pattern_id = None
         self.summon_cd = 0.0
@@ -121,9 +125,26 @@ class BossAI:
         so the per-boss ``cd_mul`` carries the rhythm signature. The
         ``BOSS_CD_FLOOR`` keeps a 0 ``cd_mul`` (or a tiny one) from making
         the boss spell out bullets illegibly.
+
+        Per-phase ``cd_jitter`` (#125) widens the cd **above** the floor:
+        the boss draws from ``[floor, floor + BOSS_CD_MAX * cd_mul]`` (no
+        jitter so the lower half coincides with the floor), then multiplies
+        by ``uniform(1 - jitter, 1 + jitter)``. The floor protects
+        legibility against an unlucky zero; above the floor the rhythm is
+        the persona's signature -- Aranha-Rei's 0.55 lands cds across
+        [~0.15, ~0.31] s in calm and a tighter band in enraged, which is
+        how she stays the LEAST regular boss in ``BOSS_POOL``. A boss with
+        cd_jitter unset (default) rides the floor on every cycle: same as
+        before #125, just a tighter band on top.
         """
-        cd_raw = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
-        return max(C.BOSS_CD_FLOOR, cd_raw)
+        cd_mul = self.phase()['cd_mul']
+        jitter = self.phase().get('cd_jitter', 0.0) or 0.0
+        if jitter > 0:
+            cd_base = C.BOSS_CD_FLOOR + random.uniform(0.0, C.BOSS_CD_MAX * cd_mul)
+            cd = cd_base * random.uniform(1.0 - jitter, 1.0 + jitter)
+        else:
+            cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * cd_mul
+        return max(C.BOSS_CD_FLOOR, cd)
 
     def _eff_windup(self, pid):
         """Effective windup for ``pid``, clamped to the 27-frame floor.
