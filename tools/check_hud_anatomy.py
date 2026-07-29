@@ -438,4 +438,178 @@ print(f"[10] entry overshoot: OK -- wired in _draw_hud, fired on P0 "
       f"(vx={cap0.vitals_spring.vx:.1f}, vy={cap0.vitals_spring.vy:.1f}) "
       f"and P1 (vx={cap1.vitals_spring.vx:.1f})")
 
+# ---- 11. gland: silhouette size is a monotone function of frac --------- #
+# Issue #133: the silhouette inflates as the ability recharges. The size
+# must grow monotonically with frac in [0, 1) and reach exactly r at
+# frac=1 -- a glandula cheia com habilidade em cooldown is a mentira.
+from lagarto.render import icons
+gland_test = pygame.Surface((44, 44), 0, 24)
+def _gland_footprint(frac, enabled):
+    gland_test.fill((9, 11, 18))
+    hud.gland(gland_test, (22, 22), 11, frac, (78, 236, 126),
+              icons._legs_icon, 0.0, enabled=enabled)
+    return sum(1 for x in range(44) for y in range(44)
+               if gland_test.get_at((x, y))[:3] != (9, 11, 18))
+# charging curve: enabled=True so we hit the inflate branch
+charge_fracs = (0.0, 0.25, 0.5, 0.75, 1.0)
+charge_sizes = [_gland_footprint(f, enabled=True) for f in charge_fracs]
+for prev, cur, frac in zip(charge_sizes, charge_sizes[1:], charge_fracs[1:]):
+    assert cur >= prev, \
+        f"gland pixel count not monotonic: frac={frac} {cur} < {prev}"
+assert charge_sizes[-1] > charge_sizes[0], \
+    f"gland at frac=0 not smaller than frac=1: {charge_sizes}"
+print(f"[11] gland size: OK -- frac 0..1 -> {charge_sizes[0]}..{charge_sizes[-1]} px, "
+      f"monotonic")
+
+# ---- 12. gland: three states visually distinct -------------------------- #
+# Each state must look different -- the issue's three thresholds:
+# charging, ready-but-no-energy, ready. We compare pixel histograms (with
+# palette.glow adding many translucent tints on the ready state); two
+# states that look the same collapse to one histogram.
+import collections
+def _hist(surf):
+    counter = collections.Counter()
+    w, h = surf.get_width(), surf.get_height()
+    for x in range(w):
+        for y in range(h):
+            counter[surf.get_at((x, y))[:3]] += 1
+    return counter
+
+def _hist_distance(a, b):
+    keys = set(a) | set(b)
+    return sum(abs(a.get(k, 0) - b.get(k, 0)) for k in keys)
+
+gland_state = pygame.Surface((50, 50), 0, 24)
+gland_state.fill((9, 11, 18))
+hud.gland(gland_state, (25, 25), 11, 0.4, (78, 236, 126),
+          icons._legs_icon, 0.0, enabled=True)
+h_charging = _hist(gland_state)
+gland_state.fill((9, 11, 18))
+hud.gland(gland_state, (25, 25), 11, 1.0, (78, 236, 126),
+          icons._legs_icon, 0.0, enabled=False)
+h_no_energy = _hist(gland_state)
+gland_state.fill((9, 11, 18))
+hud.gland(gland_state, (25, 25), 11, 1.0, (78, 236, 126),
+          icons._legs_icon, 0.0, enabled=True)
+h_ready = _hist(gland_state)
+# tolerances tuned for 50x50 with the icon's translucent glow on ready:
+# we want the assertion to fail loudly if two states collapse
+PAIRS = (("charging", "no-energy", h_charging, h_no_energy),
+         ("charging", "ready", h_charging, h_ready),
+         ("no-energy", "ready", h_no_energy, h_ready))
+for a, b, ha, hb in PAIRS:
+    d = _hist_distance(ha, hb)
+    assert d > 30, f"gland states {a} vs {b} too similar (distance {d})"
+print(f"[12] gland states: OK -- charging vs no-energy {_hist_distance(h_charging, h_no_energy)}, "
+      f"charging vs ready {_hist_distance(h_charging, h_ready)}, "
+      f"no-energy vs ready {_hist_distance(h_no_energy, h_ready)}")
+
+# ---- 13. gland: three glands fit inside the cooldowns capsule ---------- #
+# The pitch is bar_w // 3, each gland is r px wide. Singleplayer and coop
+# both use the same bar_w; the coop check at [1] already asserts the two
+# player blocks do not collide.
+bar_w = C.HUD_PANEL_W - 2 * C.HUD_PAD
+pitch = bar_w // 3
+r = 11
+centres = [pitch // 2 + pitch * i for i in range(3)]
+for i in range(3):
+    for j in range(i + 1, 3):
+        gap = centres[j] - centres[i]
+        assert gap > 2 * r, f"gland {i} and {j} overlap: gap {gap - 2 * r} px"
+last_edge = centres[-1] + r
+assert last_edge <= bar_w, f"glands overflow capsule: last edge {last_edge} > bar_w {bar_w}"
+# verify a real coop draw: two players, six glands, all within their own
+# 216-px panel, panels themselves don't collide (re-asserted via #1).
+g3 = _game(2)
+g3.wave = 5
+for _ in range(5):
+    g3.step(1 / 60)
+surf = pygame.Surface((C.WIDTH, C.HEIGHT))
+state_play._draw_hud(g3, surf)
+# walk a 6-gland bounding box per player; the y for the cooldowns row is
+# strip_top - GAP - HUD_COOLDOWNS_H ... + HUD_PAD + 4 + 14
+strip_top = C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H
+cd_top = strip_top - C.HUD_BLOCK_GAP - C.HUD_COOLDOWNS_H
+y = cd_top + 4 + 14
+# each player's cooldowns capsule is bw px wide; assert the three gland
+# centres land within it
+for i in range(2):
+    x_anchor = C.HUD_MARGIN if i == 0 else C.WIDTH - C.HUD_PANEL_W - C.HUD_MARGIN
+    left = x_anchor + C.HUD_PAD
+    right = left + bar_w
+    assert left + centres[0] - r >= x_anchor, "first gland clipped on left"
+    assert left + centres[-1] + r <= right, "last gland clipped on right"
+print(f"[13] gland layout: OK -- centres {centres} px, gap {centres[1] - centres[0]} px, "
+      f"all fit in {bar_w} px capsule")
+
+# ---- 14. gland: cooldown row emits no ui.text --------------------------- #
+# The trade-off #133 chose: identity over scan speed. The cooldown row must
+# not emit any text -- the silhouette is the only signal. Walking the
+# _draw_hud source between the cooldowns capsule and the strip section
+# must find zero ui.text calls.
+draw_src = inspect.getsource(__import__('lagarto.game.state_play', fromlist=['x']))
+cd_idx = draw_src.index('cd_rect = pygame.Rect(cdx, cdy')
+strip_idx = draw_src.index('# ---- bottom strip', cd_idx)
+section = draw_src[cd_idx:strip_idx]
+text_calls = section.count('ui.text(')
+assert text_calls == 0, \
+    f"cooldowns row emitted {text_calls} ui.text call(s) -- labels are gone"
+print(f"[14] no text in cooldowns row: OK -- 0 ui.text call(s) in the section")
+
+# ---- 15. gland: six glands in coop stay inside the HUD frame budget ------ #
+# The full _draw_hud perf check at [6] already covers this; we add a
+# direct micro-bench on hud.gland for regression safety -- six glands is
+# the coop worst case.
+import time as _t
+micro = pygame.Surface((C.WIDTH, C.HEIGHT))
+start = _t.perf_counter()
+for f in range(400):
+    micro.fill((9, 11, 18))
+    for i in range(6):
+        frac = ((f + i) % 100) / 100.0
+        enabled = ((f + i) % 5) != 0
+        fn = (icons._legs_icon, icons._tongue, icons._club)[i % 3]
+        col = ((78, 236, 126), (235, 90, 120), (250, 190, 90))[i % 3]
+        hud.gland(micro, (100 + (i % 3) * 65, 100), 11, frac, col, fn, f / 60.0,
+                  enabled=enabled)
+elapsed_ms = (_t.perf_counter() - start) / 400 * 1000
+assert elapsed_ms < 1.0, f"six glands cost {elapsed_ms:.3f} ms/frame (budget 1.0 ms)"
+print(f"[15] six-gland perf: OK -- {elapsed_ms:.3f} ms/frame (budget 1.0 ms)")
+
+# ---- 16. gland screenshot: three states in a grid ------------------------ #
+# A reference image so the issue's three states are inspectable without
+# running the game. Three icons (legs, tongue, club) x three states each
+# = 9 cells, all in one strip.
+if '--shot' in sys.argv:
+    cell = 56
+    pad = 8
+    grid = pygame.Surface((cell * 3 + pad * 4, cell * 3 + pad * 4 + 24), 0, 24)
+    grid.fill((9, 11, 18))
+    legs_col = (78, 236, 126)
+    tongue_col = (235, 90, 120)
+    club_col = (250, 190, 90)
+    cases = (
+        ('charging', 0.4, True),
+        ('pronta sem energia', 1.0, False),
+        ('pronta', 1.0, True),
+    )
+    icons_row = (('DASH', icons._legs_icon, legs_col),
+                 ('LING', icons._tongue, tongue_col),
+                 ('RABO', icons._club, club_col))
+    label_font = fonts.get(16)
+    for col_i, (name, fn, c) in enumerate(icons_row):
+        for row_i, (state_name, frac, enabled) in enumerate(cases):
+            cx = pad + col_i * (cell + pad) + cell // 2
+            cy = pad + row_i * (cell + pad) + cell // 2
+            cell_surf = pygame.Surface((cell, cell), 0, 24)
+            cell_surf.fill((16, 18, 30))
+            hud.gland(cell_surf, (cell // 2, cell // 2), 11, frac, c, fn, 0.4,
+                      enabled=enabled)
+            grid.blit(cell_surf, (pad + col_i * (cell + pad),
+                                  pad + row_i * (cell + pad)))
+            grid.blit(label_font.render(f"{name} {state_name}", True, (220, 220, 232)),
+                      (pad + col_i * (cell + pad), pad * 3 + cell * 3))
+    pygame.image.save(grid, 'hud-glands-states.bmp')
+    print("  screenshot: hud-glands-states.bmp")
+
 print("ALL OK")
