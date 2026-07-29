@@ -69,7 +69,7 @@ for num in (1, 2):
     surf = pygame.Surface((C.WIDTH, C.HEIGHT))
     rects = []
     for i, p in enumerate(g.players):
-        rows, badges = state_play._stat_rows(p), state_play._stat_badges(p)
+        rows, badges = hud.stat_rows(p), hud.stat_badges(p)
         assert len(rows) == 5, f"expected 5 stat rows, got {len(rows)}"
         labels = [r[0] for r in rows]
         assert labels == ['DANO', 'VIDA', 'RECAR', 'VELOC', 'AREA'], labels
@@ -97,8 +97,8 @@ surf = pygame.Surface((C.WIDTH, C.HEIGHT))
 
 
 def draw_once():
-    hud.stat_grid(surf, g.smallfont, (16, 176), state_play._stat_rows(p),
-                  state_play._stat_badges(p), g._panel)
+    hud.stat_grid(surf, g.smallfont, (16, 176), hud.stat_rows(p),
+                  hud.stat_badges(p), g._panel)
 
 
 g._panels.clear()
