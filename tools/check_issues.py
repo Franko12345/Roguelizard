@@ -66,6 +66,45 @@ chk(123, "rei lagarto -- legibilidade",
     and king_personality().tell_mult == {}
     and _kg.returncode == 0,
     "" if _kg.returncode == 0 else _kg.stderr.decode()[-90:])
+_ws = subprocess.run([sys.executable, 'tools/check_wasp_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(122, "wasp signature",
+    'dive_arc' in src(bossmoves) and 'flyby' in src(bossmoves)
+    and 'curve_approach' in src(bossmoves) and 'climb_out' in src(bossmoves)
+    and "'dive_line'" in src(__import__('lagarto.flow.boss.telegraph',
+                                       fromlist=['x']))
+    and "'shadow_circle'" in src(__import__('lagarto.flow.boss.telegraph',
+                                            fromlist=['x']))
+    and 'dive_arc' in src(__import__('lagarto.flow.boss.telegraph',
+                                    fromlist=['x']))
+    and 'terror_alado' in ar.ARENAS
+    and _ws.returncode == 0,
+    "" if _ws.returncode == 0 else _ws.stderr.decode()[-90:])
+_ce = subprocess.run([sys.executable, 'tools/check_centipede_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(124, "centopeiadeira signature -- burrow-as-locomotion",
+    'move_spin_glide' in src(bossmoves) and 'move_lunge' in src(bossmoves)
+    and "move='spin_glide'" in src(pat) and "move='lunge'" in src(pat)
+    and "'burrow IS the locomotion'" in src(bossai)
+    and _ce.returncode == 0,
+    "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
+_sp = subprocess.run([sys.executable, 'tools/check_spider_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(125, "aranha-rei signature -- erratic + siege",
+    'move_erratic_step' in src(bossmoves) and 'move_trap_and_shift' in src(bossmoves)
+    and 'cd_jitter' in src(pat) and 'cd_jitter' in src(bossai)
+    and "move='erratic_step'" in src(pat) and "move='trap_and_shift'" in src(pat)
+    and _sp.returncode == 0,
+    "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
+_ttk = subprocess.run([sys.executable, 'tools/check_boss_ttk.py'], capture_output=True,
+                       env={**os.environ, 'PYTHONPATH': '.'})
+chk(120, "boss time-to-kill harness",
+    os.path.exists('tools/check_boss_ttk.py')
+    and 'PROFILES' in open('tools/check_boss_ttk.py').read()
+    and 'BOSS_POOL' in open('tools/check_boss_ttk.py').read()
+    and 'phase_reached' in open('tools/check_boss_ttk.py').read()
+    and _ttk.returncode == 0,
+    "" if _ttk.returncode == 0 else _ttk.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib
