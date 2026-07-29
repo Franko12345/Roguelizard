@@ -45,12 +45,18 @@ def telegraph_radial(surf, cam, b, ai, prog, col, blink):
 
 
 def telegraph_fan(surf, cam, b, ai, prog, col, blink):
-    """Two lines fanning out from the mouth -- 'dodge sideways' tell."""
+    """Two lines fanning out from the mouth -- 'dodge sideways' tell.
+
+    Issue #118: the aim is read LIVE from ``ai._windup_target``. The
+    BossAI.zs tick updates that point every frame the boss is in windup,
+    so a walking boss aims where the player is *now*, not where it was
+    when the windup started. The fan rotates with the mouth as the
+    body moves; the shot comes from the new position and the cone
+    reflects that -- no ghost cone hanging in the air.
+    """
     mouth = b.spine.joints[0]
     sp = cam.w2s(mouth)
     spread = C.BOSS_FAN_SPREAD
-    # caller may override the spread via the PATTERN dict; ai._windup_target
-    # is what the BossAI aimed at when it kicked off the windup.
     base = safe_norm(getattr(ai, '_windup_target', mouth + Vector2(100, 0)) - mouth)
     for s in (-0.5, 0.5):
         edge = base.rotate(s * spread)
@@ -60,7 +66,12 @@ def telegraph_fan(surf, cam, b, ai, prog, col, blink):
 
 
 def telegraph_line(surf, cam, b, ai, prog, col, blink):
-    """A single line from mouth to target -- 'this is where I'm biting' tell."""
+    """A single line from mouth to target -- 'this is where I'm biting' tell.
+
+    Same as telegraph_fan: the aim is read live from ``ai._windup_target``
+    every frame, so a moving boss doesn't draw a stale line. Used by
+    barrage, pincha, eye_laser, charging and other line telegraphs.
+    """
     mouth = b.spine.joints[0]
     sp = cam.w2s(mouth)
     aim = getattr(ai, '_windup_target', mouth + Vector2(100, 0))

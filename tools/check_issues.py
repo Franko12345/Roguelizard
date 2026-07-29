@@ -36,6 +36,19 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_bm = subprocess.run([sys.executable, 'tools/check_boss_movement.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.flow.boss import moves as bossmoves
+chk(118, "boss movement trail",
+    'MOVES' in src(bossmoves) and 'move_orbit' in src(bossmoves)
+    and 'moves.py' in str(bossmoves.__file__)
+    and 'BOSS_WINDUP_FLOOR' in src(C)
+    and C.BOSS_WINDUP_FLOOR >= 0.45
+    and 'BOSS_CD_FLOOR' in src(C)
+    and C.BOSS_CD_FLOOR >= 0.10
+    and 'moves=' in src(pat)
+    and _bm.returncode == 0,
+    "" if _bm.returncode == 0 else _bm.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib

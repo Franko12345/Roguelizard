@@ -74,6 +74,34 @@ tense. Zero draw code new.
 - Body scale of ~2.3× (2.3 × 1.35 for the final tier). "4×" mentioned in
   design docs is flavour text — the numbers on the wire.
 
+## Movement Trail and the `cd_mul` rhythm signature
+
+The FSM's per-frame `(direction, speed)` is the **Movement Trail** —
+the slot that says what the boss does *between* attacks. The trail
+has two bindings, with precedence **attack > phase > none**:
+
+- The active pattern's `move` field (`PATTERNS[pid]['move']`).
+- The phase kit's `moves` slot (the background between attacks).
+- The default `move_reposition` (move toward the target).
+
+Charge / burrow / grapple keep their veto.
+
+The phase kit's `cd_mul` is the **rhythm signature** now that
+`BOSS_CD_MIN` / `MAX` collapsed to near zero. A Muralha fights
+relentlessly (floor); Olho-Sismico uses a higher `cd_mul` for the
+long pauses of the observer. The cycle drops from ~2.1s to ~1.0s
+in calm and approaches 0.75s in enraged — the cadence by overlap,
+not by cutting the tell.
+
+A Muralha's `moves=[]` is the framework's signal that the slot is
+intentionally empty (the wall). Every other boss declares a slot,
+and the per-boss signatures (#121-#125) fill the rich moves over
+time.
+
+See [Boss Movement](./boss-movement.md) for the concept and
+[ADR-0015](../adr/0015-cadence-by-overlap-not-tell-cut.md) for the
+why.
+
 ## Boss vs generic
 
 Named bosses live in `BOSS_POOL` with overrides (patterns per phase,

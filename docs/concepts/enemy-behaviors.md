@@ -71,6 +71,23 @@ zone while it grows — for an enemy whose whole pitch is catching you standing
 in it, that is the one thing the mark may not do. Urgency lives in the line
 width and the glow, which already scale with progress.
 
+## Telegraph floor: 27 frames at 60 Hz
+
+The 27-frame rule is **0.45 s** at `SIM_HZ = 60`. Every real telegraph
+stays at or above this floor, before any mood multiplier:
+`PATTERNS[pid]['windup'] * personality.windup_mult(mood) >= 0.45`.
+
+The static check is in `tools/check_boss_movement.py` (issue #118),
+which walks every `(pid, mood)` pair and asserts the floor. The
+runtime clamp is in `BossAI._eff_windup`: when a mood multiplier
+would drag a real telegraph below 0.45 s, the clamp pulls it back.
+Burrow and grapple exempt (their `telegraph` is `None` — the body IS
+the tell via the dig/grapple state machines).
+
+The cadence target is **overlap**, not tell-cut. Cutting the windup
+below the floor to make the boss fire faster is the trade that
+broke the rule the issue's premise is built on.
+
 ## Hostile puddle: `dmg` changes meaning
 
 `weapons.Puddle(hostile=True)`:
