@@ -9,13 +9,16 @@ parent.
 **Decision.** The HUD follows the **anatomy** metaphor from
 `docs/concepts/hud-anatomy.md`:
 
-- Every player block is wrapped in a framed **capsule** (`ui.panel`,
-  the same primitive used by the menu and level-up screens).
-- The capsule has its own low-frequency spring; each organ inside has
-  its own, faster rhythm.
+- Every player block is wrapped in **two framed capsules** (`ui.panel`,
+  the same primitive used by the menu and level-up screens) — one for
+  vitais (header + 3 bars), one for cooldowns (3 dials). The weapon
+  / item strip below is unframed.
+- Each capsule has its own low-frequency spring; each organ inside has
+  its own, faster rhythm. A fast organ inside a slow container must
+  not share a border or the eye reads them as one block.
 - Every element obeys the four beats of procedural animation:
   Intent / Action / Reaction / Follow-through.
-- The capsule lives in the bottom corners (P1 left, P2 right). The
+- The block lives in the bottom corners (P1 left, P2 right). The
   top-centre column is owned by `TopStack`.
 
 **Why.** The metaphor turns "where does this go?" into "what organ is
@@ -70,11 +73,13 @@ this doc will ask three questions:
   `Game.hud_capsules`. The sim is at 30 Hz, the draw is at 60 Hz,
   the spring interpolates between steps.
 - `lagarto/core/config.py` exposes the layout numbers
-  (`HUD_PANEL_W`, `HUD_PANEL_H`, the spring constants, the shake
-  amplitudes) in one block.
-- `tools/check_hud_anatomy.py` pins the four claims with teeth:
-  capsule anchor, framing primitive, no TopStack collision, spring
-  settling.
+  (`HUD_PANEL_W`, `HUD_VITALS_H`, `HUD_COOLDOWNS_H`, `HUD_STRIP_H`,
+  the spring constants, the shake amplitudes, the impulse constants)
+  in one block.
+- `tools/check_hud_anatomy.py` pins seven claims with teeth:
+  capsule anchor, two framed capsules, no TopStack collision, spring
+  settling through the wired impulse path, amplitude decay, draw
+  budget, and panel-cache stability.
 - `tools/check_issues.py` adds a row that runs the new check.
 - `docs/concepts/hud-anatomy.md` is the rule; this ADR is the
   decision to adopt it.

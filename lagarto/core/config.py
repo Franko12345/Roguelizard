@@ -523,6 +523,10 @@ HUD_VITALS_H = (HUD_HEAD_H + HUD_HEALTH_H + HUD_ORGAN_GAP + HUD_BELLOWS_H
 HUD_COOLDOWNS_H = HUD_DIALS_H
 HUD_STRIP_H = 28             # weapons + item row, no frame
 HUD_BLOCK_GAP = 8            # vertical gap between vitais / cooldowns / strip
+# Total height of a player's HUD region (the lowest of the three y positions,
+# inclusive of the bottom margin). Useful for layout maths from the screen
+# bottom: ``y_top = C.HEIGHT - C.HUD_PLAYER_H - C.HUD_MARGIN``.
+HUD_PLAYER_H = HUD_VITALS_H + HUD_COOLDOWNS_H + HUD_STRIP_H + 2 * HUD_BLOCK_GAP
 HUD_MARGIN = 12              # panel inset from screen edge
 HUD_PAD = 10                 # interior left/right padding
 HUD_PLAYER_H = HUD_VITALS_H + HUD_COOLDOWNS_H + HUD_STRIP_H + 2 * HUD_BLOCK_GAP
