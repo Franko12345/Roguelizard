@@ -122,6 +122,7 @@ class Game:
         self._uilayer = None      # scratch surface so screen shake can move the whole UI
         self._panels = {}         # rendered card/shop/route panels, keyed by their state
         self.top = hud.TopStack()     # shared top-centre column (see TopStack)
+        self.hud_capsules = [hud.PlayerCapsule() for _ in range(num_players)]
         self._card_rects = []
         self._shop_rects = []
         self._route_rects = []

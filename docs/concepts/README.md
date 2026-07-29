@@ -59,6 +59,8 @@ wrong.
 - [UI screens](./ui-screens.md) — level-up / camp entrance + absorption
 - [UI legibility](./ui-legibility.md) — text rendering + top stack
 - [Health HUD](./health-hud.md) — player, enemy, boss, friend bars
+- [HUD anatomy](./hud-anatomy.md) — capsule + organ + four beats applied
+  to the player HUD
 - [Juice](./juice.md) — hit-stop, transitions, menu drop-in
 - [Icons & audio](./icons-audio.md) — code-generated art and sound
 

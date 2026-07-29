@@ -128,6 +128,14 @@ chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
 chk(22, "club charm-only", 'club' not in mut.MUTATIONS_LIST_IDS if False else
     all(m.id != 'club' for m in mut.MUTATIONS_LIST) and 'clava' in charms.CHARMS
     and any('clava' in s.needs for s in syn.SYNERGIES if s.id == 'bola'))
+_ha = subprocess.run([sys.executable, 'tools/check_hud_anatomy.py'],
+                     capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.game import hud as _hudlib
+chk(130, "anatomia do HUD",
+    hasattr(_hudlib, 'CapsuleSpring') and hasattr(_hudlib, 'PlayerCapsule')
+    and _ha.returncode == 0,
+    "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
 _t = subprocess.run([sys.executable, 'tools/check_tongue.py'], capture_output=True,
                     env={**os.environ, 'PYTHONPATH': '.'})
 chk(21, "IK tongue", hasattr(Player, 'tongue_path') and _t.returncode == 0,

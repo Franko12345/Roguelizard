@@ -88,4 +88,6 @@ screen.
 - [UI screens](./ui-screens.md) — where drop-in + absorption compose.
 - [Combat](./combat.md) — where hit-stop is called, and the tongue's beats.
 - [Boss](./boss.md) — the 0.22 s freeze on boss death.
+- [HUD anatomy](./hud-anatomy.md) — the capsule spring that carries the
+  whole-screen "something inside you changed" feedback for the player HUD.
 - [Icons & audio](./icons-audio.md) — the adaptive stem mix.

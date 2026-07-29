@@ -4,6 +4,11 @@ Everything here is a function of ``(surf, ...)`` plus plain numbers/colours, so
 it can be called from any state module without dragging the state machine in.
 Anything that has to *read* the run (player health, wave, combo) belongs in the
 state module that draws it, not here.
+
+The ``CapsuleSpring`` and ``PlayerCapsule`` types live here too -- they are
+HUD-specific state, owned by the player capsule (the framed panel that holds
+vitals + dials), not by the run. See ``docs/concepts/hud-anatomy.md`` for the
+metaphor and the budget.
 """
 
 import math
@@ -12,7 +17,7 @@ import pygame
 from pygame import Vector2
 
 from ..core import config as C
-from ..core.mathutil import pulse, vfrom_angle
+from ..core.mathutil import decay, pulse, vfrom_angle
 from ..core import palette
 from ..render import ui
 
@@ -290,3 +295,123 @@ class TopStack:
         y = self.y
         self.y += h + self.gap
         return y
+
+
+class CapsuleSpring:
+    """Low-frequency mass-spring-damper for the player HUD capsule.
+
+    The capsule is "massa rigida" in the HUD-anatomy metaphor -- it has its own
+    overshoot on entry and its own tremble on damage / value change. The organs
+    inside (bars, dials) animate on their own, faster rhythms; the spring gives
+    the player something to read as "the container reacted" without naming which
+    organ moved.
+
+    State is a 2D displacement from the resting offset (0, 0). One impulse at
+    a time -- a damage hit AND a value change in the same frame sum into one
+    impulse, capped by ``HUD_SHAKE_HP``. The tremble itself is a separate sine
+    added on top of the spring displacement, gated by ``HUD_SHAKE_DUR``.
+    """
+
+    __slots__ = ('x', 'y', 'vx', 'vy', 'shake_t', 'shake_amp')
+
+    def __init__(self):
+        self.x = 0.0
+        self.y = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+        self.shake_t = 0.0
+        self.shake_amp = 0.0
+
+    def impulse(self, ax, ay):
+        self.vx += ax
+        self.vy += ay
+
+    def start_shake(self, amp):
+        """Start (or raise) a decaying sinusoidal shake of peak amplitude ``amp`` px."""
+        self.shake_amp = max(self.shake_amp, amp)
+        self.shake_t = C.HUD_SHAKE_DUR
+
+    def update(self, dt):
+        # Semi-implicit Euler at 60 Hz is stable for k=38, c=9 -- the system is
+        # overdamped (c^2 > 4*k*m with m=1), so no z-plane is needed and the
+        # spring returns to rest without ringing forever.
+        ax = -C.HUD_SPRING_K * self.x - C.HUD_SPRING_C * self.vx
+        ay = -C.HUD_SPRING_K * self.y - C.HUD_SPRING_C * self.vy
+        self.vx += ax * dt
+        self.vy += ay * dt
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.shake_t = decay(self.shake_t, dt)
+
+    def settle_error(self):
+        """Max of |x| and |y| -- how far the spring is from rest. Used by the
+        check to assert the capsule actually settles after an impulse."""
+        return max(abs(self.x), abs(self.y))
+
+    def offset(self, t):
+        """(ox, oy) pixel offset to add to the panel's resting rect."""
+        ox, oy = self.x, self.y
+        if self.shake_t > 0 and self.shake_amp > 0.01:
+            # linear decay of the envelope; the sine runs on game.time so the
+            # tremor stays phase-locked to the player, not the frame.
+            f = self.shake_t / C.HUD_SHAKE_DUR
+            ox += math.sin(t * 56.0) * self.shake_amp * f
+            oy += math.cos(t * 47.0) * self.shake_amp * f * 0.6
+        return ox, oy
+
+
+class PlayerCapsule:
+    """Per-player HUD state: the panel spring plus last-frame vitals.
+
+    ``last`` is what the capsule compares against to detect a value change
+    inside the panel. ``spring`` is the CapsuleSpring for the panel position.
+    Initialised empty -- the state module fills it in on the first frame.
+    """
+
+    __slots__ = ('spring', 'last_hp', 'last_energy', 'last_xp', 'last_ability')
+
+    def __init__(self):
+        self.spring = CapsuleSpring()
+        self.last_hp = None
+        self.last_energy = None
+        self.last_xp = None
+        self.last_ability = None
+
+
+def detect_changes(capsule, player):
+    """Compare the player's current vitals to the capsule's last frame and fire
+    shakes on the spring when they differ. Returns True if anything moved -- the
+    caller can use this to drive per-organ animations later."""
+    anything = False
+    last = capsule.last_hp
+    if last is not None and player.health < last - 0.5:
+        # damage: stronger tremble, direction taken from the hit normal if the
+        # caller left one on the player; default is straight down
+        capsule.spring.start_shake(C.HUD_SHAKE_HP)
+        anything = True
+    elif last is not None and player.health > last + 0.5:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE)
+        anything = True
+    capsule.last_hp = player.health
+
+    last = capsule.last_energy
+    if last is not None and abs(player.energy - last) > 0.6:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        anything = True
+    capsule.last_energy = player.energy
+
+    last = capsule.last_xp
+    if last is not None and player.xp > last + 0.5:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        anything = True
+    capsule.last_xp = player.xp
+
+    last = capsule.last_ability
+    if last is not None and (player.ability_charge >= 1.0) != (last >= 1.0):
+        # crossing the "ready" threshold is the loudest value change in the
+        # panel -- a different shake amplitude so the player can tell which
+        # organ flipped.
+        capsule.spring.start_shake(C.HUD_SHAKE_HP * 0.6)
+        anything = True
+    capsule.last_ability = player.ability_charge
+    return anything

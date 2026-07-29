@@ -19,7 +19,10 @@ raises pulse frequency and saturation across the row so danger attracts the
 eye. Damage swells the active sac, bursts its fluid state, rocks its neighbours
 along the artery, then leaves the empty shell settled in place.
 
-Alongside: energy bar and XP bar.
+Alongside: energy bar and XP bar. The three sit inside the player
+**capsule** ([HUD anatomy](./hud-anatomy.md)) and animate on their own
+faster rhythm; the capsule itself answers damage with a low-frequency
+spring.
 
 ## Enemies
 
@@ -50,4 +53,6 @@ rim / glow with it.
 - [Hitbox](./hitbox.md) — where damage lands.
 - [UI legibility](./ui-legibility.md) — the top-stack that owns the boss
   bar.
+- [HUD anatomy](./hud-anatomy.md) — the capsule that wraps the player bars
+  and the four beats the HUD obeys.
 - [Balance](./balance.md) — the friend lifetime that drives the fade.

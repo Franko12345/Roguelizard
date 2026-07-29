@@ -3,6 +3,12 @@
 ``update`` is the whole play-state body of ``Game.step``; ``draw`` is the only
 thing play adds to the shared world pass (the offscreen arrows). ``_draw_hud``
 is called by ``Game.draw`` for every state that still shows the run readouts.
+
+The HUD itself follows the "anatomy" metaphor from issue #130: vitals + cooldowns
+live inside a framed *capsule* (the panel) anchored in the bottom corners; the
+capsule has its own low-frequency spring (trembles on damage / value change)
+while each *organ* inside animates on its own, faster rhythm. The top-centre
+column is owned by ``TopStack`` -- player blocks no longer compete with it.
 """
 
 import math
@@ -110,14 +116,50 @@ def draw(game, surf):
 
 
 def _draw_hud(game, surf):
-    bw = 216
+    """Draw each player's HUD capsule and the shared top-centre column.
+
+    Per-player state lives in ``game.hud_capsules[i]`` -- a ``PlayerCapsule``
+    that owns its spring and the last-frame vitals used to fire shakes. The
+    capsule is a framed panel in the bottom corners; the top-centre column is
+    owned by ``TopStack`` and no player block competes with it.
+    """
+    bw = C.HUD_PANEL_W
+    bh = C.HUD_PANEL_H
+    # grow the capsule list defensively in case num_players changes after init
+    while len(game.hud_capsules) < len(game.players):
+        game.hud_capsules.append(hud.PlayerCapsule())
     for i, p in enumerate(game.players):
-        x = 16 if i == 0 else C.WIDTH - bw - 16
-        y = 14
+        cap = game.hud_capsules[i]
+        # detect value changes BEFORE drawing so the shake is visible this frame
+        hud.detect_changes(cap, p)
+        cap.spring.update(game.dt_last)
+
+        base_x = C.HUD_MARGIN if i == 0 else C.WIDTH - bw - C.HUD_MARGIN
+        base_y = C.HEIGHT - bh - C.HUD_MARGIN
+        ox, oy = cap.spring.offset(game.time)
+        px, py = int(base_x + ox), int(base_y + oy)
+        panel_rect = pygame.Rect(px, py, bw, bh)
+
+        # the framed capsule (one ui.panel call per player; panel already
+        # draws both the dark fill and the bright rim in the same primitive)
+        ui.panel(surf, panel_rect)
+
+        # explicit vertical layout: each band is laid out from py, so the
+        # header / bars / dials / strip never collide even when the spring
+        # is trembling. Sum of heights + gaps = HUD_PANEL_H.
+        head_y = py + 4                         # P1 / Nv (18 px tall)
+        bar_x = px + C.HUD_PAD
+        bar_w = bw - 2 * C.HUD_PAD
+        hy = py + C.HUD_HEAD_H + 6              # health (16)
+        ey = hy + 22                            # energy (8)
+        xy = ey + 12                            # xp (6)
+        dy = xy + 18                            # dials row (~30)
+
+        # ---- header band: P1/P2 + level ---------------------------------
         col = p.colorset[0]
-        ui.text(surf, game.font, f"P{i+1}", (x, y), col)
-        ui.text(surf, game.font, f"Nv {p.level}", (x + bw, y), (226, 228, 244),
-                align='right')
+        ui.text(surf, game.font, f"P{i+1}", (bar_x, head_y), col)
+        ui.text(surf, game.font, f"Nv {p.level}",
+                (px + bw - C.HUD_PAD, head_y), (226, 228, 244), align='right')
 
         hy = y + 26
         previous_health = getattr(p, '_hud_health', p.health)
@@ -140,65 +182,83 @@ def _draw_hud(game, surf):
         # three dials in a 216px panel: 78px pitch overflowed, so 11px radius
         # on a 68px pitch, with short labels
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
-        hud.dial(surf, (x + 12, dy + 14), 11, dash_frac, p.colorset[0],
-                 game.smallfont, "DASH", game.time, enabled=p.energy >= C.DASH_COST)
+        hud.dial(surf, (dial_cx, dy + 14), 11, dash_frac, p.colorset[0],
+                 game.smallfont, "DASH", game.time,
+                 enabled=p.energy >= C.DASH_COST)
         t_frac = 0.0 if p.tongue_t > 0 else 1.0
-        hud.dial(surf, (x + 80, dy + 14), 11, t_frac, (235, 90, 120),
-                 game.smallfont, "LING", game.time, enabled=p.energy >= C.TONGUE_COST)
+        hud.dial(surf, (dial_cx + dial_pitch, dy + 14), 11, t_frac,
+                 (235, 90, 120), game.smallfont, "LING", game.time,
+                 enabled=p.energy >= C.TONGUE_COST)
         w_frac = 1.0 - clamp(p.whip_cd / max(0.001, p.whip_cooldown), 0, 1)
-        hud.dial(surf, (x + 148, dy + 14), 11, w_frac, (250, 190, 90),
-                 game.smallfont, "RABO", game.time, enabled=p.energy >= C.WHIP_COST)
+        hud.dial(surf, (dial_cx + dial_pitch * 2, dy + 14), 11, w_frac,
+                 (250, 190, 90), game.smallfont, "RABO", game.time,
+                 enabled=p.energy >= C.WHIP_COST)
 
         if p.down:
-            ui.text(surf, game.font, f"CAIDO {p.revive:0.0f}s - toque p/ reviver",
-                    (x, dy + 34), C.COL_ENEMY)
-        # Active item: its own corner, not a fourth cooldown dial (the dial
-        # row is a 216px panel at 68px pitch -- a fourth lands outside it).
-        # Top-right when it is free; in co-op that corner IS P2's panel, so
-        # each player gets it under their own dials instead.
+            ui.text(surf, game.font,
+                    f"CAIDO {p.revive:0.0f}s - toque p/ reviver",
+                    (bar_x, dy + 36), C.COL_ENEMY)
+
+        # ---- bottom strip: weapons + active item, each in its own corner
+        # the strip sits below the dials inside the same capsule; weapons
+        # march toward the centre, the active item lives in the opposite
+        # corner so a fourth dial could never have competed with it
+        wy = py + bh - 24                # weapon / item vertical centre
+        weapons_list = list(p.weapons.items())
+        # P1: weapons left-to-right, item at the right edge.
+        # P2: weapons right-to-left, item at the left edge.
+        if i == 0:
+            wx_start = bar_x + 16
+            wx_step = 34
+            item_cx = px + bw - C.HUD_PAD - 22
+        else:
+            wx_start = px + bw - C.HUD_PAD - 16
+            wx_step = -34
+            item_cx = bar_x + 22
+        for wi, (wid, lvl) in enumerate(weapons_list):
+            w = weapons.WEAPONS[wid]
+            cwx = wx_start + wi * wx_step
+            c = (cwx, wy)
+            icons.draw(surf, wid, c, 11, w.color)
+            lp = (c[0] + 10, c[1] + 8)
+            pygame.draw.circle(surf, C.COL_INK, lp, 7)
+            pygame.draw.circle(surf, w.color, lp, 7, 1)
+            lh = game.font.get_height()
+            ui.text(surf, game.font, str(lvl), (lp[0], lp[1] - lh // 2),
+                    C.COL_WHITE, align='center')
+
+        # Active item: dedicated corner of the strip. Co-op gives each player
+        # the same corner of their own capsule, so they never share a slot.
         if p.ability:
             from ..combat import items as itemlib
             it = itemlib.ITEMS.get(p.ability)
             if it is not None:
-                if len(game.players) == 1:
-                    ix, iy = C.WIDTH - 52, 46
-                else:
-                    ix = (x + 20) if i == 0 else (x + bw - 20)
-                    iy = dy + 62
+                iy = wy
                 full = p.ability_charge >= 1.0
-                col = it.color if full else (96, 100, 128)
+                acol = it.color if full else (96, 100, 128)
                 if full:
-                    palette.glow(surf, (ix, iy), 30, it.color,
+                    palette.glow(surf, (item_cx, iy), 22, it.color,
                                  0.28 + 0.2 * pulse(game.time, 6))
-                icons.draw(surf, it.icon, (ix, iy), 13, col, glow=False)
-                pygame.draw.circle(surf, (36, 40, 58), (ix, iy), 18, 3)
+                icons.draw(surf, it.icon, (item_cx, iy), 10, acol,
+                           glow=False)
+                pygame.draw.circle(surf, (36, 40, 58), (item_cx, iy), 14, 2)
                 if p.ability_charge > 0:
-                    pygame.draw.arc(surf, col, (ix - 18, iy - 18, 36, 36),
+                    pygame.draw.arc(surf, acol,
+                                    (item_cx - 14, iy - 14, 28, 28),
                                     math.pi / 2,
-                                    math.pi / 2 + p.ability_charge * C.TAU, 3)
+                                    math.pi / 2 + p.ability_charge * C.TAU,
+                                    2)
+                # button hint sits beside the icon (right for P1, left for P2)
+                # so the icon's centre stays clean
                 lbl = "E" if i == 0 else "U"
-                if len(game.players) == 1:
-                    ui.text(surf, game.smallfont, lbl, (ix, iy + 24), col,
-                            align='center')
-                    ui.text(surf, game.smallfont, it.name, (ix - 26, iy - 7),
-                            col, align='right')
+                if i == 0:
+                    lbl_x = item_cx - 18
+                    ui.text(surf, game.smallfont, lbl, (lbl_x, iy - 8),
+                            acol, align='right')
                 else:
-                    ui.text(surf, game.smallfont, lbl, (ix + 22, iy - 8), col)
-
-        # equipped weapons live in the bottom corners so they never collide
-        # with the health/energy bars or the cooldown dials
-        wy = C.HEIGHT - 34
-        for wi, (wid, lvl) in enumerate(p.weapons.items()):
-            w = weapons.WEAPONS[wid]
-            cxw = (x + 18 + wi * 46) if i == 0 else (x + bw - 18 - wi * 46)
-            c = (cxw, wy)
-            icons.draw(surf, wid, c, 14, w.color)
-            lp = (c[0] + 13, c[1] + 11)
-            pygame.draw.circle(surf, C.COL_INK, lp, 9)
-            pygame.draw.circle(surf, w.color, lp, 9, 1)
-            lh = game.font.get_height()
-            ui.text(surf, game.font, str(lvl), (lp[0], lp[1] - lh // 2),
-                    C.COL_WHITE, align='center')
+                    lbl_x = item_cx + 18
+                    ui.text(surf, game.smallfont, lbl, (lbl_x, iy - 8),
+                            acol, align='left')
 
     # ---- top-centre column: every element reserves its own band ---- #
     cx = C.WIDTH // 2
