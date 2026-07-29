@@ -11,7 +11,8 @@ import os
 
 DEFAULTS = {'fullscreen': False, 'scale': 2, 'vsync': True,
             'sfx_vol': 0.7, 'music_vol': 0.45,
-            'perf': 0}      # medidor de FPS: 0 desligado / 1 fps / 2 detalhado
+            'perf': 0,      # medidor de FPS: 0 desligado / 1 fps / 2 detalhado
+            'stat_grid': 1}  # grid de stats no HUD (TAB): 1 ligada / 0 desligada
 
 
 def _dir():
@@ -38,6 +39,8 @@ def load():
         data['scale'] = DEFAULTS['scale']
     if data['perf'] not in (0, 1, 2):
         data['perf'] = DEFAULTS['perf']
+    if data['stat_grid'] not in (0, 1):
+        data['stat_grid'] = DEFAULTS['stat_grid']
     for k in ('sfx_vol', 'music_vol'):
         try:
             data[k] = min(1.0, max(0.0, float(data[k])))
@@ -78,5 +81,8 @@ def save_display(display_mod, audio_mod=None):
     else:
         cur = load()
         data['sfx_vol'], data['music_vol'] = cur['sfx_vol'], cur['music_vol']
-    data['perf'] = load()['perf']       # never clobber the perf toggle
+    # never clobber the in-run toggles: this function only knows about display
+    # and audio, and ``save`` fills anything missing from DEFAULTS.
+    cur = load()
+    data['perf'], data['stat_grid'] = cur['perf'], cur['stat_grid']
     return save(data)
