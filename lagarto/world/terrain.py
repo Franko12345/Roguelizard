@@ -5,6 +5,10 @@ The arena used to be an empty dotted void. This fills it with a living ecosystem
 own colours, and each biome is scattered with its own props -- grass, flowers,
 bushes, mushrooms, reeds, lily pads, rocks, cacti -- that sway procedurally.
 Everything is culled to the visible area, so a full world stays cheap.
+
+Issue #110: the ``static_lights`` list is the [Fonte de luz](../concepts/lighting.md)
+pool that the ambient layer reads each frame. Built once at construction
+(glow-capable props + firefly motes), reused forever.
 """
 
 import math
@@ -15,9 +19,16 @@ import pygame
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import vfrom_angle, pulse
+from ..render.lighting import Light
 
 CELL = 128          # ground tile size (world units)
 VOID = (14, 12, 26)
+
+# Prop kinds that shed a soft static light at their position. Deliberately a
+# subset: ~54 pickups are off the list on purpose (the print turns into a
+# flicker) and rock/boulder/cactus are too hard-edged to read as glow. See
+# docs/concepts/lighting.md.
+_LIGHT_PROP_KINDS = frozenset(('mushroom', 'flower', 'lily', 'reed', 'bush'))
 
 # vivid, saturated biome grounds (dark bg makes the glowing creatures pop)
 BIOMES = {
@@ -58,6 +69,11 @@ class World:
 
         # scatter props across the world (~ one per 150px cell)
         self.props = []
+        # Issue #110: glow-capable props register a [Fonte de luz][1] here so the
+        # ambient layer can read them. Mushrooms, flowers, lilies, reeds, bushes
+        # only -- the print lights up only what "glows" in the biome palette.
+        # [1]: ../concepts/lighting.md
+        self.static_lights = []
         n = int((C.WORLD_W / 150) * (C.WORLD_H / 150))
         for _ in range(n):
             p = Vector2(self.rng.uniform(40, C.WORLD_W - 40),
@@ -71,6 +87,17 @@ class World:
             else:
                 color = b['flora']
             self.props.append((p.x, p.y, typ, size, phase, color))
+            if typ in _LIGHT_PROP_KINDS:
+                # flower colour carries the bloom; everything else inherits
+                # the biome flora tint (the ambient motes already do this)
+                light_col = color if typ == 'flower' else (
+                    min(255, int(color[0] * 1.4) + 18),
+                    min(255, int(color[1] * 1.3) + 16),
+                    min(255, int(color[2] * 1.0) + 8),
+                )
+                self.static_lights.append(
+                    Light(Vector2(p.x, p.y), light_col, C.PROP_LIGHT_R,
+                          intensity=0.5, kind='prop'))
 
         # ambient drifting motes (pollen / fireflies) near-uniform in world
         self.motes = [(self.rng.uniform(0, C.WORLD_W), self.rng.uniform(0, C.WORLD_H),
