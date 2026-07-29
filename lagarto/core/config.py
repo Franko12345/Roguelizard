@@ -496,6 +496,29 @@ RENDER_FPS = SIM_HZ
 
 TAU = math.tau
 
+# --- HUD anatomico (issue #130) ---------------------------------------------- #
+# Layout moved from the top corners to the bottom corners so the TopStack owns
+# the full top column. Each player block is now wrapped in an `ui.panel` (the
+# `capsula` in the HUD-anatomy doc) with its own low-frequency spring that
+# trembles on damage and on value changes -- the organs inside stay on their
+# own, faster rhythms.
+HUD_PANEL_W = 216
+HUD_PANEL_H = 140            # fits header + 3 bars + dials + weapons/item strip
+HUD_MARGIN = 12              # panel inset from screen edge
+HUD_PAD = 10                 # interior left/right padding
+HUD_HEAD_H = 20              # header band (P1/Nv + level)
+# Spring under the capsule: low frequency, mildly overdamped. The capsule is
+# "massa rigida" -- the overshoot on entry and the tremble on damage both come
+# from this one mass-spring-damper. k and c were chosen so a 1-px step input
+# settles below 0.05 px in ~20 frames (no perpetual wobble -- see the doc).
+HUD_SPRING_K = 38.0
+HUD_SPRING_C = 9.0
+# Damage impulse (px) given to the spring on a hit. Cumulative per frame so a
+# stack of small hits still visibly shakes without flipping the capsule.
+HUD_SHAKE_HP = 6.0
+HUD_SHAKE_VALUE = 3.0       # on any non-damage change inside the panel
+HUD_SHAKE_DUR = 0.55        # seconds the sine lingers before fully fading
+
 # --- palette: VIVID, saturated, cartoonish (dark ground -> glow pops) ------- #
 COL_BG      = (16, 14, 30)                          # void / behind the world
 COL_BG2     = (26, 24, 50)
