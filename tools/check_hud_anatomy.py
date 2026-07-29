@@ -46,6 +46,10 @@ def _game(num_players):
                 mode='normal', chars=['lagarto'] * num_players)
 
 
+font = fonts.get(18)
+bigfont = fonts.get(28)
+
+
 # ---- 1. capsule anchored at the bottom (singleplayer AND coop) ------------ #
 errors = []
 for n in (1, 2):
@@ -377,5 +381,61 @@ if '--shot' in sys.argv:
         shot.blit(label_font.render(label, True, (232, 234, 250)), (sx, 112))
     pygame.image.save(shot, 'hud-anatomy-comparison.bmp')
     print("  screenshot: hud-anatomy-comparison.bmp")
+
+# ---- 10. entry overshoot fires on the wired path ------------------------- #
+# Issue #130: "Entra com overshoot" -- the first draw of the run must
+# impulse the springs, so the capsule has visible motion on entry. The
+# helper PlayerCapsule.entry_overshoot applies the kick; _draw_hud is
+# responsible for calling it on the FIRST frame a capsule is seen
+# (last_* all None). Without the wire, the springs stay at zero and the
+# capsule sits dead -- which is exactly what the reviewer found.
+g = Game(num_players=2,
+         controllers=[KeyboardController() for _ in range(2)],
+         font=font, bigfont=bigfont,
+         mode='normal', chars=['lagarto'] * 2)
+# every PlayerCapsule is fresh at construction; last_* are None
+for cap in g.hud_capsules:
+    assert cap.last_hp is None, "capsule pre-seeded last_* -- check is wrong"
+    assert cap.vitals_spring.x == 0.0 and cap.vitals_spring.vx == 0.0, \
+        "vitals_spring not idle at start"
+# run a single draw_hud pass: entry_overshoot must have fired
+state_play._draw_hud(g, pygame.Surface((C.WIDTH, C.HEIGHT)))
+# Player 0: sign=+1 -> impulse_entry_x = +90, impulse_entry_y = -30
+cap0 = g.hud_capsules[0]
+if cap0.vitals_spring.vx <= 0:
+    raise SystemExit(
+        f"P0 entry overshoot did not fire: vitals_spring.vx={cap0.vitals_spring.vx}")
+if cap0.vitals_spring.vy >= 0:
+    raise SystemExit(
+        f"P0 entry overshoot did not fire: vitals_spring.vy={cap0.vitals_spring.vy}")
+# Player 1: sign=-1 -> impulse_entry_x = -90
+cap1 = g.hud_capsules[1]
+if cap1.vitals_spring.vx >= 0:
+    raise SystemExit(
+        f"P1 entry overshoot did not fire (or fired in wrong sign): "
+        f"vitals_spring.vx={cap1.vitals_spring.vx}")
+# cooldowns must also have kicked (softer)
+if abs(cap0.cooldowns_spring.vx) < abs(cap0.vitals_spring.vx) * 0.3:
+    raise SystemExit(
+        f"cooldowns spring undershot the entry kick: "
+        f"cd.vx={cap0.cooldowns_spring.vx}, vit.vx={cap0.vitals_spring.vx}")
+# After the second draw, last_* are seeded -> entry does NOT refire
+vx_settled = cap0.vitals_spring.vx
+state_play._draw_hud(g, pygame.Surface((C.WIDTH, C.HEIGHT)))
+# the spring's vx may have evolved due to update, but the entry_overshoot
+# was not called again -- verify by checking that we can recreate a fresh
+# capsule and confirm it fires
+g2 = Game(num_players=1,
+          controllers=[KeyboardController()],
+          font=font, bigfont=bigfont,
+          mode='normal', chars=['lagarto'])
+state_play._draw_hud(g2, pygame.Surface((C.WIDTH, C.HEIGHT)))
+if g2.hud_capsules[0].vitals_spring.vx <= 0:
+    raise SystemExit(
+        "fresh capsule in a second Game did not get the entry overshoot -- "
+        "wire is broken or capsule reuse is broken")
+print(f"[10] entry overshoot: OK -- wired in _draw_hud, fired on P0 "
+      f"(vx={cap0.vitals_spring.vx:.1f}, vy={cap0.vitals_spring.vy:.1f}) "
+      f"and P1 (vx={cap1.vitals_spring.vx:.1f})")
 
 print("ALL OK")

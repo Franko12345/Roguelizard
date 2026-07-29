@@ -147,6 +147,13 @@ def _draw_hud(game, surf):
         game.hud_capsules.append(hud.PlayerCapsule())
     for i, p in enumerate(game.players):
         cap = game.hud_capsules[i]
+        # Entry overshoot: a fresh capsule (last_* all None) is the first
+        # draw of the run -- kick both springs so the issue's "entra com
+        # overshoot" plays once. detect_changes on the same frame seeds
+        # last_* from current values, so the entry kick is the ONLY impulse
+        # this frame and the impulse lands visible on the first render.
+        if cap.last_hp is None and cap.last_energy is None:
+            cap.entry_overshoot(i, len(game.players))
         # detect value changes BEFORE drawing so the impulse lands this frame
         hud.detect_changes(cap, p)
         # step both springs now; each capsule reads its OWN spring's offset
