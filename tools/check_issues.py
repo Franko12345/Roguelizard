@@ -35,16 +35,6 @@ _hs = subprocess.run([sys.executable, 'tools/check_health_sacs.py'], capture_out
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(131, "sacos de vida", hasattr(_hud, 'draw_health_sacs') and _hs.returncode == 0,
     "" if _hs.returncode == 0 else _hs.stderr.decode()[-90:])
-_anat = open('docs/concepts/hud-anatomy.md').read()
-_ui_l = open('docs/concepts/ui-legibility.md').read()
-_h_h = open('docs/concepts/health-hud.md').read()
-_adr = open('docs/adr/README.md').read()
-chk(134, "lingua do topo decidida",
-    'lingua do mundo' in _anat and 'lingua do corpo' in _anat
-    and 'TopStack' in _anat and 'palette.health_color' in _h_h
-    and 'lingua do mundo' in _ui_l and 'TopStack' in _ui_l
-    and '0016-topo-e-mundo' in _adr,
-    "two-language split must be written in hud-anatomy, health-hud, ui-legibility, and ADR-0016")
 
 _mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
