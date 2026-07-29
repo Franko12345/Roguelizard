@@ -14,6 +14,7 @@ from pygame import Vector2
 from ..core import config as C
 from ..core.mathutil import pulse, vfrom_angle
 from ..core import palette
+from ..render import icons
 from ..render import ui
 
 
@@ -100,6 +101,61 @@ def dial(surf, center, r, frac, color, font, label, t, enabled=True):
     pygame.draw.circle(surf, (96, 102, 136) if not ready else color, center, r, 2)
     ui.text(surf, font, label, (center[0] + r + 6, center[1] - font.get_height() // 2),
             (232, 234, 250) if ready else (146, 150, 178))
+
+
+GRID_W = 132          # narrow enough to sit under a 216px player panel
+_GRID_PAD = 6
+_GRID_BADGE = 20      # icon pitch on the item/charm row
+_GRID_COLS = 6        # icons per badge row before it wraps
+
+
+def _stat_grid_surface(font, rows, badges):
+    """The block itself, drawn once per distinct set of displayed values."""
+    row_h = font.get_height() + 1
+    brows = -(-len(badges) // _GRID_COLS)          # ceil: 0 badges -> no row
+    h = _GRID_PAD * 2 + len(rows) * row_h + brows * _GRID_BADGE
+    s = pygame.Surface((GRID_W, h), pygame.SRCALPHA)
+    box = pygame.Rect(0, 0, GRID_W, h)
+    pygame.draw.rect(s, (18, 21, 32, 206), box, border_radius=8)
+    pygame.draw.rect(s, (58, 62, 86), box, 2, border_radius=8)
+    y = _GRID_PAD
+    for label, value, color in rows:
+        ui.text(s, font, label, (_GRID_PAD, y), (152, 156, 186))
+        ui.text(s, font, value, (GRID_W - _GRID_PAD, y), color, align='right')
+        y += row_h
+    for k, (icon_id, color) in enumerate(badges):
+        cx = _GRID_PAD + _GRID_BADGE // 2 + (k % _GRID_COLS) * _GRID_BADGE
+        cy = y + _GRID_BADGE // 2 + (k // _GRID_COLS) * _GRID_BADGE
+        icons.draw(s, icon_id, (cx, cy), 8, color, glow=False)
+    return s
+
+
+def stat_grid(surf, font, pos, rows, badges, panel, right=False):
+    """Compact readout of what the run has built: one labelled row per number,
+    then a row of icons for the items and charms owned.
+
+    ``rows`` is a sequence of ``(label, value, colour)`` already formatted by the
+    caller. The label is a short word that reads on its own, because a gamepad has
+    no cursor to hover with -- nothing here depends on a tooltip.
+
+    ``badges`` is a sequence of ``(icon_id, colour)``, using the same ids
+    ``render/icons.py`` already draws for items and charms.
+
+    ``panel(key, build)`` memoises the built surface (``Game._panel``). The key is
+    the displayed text itself, so the block is rebuilt only when a number visibly
+    changes -- the quantisation ADR-0009 asks for, with the rounding already done
+    by whoever formatted the strings.
+
+    ``right=True`` anchors ``pos`` at the block's top-RIGHT corner, which is what
+    keeps P2's column glued to P2's right-aligned health bar. Returns the rect the
+    block occupies.
+    """
+    rows, badges = tuple(rows), tuple(badges)
+    src = panel(('statgrid', rows, badges),
+                lambda: _stat_grid_surface(font, rows, badges))
+    x = pos[0] - src.get_width() if right else pos[0]
+    surf.blit(src, (x, pos[1]))
+    return src.get_rect(topleft=(x, pos[1]))
 
 
 _VIGNETTE = None
