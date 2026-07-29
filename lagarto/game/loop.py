@@ -13,6 +13,7 @@ import pygame
 
 from ..core import config as C
 from ..core import fonts
+from ..core import settings
 from ..core.mathutil import clamp, safe_norm, decay, random_dir
 from ..anim.spine import build_radii
 from ..creatures.ai import AILizard
@@ -125,6 +126,9 @@ class Game:
         self.ui_fx = 0.0          # keeps fx drawn over the veil just after an impact
         self._uilayer = None      # scratch surface so screen shake can move the whole UI
         self._panels = {}         # rendered card/shop/route panels, keyed by their state
+        # one toggle for the whole game, not one per player: in co-op both
+        # columns are the same readout and nobody wants to argue about it
+        self.show_stat_grid = bool(settings.load()['stat_grid'])
         self.top = hud.TopStack()     # shared top-centre column (see TopStack)
         self._card_rects = []
         self._shop_rects = []
@@ -859,6 +863,17 @@ class Game:
         if s is None:
             s = self._panels[key] = build()
         return s
+
+    def toggle_stat_grid(self):
+        """TAB. A latch, not a hold -- the grid is the HUD's normal state, so the
+        key flips a preference instead of peeking. Persisted here rather than in
+        app.py so there is one owner of the value; returns the new state so the
+        caller can keep its own copy of settings in sync."""
+        self.show_stat_grid = not self.show_stat_grid
+        cfg = settings.load()
+        cfg['stat_grid'] = 1 if self.show_stat_grid else 0
+        settings.save(cfg)
+        return self.show_stat_grid
 
     def _veil(self, surf, color, target_alpha):
         """Background dim that fades in first -- phase 1 of every screen."""

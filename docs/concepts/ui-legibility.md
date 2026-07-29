@@ -48,10 +48,21 @@ it needs (`top.take(h)`) and gets the next free strip.
 - `top.reset()` once per frame, in `game.draw`.
 - The **HUD is hidden in `levelup` / `camp`** — those screens have their
   own header, and the HUD under the veil only competed with the panels.
+  The [stat grid](./stat-grid.md) is drawn by the same pass, so it
+  inherits that rule for free.
+
+## Side columns are deliberately outside the stack
+
+The stack owns the top-centre strip only. The per-player panels — bars,
+dials, [stat grid](./stat-grid.md) — hard-code their `y`, and that is not
+an oversight: there are exactly two of them, one pinned to each screen
+edge, so they cannot collide with each other. The stack exists for the six
+elements that all wanted the same centre column.
 
 ## Related
 
 - [Health HUD](./health-hud.md) — reads through this stack.
+- [Stat grid](./stat-grid.md) — a side column, hidden by the same rule.
 - [UI screens](./ui-screens.md) — where the HUD is hidden.
 - [Performance](./performance.md) — cache caps, no per-frame full-screen
   `Surface`.

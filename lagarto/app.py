@@ -203,6 +203,11 @@ def main():
                     if ev.key == pygame.K_F3:
                         cfg['perf'] = meter.cycle()
                         settings.save(cfg)
+                    if ev.key == pygame.K_TAB:
+                        # Game owns the persistence; we only keep our copy of
+                        # settings current, because the F3 handler above writes
+                        # `cfg` back wholesale and would revert the toggle.
+                        cfg['stat_grid'] = 1 if game.toggle_stat_grid() else 0
                     if ev.key == pygame.K_F11:
                         display.toggle_fullscreen()
                         settings.save_display(display)

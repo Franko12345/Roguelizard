@@ -8,7 +8,9 @@ Bar on the HUD with the `palette.health_color` ramp (green → yellow →
 red). Mixing two stops turns the middle into muddy olive — the ramp has
 **three** stops for that reason.
 
-Alongside: energy bar and XP bar.
+Alongside: energy bar and XP bar. Glued underneath, the
+[stat grid](./stat-grid.md) — the numbers the bars cannot show
+(`might`, the multipliers, the items and charms owned).
 
 ## Enemies
 
@@ -35,6 +37,7 @@ rim / glow with it.
 
 - [Damage](./damage.md) — where HP comes from.
 - [Hitbox](./hitbox.md) — where damage lands.
+- [Stat grid](./stat-grid.md) — the stat column under the player's bar.
 - [UI legibility](./ui-legibility.md) — the top-stack that owns the boss
   bar.
 - [Balance](./balance.md) — the friend lifetime that drives the fade.

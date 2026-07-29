@@ -87,7 +87,9 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 - [UI screens](docs/concepts/ui-screens.md) — level-up / camp entry +
   absorção da escolha.
 - [UI legibility](docs/concepts/ui-legibility.md) — texto + TopStack.
-- [Health HUD](docs/concepts/health-hud.md) · [Juice](docs/concepts/juice.md) ·
+- [Health HUD](docs/concepts/health-hud.md) ·
+  [Stat grid](docs/concepts/stat-grid.md) — coluna de stats por jogador,
+  TAB liga/desliga. [Juice](docs/concepts/juice.md) ·
   [Icons & audio](docs/concepts/icons-audio.md).
 - [ADR-0003](docs/adr/0003-zero-assets-with-png-fallback.md) — invariante
   zero-assets quebrada de propósito.
