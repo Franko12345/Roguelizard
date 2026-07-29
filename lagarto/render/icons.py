@@ -215,10 +215,11 @@ def _sting(s, c, r, col):
 
 
 def _tongue(s, c, r, col):
-    pygame.draw.lines(s, (235, 90, 120), False,
+    pygame.draw.lines(s, col, False,
                       [(c[0] - r * 0.85, c[1] + r * 0.5), (c[0], c[1]),
                        (c[0] + r * 0.7, c[1] - r * 0.55)], max(2, r // 5))
-    pygame.draw.circle(s, (255, 140, 160), (int(c[0] + r * 0.75), int(c[1] - r * 0.6)),
+    pygame.draw.circle(s, palette.lighten(col, 0.3),
+                       (int(c[0] + r * 0.75), int(c[1] - r * 0.6)),
                        max(2, r // 5))
 
 
