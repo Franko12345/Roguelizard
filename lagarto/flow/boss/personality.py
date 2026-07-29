@@ -48,12 +48,25 @@ def default_personality():
 
 def king_personality():
     """Orgulhoso: prefere a investida quando encurralado (não foge, comete);
-    fica mais raivoso, não mais covarde."""
-    return BossPersonality(pattern_weights={
+    fica mais raivoso, não mais covarde.
+
+    Issue #123: ``tell_mult`` is cleared so the windup NEVER shortens with
+    mood. The first boss of the game teaches one thing -- "this is what a
+    telegraph looks like" -- and the lesson has to survive the boss
+    getting angry at you. Eye and ANKH do the same (see their
+    docstrings); the difference is that Eye and ANKH use the cleared
+    multiplier because their IDENTITY is "the tell is constant". Rei
+    uses it because his role is the legibility canonical -- if the
+    windup shrank as the boss got angrier, the player would never
+    actually learn the language.
+    """
+    pers = BossPersonality(pattern_weights={
         'charge': {'cornered': 2.2, 'enraged': 1.6},
         'shockwave': {'agitated': 1.5, 'calm': 1.0},
         'spiral': {'enraged': 1.6},
     })
+    pers.tell_mult = {}      # the language doesn't shrink as he gets angrier
+    return pers
 
 
 def centipede_personality():

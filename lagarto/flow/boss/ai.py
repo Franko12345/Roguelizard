@@ -34,16 +34,46 @@ TELL_CROUCH = 0.4          # charge: squat_bias drop -- body lowers & squashes
 
 # --------------------------------------------------------------------------- #
 #  Rei Lagarto (plans/03, first authored boss, onda 5): CicatriZ mechanic --   #
-#  every 25% HP lost, a scarred patch (slow + tick damage) appears underfoot;  #
-#  it clears whenever the fight moves to the next phase.                      #
+#  every 25% HP lost, a scarred patch (slow + tick damage) appears on the     #
+#  boss's recent path (issue #123), so the puddle is area denial that          #
+#  interacts with his movement instead of decoration underfoot. Cleared at     #
+#  phase transition.                                                          #
 # --------------------------------------------------------------------------- #
+
+# How many frames of the boss's recent path ``spawn_scar`` may sample
+# from. The ring buffer ``BossAI._path_samples`` grows up to this length;
+# picking from it (instead of ``boss.pos + random_dir(...)``) means the
+# puddle lands where the boss was walking, not in a random radius
+# around where he stands.
+KING_SCAR_PATH_WINDOW = 30
+
 
 def spawn_scar(boss, game):
     from ...combat import weapons
-    pos = boss.pos + random_dir(boss.max_r * 0.6)
+    # Issue #123: with movement, the puddle lands on the boss's RECENT
+    # PATH, not at a random underfoot position. The ring buffer is
+    # filled by ``BossAI.tick`` every frame; if it's empty (the very
+    # first scar before the boss has walked anywhere) fall back to
+    # the legacy underfoot placement so the mechanic still works on
+    # spawn.
+    ai = boss.boss_ai
+    samples = getattr(ai, '_path_samples', None) if ai is not None else None
+    if samples:
+        chosen = random.choice(samples)
+        pos = Vector2(chosen)
+    else:
+        chosen = None
+        pos = boss.pos + random_dir(boss.max_r * 0.6)
     p = weapons.Puddle(pos, boss.max_r * 0.9, C.KING_SCAR_DMG, C.KING_SCAR_LIFE,
                        22, hostile=True, tick=0.5,
                        slow=(C.KING_SCAR_SLOW, C.KING_SCAR_TIME))
+    # Snapshot the path buffer at spawn time so a check can verify the
+    # puddle landed on a position the boss actually occupied. The buffer
+    # itself rolls forward (oldest frame is popped), so without the
+    # snapshot the verification would race against the buffer's
+    # evolution.
+    p._scar_path_snapshot = list(samples) if samples else []
+    p._scar_path_pos = Vector2(pos) if chosen is None else Vector2(chosen)
     game.spawn_puddle(p)
     game.fx.burst(pos, (150, 90, 50), 10, 140)
     return p
@@ -70,6 +100,19 @@ class BossAI:
         self.no_hit_t = 0.0        # time since this boss last connected -- frustration
         self.scar_thresholds = None   # e.g. [0.75, 0.5, 0.25] -- opt-in (Rei Lagarto)
         self.scars = []
+        # Issue #123: ``proud_walk`` keeps a committed direction and a
+        # timer on the BossAI so the move never reverses (a sign flip
+        # would read as retreat). Seeded empty; the first call to
+        # ``move_proud_walk`` initialises from the line to the target.
+        self._pw_dir = Vector2()
+        self._pw_t = 0
+        # Issue #123: ring buffer of recent boss positions. ``spawn_scar``
+        # picks from this buffer so the CicatriZ puddle lands where the
+        # boss WAS in the last ~30 frames, not at a random spot near
+        # its current position. The trail makes the puddle interact
+        # with the boss's movement; without movement, the puddle is
+        # decoration.
+        self._path_samples = []   # list[Vector2], newest at the end
         boss.boss_invuln = True
 
     def phase(self):
@@ -192,6 +235,16 @@ class BossAI:
         _tick_fire_breath(b, game)
         self.summon_cd = decay(self.summon_cd, dt)
         self._maybe_advance_phase()
+        # Issue #123: ring buffer of recent boss positions for the
+        # CicatriZ puddle. Sampling the buffer at ``spawn_scar`` time
+        # means the puddle lands where the boss WAS walking (the trail
+        # of his movement), not at a random underfoot position. The
+        # buffer caps at ``KING_SCAR_PATH_WINDOW`` so a long fight
+        # doesn't grow it unbounded.
+        samples = self._path_samples
+        if len(samples) >= KING_SCAR_PATH_WINDOW:
+            samples.pop(0)
+        samples.append(Vector2(b.pos))
         if self.scar_thresholds:
             frac = b.hp / max(1, b.max_hp)
             while self.scar_thresholds and frac <= self.scar_thresholds[0]:

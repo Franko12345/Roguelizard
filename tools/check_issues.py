@@ -23,6 +23,7 @@ from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
 from lagarto.input.controllers import _ACTIONS
+from lagarto.flow.boss.personality import king_personality
 import lagarto
 
 src = lambda m: inspect.getsource(m)
@@ -38,7 +39,7 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
 _bm = subprocess.run([sys.executable, 'tools/check_boss_movement.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
-from lagarto.flow.boss import moves as bossmoves
+from lagarto.flow.boss import moves as bossmoves, ai as bossai
 chk(118, "boss movement trail",
     'MOVES' in src(bossmoves) and 'move_orbit' in src(bossmoves)
     and 'moves.py' in str(bossmoves.__file__)
@@ -49,6 +50,21 @@ chk(118, "boss movement trail",
     and 'moves=' in src(pat)
     and _bm.returncode == 0,
     "" if _bm.returncode == 0 else _bm.stderr.decode()[-90:])
+_kg = subprocess.run([sys.executable, 'tools/check_king_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(123, "rei lagarto -- legibilidade",
+    'proud_walk' in src(bossmoves)
+    and '_pw_dir' in src(bossai)
+    and '_path_samples' in src(bossai)
+    and 'KING_SCAR_PATH_WINDOW' in src(bossai)
+    and "_scar_path_snapshot" in src(bossai.spawn_scar)
+    and "move='proud_walk'" in src(pat)
+    and "moves=['proud_walk']" in src(pat)
+    and C.BOSS_FAN_WINDUP >= 1.0 and C.BOSS_SHOCKWAVE_WINDUP >= 1.0
+    and C.BOSS_RADIAL_WINDUP >= 1.0 and C.BOSS_CHARGE_WINDUP >= 1.0
+    and king_personality().tell_mult == {}
+    and _kg.returncode == 0,
+    "" if _kg.returncode == 0 else _kg.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib
