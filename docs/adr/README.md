@@ -47,7 +47,7 @@ introduces a new concept, add it to `CONTEXT.md` in the same commit.
 | [0012](./0012-shared-pattern-emitter.md) | One pattern emitter shared by bosses and common enemies | Un-couples 20 patterns from `boss_ai`; going back means re-coupling them and disarming every enemy built on it |
 | [0013](./0013-two-dodge-verbs.md) | Two dodge verbs (Investida + Rolamento), both invulnerable | Two invulnerability buttons looks redundant; the asymmetry is what lets bullet density rise, and the pad's last free input is spent on it |
 | [0014](./0014-bullet-colour-encodes-side.md) | A bullet's colour encodes the side, not the creature | Partially overrides ADR-0001; someone will ask why a shot ignores its owner's hue, and the body sprite cache depends on the answer |
-
+| [0015](./0015-cadence-by-overlap-not-tell-cut.md) | Boss cadence comes from overlap, not from cutting the tell | The cycle was 2.1s with 1.3s of dead breath; cutting the windup would break the 27-frame rule. The cd floor + per-boss cd_mul + a movement trail drop the cycle to ~1.0s without shortening a single windup. |
 ## Adding a new ADR
 
 Scan for the highest number, add one:
