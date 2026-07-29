@@ -119,18 +119,17 @@ def _draw_hud(game, surf):
         ui.text(surf, game.font, f"Nv {p.level}", (x + bw, y), (226, 228, 244),
                 align='right')
 
-        # health: the big organic sac, with swaying flagella
         hy = y + 26
-        hr = clamp(p.health / p.max_health, 0, 1)
-        hud.bio_bar(surf, x, hy, bw, 16, hr, palette.health_color(hr), game.time,
-                    flagella=3, glow=True)
-        # light glyphs + dark rim, not dark-on-bar: the fill shifts green ->
-        # orange -> red under it, and dark ink lost contrast on every shade.
-        ui.text(surf, game.font, f"{int(p.health)}/{int(p.max_health)}",
-                (x + bw // 2, hy), (255, 255, 255), align='center')
+        previous_health = getattr(p, '_hud_health', p.health)
+        impact = min(1.0, abs(previous_health - p.health) / hud.HEALTH_SAC_HP)
+        p._hud_health = p.health
+        hud.draw_health_sacs(surf, x, hy, bw, p.health, p.max_health, game.time,
+                             impact=impact)
+        ui.text(surf, game.smallfont, f"{int(p.health)}/{int(p.max_health)}",
+                (x + bw, hy + 2), (230, 210, 216), align='right')
 
         # energy + xp: slim sacs (no flagella -- too short to read)
-        ey = hy + 22
+        ey = hy + 42
         hud.bio_bar(surf, x, ey, bw, 8, p.energy / p.max_energy, (96, 206, 240),
                     game.time)
         xy = ey + 12
