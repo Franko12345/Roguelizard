@@ -522,9 +522,19 @@ COL_FX_REVIVE   = (255, 240, 160)   # segundo folego: ouro claro (ring+spark+pop
 # dos padroes ficam bem acima disso -- e tempo E visibilidade, nunca so um.
 BOSS_INTRO_TIME = 1.0       # entrada: invulneravel, corpo ainda assentando
 BOSS_TRANSITION_TIME = 1.0  # troca de fase: invulneravel (~1s), no maximo 2 coisas mudam
-BOSS_CD_MIN = 0.55          # respiro entre ataques (varia por padrao) -- metade
-BOSS_CD_MAX = 1.1           # do original: feedback que os chefes atiravam devagar demais
+# Issue #118: cadence is now a MOVES trail, not a long pause. The default
+# MIN/MAX collapsed to near zero; the per-boss `cd_mul` from the phase kit
+# becomes the rhythm signature. BOSS_CD_FLOOR is the global safety net so a
+# cd_mul of 0 (or very small) cannot make the boss illegible.
+BOSS_CD_MIN = 0.0           # near zero; the per-boss cd_mul carries the signature
+BOSS_CD_MAX = 0.05
+BOSS_CD_FLOOR = 0.15        # safety net: never below 0.15s of breath between attacks
+BOSS_RECOVER_TIME = 0.15    # default post-attack freeze (charged moves override)
 BOSS_APPROACH_SPEED = 0.55  # fracao da velocidade normal enquanto se aproxima
+# 0.45s is the 27-frame rule at SIM_HZ=60 made code: everything called a
+# "telegraph" stays at >= 0.45s of windup, before any mood multiplier. The
+# clamp lives in BossAI; the rule is documented in enemy-behaviors.md.
+BOSS_WINDUP_FLOOR = 0.45
 BOSS_RADIAL_WINDUP = 0.85   # >27 frames
 BOSS_RADIAL_COUNT = 10
 BOSS_RADIAL_SPEED = 230
