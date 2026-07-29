@@ -13,11 +13,18 @@ import pygame
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import vfrom_angle, random_dir, angle_of
+from .lighting import Light
 
 # Half-angle of a directional spark burst. Small on purpose: the whole point of
 # a directional burst is that the angle IS the information, and a wide cone
 # reads as the same puff the omnidirectional call already makes.
 _CONE = 22.0
+
+# Cap on FX-emitted light sources: the lighting layer reads this list each
+# frame and ages them out. Keeps an idle frame from accumulating lights even
+# when callers over-fire (a level-up stack of bursts should not lock the
+# layer into "fully lit").
+_MAX_EMISSIONS = 24
 
 
 class FX:
@@ -31,6 +38,9 @@ class FX:
         self.sparks = []
         self.rings = []     # [x, y, age, life, color]
         self.floats = []    # [x, y, vy, age, life, text, color]
+        # Issue #110: emissive lights registered here are read by the lighting
+        # layer once per frame and aged out by ``life``. Kept tiny on purpose.
+        self.emissions = []
 
     # ---- spawn ---------------------------------------------------------- #
     def _add(self, x, y, vx, vy, life, r, color, grav, glow=False):
@@ -38,7 +48,23 @@ class FX:
             self.parts.pop(0)
         self.parts.append([x, y, vx, vy, life, life, r, color, grav, glow])
 
+    def _emit(self, pos, color, radius=70, intensity=1.0):
+        """Register a one-frame light spill from an FX event.
+
+        The lighting layer (issue #110) reads ``self.emissions`` and ages
+        each light by its own life. The radius is in WORLD units; the layer
+        converts to screen via the camera. No-op when ``NIGHT_MAX == 0`` --
+        callers don't need to know whether the layer is on, the cost is one
+        list append either way.
+        """
+        if len(self.emissions) >= _MAX_EMISSIONS:
+            self.emissions.pop(0)
+        self.emissions.append(Light(Vector2(pos), color, radius, intensity,
+                                     life=C.FX_EMISSION_LIFE,
+                                     maxlife=C.FX_EMISSION_LIFE, kind='fx'))
+
     def burst(self, pos, color, n, speed):
+        self._emit(pos, color)
         for _ in range(n):
             v = random_dir(random.uniform(0.3, 1.0) * speed)
             self._add(pos.x, pos.y, v.x, v.y, random.uniform(0.3, 0.6),
@@ -51,6 +77,7 @@ class FX:
         motion instead of a puff. ``life`` is the longest one lives; they die
         anywhere from half of it to all of it.
         """
+        self._emit(pos, color)
         ang = angle_of(direction) if direction is not None else None
         for _ in range(n):
             if len(self.sparks) >= self.MAX_SPARKS:
