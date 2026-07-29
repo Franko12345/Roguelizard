@@ -22,6 +22,7 @@ from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
+from lagarto.game import hud as _hud
 from lagarto.input.controllers import _ACTIONS
 import lagarto
 
@@ -30,12 +31,10 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
-_hud = subprocess.run([sys.executable, 'tools/check_hud_anatomy.py'], capture_output=True,
-                      env={**os.environ, 'PYTHONPATH': '.'})
-from lagarto.game import hud
-chk(132, "fole e cranio", hasattr(hud, 'CranialFluid') and hasattr(hud, 'Bellows')
-    and _hud.returncode == 0,
-    "" if _hud.returncode == 0 else _hud.stderr.decode()[-90:])
+_hs = subprocess.run([sys.executable, 'tools/check_health_sacs.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(131, "sacos de vida", hasattr(_hud, 'draw_health_sacs') and _hs.returncode == 0,
+    "" if _hs.returncode == 0 else _hs.stderr.decode()[-90:])
 
 _mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
@@ -129,6 +128,18 @@ chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
 chk(22, "club charm-only", 'club' not in mut.MUTATIONS_LIST_IDS if False else
     all(m.id != 'club' for m in mut.MUTATIONS_LIST) and 'clava' in charms.CHARMS
     and any('clava' in s.needs for s in syn.SYNERGIES if s.id == 'bola'))
+_ha = subprocess.run([sys.executable, 'tools/check_hud_anatomy.py'],
+                     capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.game import hud as _hudlib
+chk(130, "anatomia do HUD",
+    hasattr(_hudlib, 'CapsuleSpring') and hasattr(_hudlib, 'PlayerCapsule')
+    and _ha.returncode == 0,
+    "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
+chk(132, "fole e cranio",
+    hasattr(_hudlib, 'Bellows') and hasattr(_hudlib, 'CranialFluid')
+    and _ha.returncode == 0,
+    "" if _ha.returncode == 0 else _ha.stderr.decode()[-90:])
 _t = subprocess.run([sys.executable, 'tools/check_tongue.py'], capture_output=True,
                     env={**os.environ, 'PYTHONPATH': '.'})
 chk(21, "IK tongue", hasattr(Player, 'tongue_path') and _t.returncode == 0,

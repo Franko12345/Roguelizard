@@ -53,5 +53,7 @@ it needs (`top.take(h)`) and gets the next free strip.
 
 - [Health HUD](./health-hud.md) — reads through this stack.
 - [UI screens](./ui-screens.md) — where the HUD is hidden.
+- [HUD anatomy](./hud-anatomy.md) — the metaphor behind the framed
+  capsules in the bottom corners.
 - [Performance](./performance.md) — cache caps, no per-frame full-screen
   `Surface`.

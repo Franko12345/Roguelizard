@@ -4,14 +4,30 @@ Visible health for player, enemies, bosses, and friends.
 
 ## Player
 
-Bar on the HUD with the `palette.health_color` ramp (green → yellow →
-red). Mixing two stops turns the middle into muddy olive — the ramp has
-**three** stops for that reason.
+Player health uses **Health Sacs**, each worth a fixed 25 HP. The fixed unit
+keeps the row countable as `max_health` grows: eight sacs fit per row, the
+second row grows upward, and sacs shrink instead of opening a third row after
+sixteen.
 
-Alongside: energy bar and XP bar.
+A sac's shell remains visible when empty, with residue at its base, so the row
+shows both current and maximum health. Arbitrary health values fill the last
+sac fractionally. Exact `health/max_health` text remains small at the row edge
+for runs where shrinking makes precise values harder to read.
+
+Filled sacs are blood-red rather than using `palette.health_color`. Low health
+raises pulse frequency and saturation across the row so danger attracts the
+eye. Damage swells the active sac, bursts its fluid state, rocks its neighbours
+along the artery, then leaves the empty shell settled in place.
+
+Alongside: energy bar and XP bar. The three sit inside the player
+**capsule** ([HUD anatomy](./hud-anatomy.md)) and animate on their own
+faster rhythm; the capsule itself answers damage with a low-frequency
+spring.
 
 ## Enemies
 
+Enemy health keeps the `palette.health_color` ramp (green → yellow → red).
+Mixing two stops turns the middle into muddy olive, so the ramp has three stops.
 `AILizard._draw_health` draws a small bar above the head **only when
 wounded** (hidden at full HP so the screen stays clean). Scales by
 `max_hp` — if `hp` is adjusted after spawn, call `sync_max_hp()` (species
@@ -37,4 +53,6 @@ rim / glow with it.
 - [Hitbox](./hitbox.md) — where damage lands.
 - [UI legibility](./ui-legibility.md) — the top-stack that owns the boss
   bar.
+- [HUD anatomy](./hud-anatomy.md) — the capsule that wraps the player bars
+  and the four beats the HUD obeys.
 - [Balance](./balance.md) — the friend lifetime that drives the fade.

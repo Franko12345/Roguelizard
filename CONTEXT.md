@@ -104,6 +104,13 @@ _Avoid_: wave, sine, wobbler.
 
 ### Combat
 
+**Health Sac**:
+The fixed 25-HP unit in the player's health row. Its shell stays visible when
+empty, so the row shows maximum health; arbitrary health fills the last sac
+fractionally. Eight fit per row and rows stop at two. See
+[Health HUD](docs/concepts/health-hud.md).
+_Avoid_: health segment, heart, pip.
+
 **Weapon**:
 An automatic attack the player owns at a level (`Player.weapons[id] = level`).
 Each ticks every frame; there are 9 weapons and a cap of 6 equipped. Cards
@@ -347,6 +354,28 @@ _Avoid_: crouch, prepare.
 The organic HUD element (membrane + meniscus + inner glow + flagella) used
 for health/energy/xp. Not a rectangle.
 _Avoid_: stat bar, gauge.
+
+**Capsule**:
+The framed panel that holds a player's HUD readouts. Drawn with `ui.panel`;
+springs (`CapsuleSpring`) on damage and on value change inside. The HUD's
+"massa rigida" — two layers in series with the organs inside. See
+[HUD anatomy](docs/concepts/hud-anatomy.md).
+_Avoid_: HUD block, panel (the term `panel` is the primitive, not the
+metaphor).
+
+**HUD anatomy**:
+The metaphor that governs every HUD element: each readout is an organ inside
+a framed capsule; the capsule has its own rhythm, the organ has its own. The
+four beats of [procedural animation](docs/concepts/procedural-animation.md)
+apply to the HUD as well as to the body. See
+[HUD anatomy](docs/concepts/hud-anatomy.md) and
+[ADR-0015](docs/adr/0015-hud-anatomy.md).
+_Avoid_: HUD style, HUD look.
+
+**Organ**:
+A single readout inside a capsule — bio bar, dial, weapon icon, active item.
+Each organ has its own faster rhythm; the capsule holds them.
+_Avoid_: HUD element (broader — it includes the capsule).
 
 **TopStack**:
 The reservation-based layout for the top-of-screen HUD (score, wave, combo,

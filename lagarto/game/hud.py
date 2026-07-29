@@ -4,6 +4,11 @@ Everything here is a function of ``(surf, ...)`` plus plain numbers/colours, so
 it can be called from any state module without dragging the state machine in.
 Anything that has to *read* the run (player health, wave, combo) belongs in the
 state module that draws it, not here.
+
+The ``CapsuleSpring`` and ``PlayerCapsule`` types live here too -- they are
+HUD-specific state, owned by the player capsule (the framed panel that holds
+vitals + dials), not by the run. See ``docs/concepts/hud-anatomy.md`` for the
+metaphor and the budget.
 """
 
 import math
@@ -12,9 +17,119 @@ import pygame
 from pygame import Vector2
 
 from ..core import config as C
-from ..core.mathutil import pulse, vfrom_angle
+from ..core.mathutil import decay, pulse, vfrom_angle
 from ..core import palette
 from ..render import ui
+
+
+HEALTH_SAC_HP = 25.0
+HEALTH_SACS_PER_ROW = 8
+HEALTH_SAC_MAX_ROWS = 2
+HEALTH_SAC_SIZE = 18
+HEALTH_SAC_GAP = 4
+
+
+def health_sac_fills(health, max_health):
+    count = max(1, math.ceil(max(0.0, max_health) / HEALTH_SAC_HP))
+    remaining = max(0.0, min(float(health), float(max_health)))
+    return [max(0.0, min(1.0, (remaining - i * HEALTH_SAC_HP) / HEALTH_SAC_HP))
+            for i in range(count)]
+
+
+def health_sac_layout(max_health, width):
+    count = max(1, math.ceil(max(0.0, max_health) / HEALTH_SAC_HP))
+    rows = min(HEALTH_SAC_MAX_ROWS, math.ceil(count / HEALTH_SACS_PER_ROW))
+    columns = math.ceil(count / rows)
+    size = min(HEALTH_SAC_SIZE, (width - HEALTH_SAC_GAP * (columns - 1)) / columns)
+    return count, rows, columns, max(6.0, size)
+
+
+def health_panic_rate(frac):
+    frac = max(0.0, min(1.0, frac))
+    return 2.2 + (1.0 - frac) * 7.8
+
+
+def health_sacs_bounds(x, y, max_health, width):
+    count, rows, columns, size = health_sac_layout(max_health, width)
+    used_columns = min(columns, count)
+    used_width = used_columns * size + max(0, used_columns - 1) * HEALTH_SAC_GAP
+    used_height = rows * size + max(0, rows - 1) * HEALTH_SAC_GAP
+    return pygame.Rect(x, y - used_height + size, math.ceil(used_width), math.ceil(used_height))
+
+
+def _draw_artery(surf, centers, color):
+    if len(centers) < 2:
+        return
+    root = palette.darken(color, 0.35)
+    for a, b in zip(centers, centers[1:]):
+        distance = Vector2(b).distance_to(a)
+        steps = max(2, int(distance / 3))
+        for step in range(steps + 1):
+            f = step / steps
+            p = Vector2(a).lerp(b, f)
+            pygame.draw.circle(surf, root, (round(p.x), round(p.y)), max(1, round(2.4 - f)))
+
+
+def draw_health_sacs(surf, x, y, width, health, max_health, t, impact=0.0):
+    fills = health_sac_fills(health, max_health)
+    count, rows, columns, size = health_sac_layout(max_health, width)
+    frac = max(0.0, min(1.0, health / max(0.001, max_health)))
+    panic = 1.0 - frac
+    rate = health_panic_rate(frac)
+    beat = (0.5 + 0.5 * math.sin(t * rate)) * panic
+    color = palette.mix((148, 54, 62), (255, 42, 58), min(1.0, panic * 0.85 + beat * 0.35))
+    row_counts = [min(columns, count - row * columns) for row in range(rows)]
+    centers = []
+    positions = []
+    index = 0
+    for row in range(rows):
+        row_width = row_counts[row] * size + max(0, row_counts[row] - 1) * HEALTH_SAC_GAP
+        row_x = x + (width - row_width) / 2
+        cy = y - row * (size + HEALTH_SAC_GAP) + size / 2
+        row_centers = []
+        for column in range(row_counts[row]):
+            cx = row_x + column * (size + HEALTH_SAC_GAP) + size / 2
+            sway = math.sin(t * 4.1 + index * 1.7) * impact * (1.5 + row * 0.5)
+            row_centers.append((cx, cy + sway))
+            positions.append((cx, cy + sway, index))
+            index += 1
+        centers.append(row_centers)
+    for row_centers in centers:
+        _draw_artery(surf, row_centers, color)
+    shell = (52, 30, 38)
+    empty = (25, 20, 29)
+    rim = palette.lighten(color, 0.12)
+    active = next((i for i, fill in enumerate(fills) if fill < 1.0), count - 1)
+    for cx, cy, index in positions:
+        fill = fills[index]
+        neighbour = max(0.0, 1.0 - abs(index - active) / 2.0)
+        bulge = impact * neighbour * 1.8 + beat * 0.8
+        radius = max(3, round(size * 0.42 + bulge))
+        center = (round(cx), round(cy))
+        pygame.draw.circle(surf, shell, center, radius + 1)
+        pygame.draw.circle(surf, empty, center, radius)
+        if fill > 0:
+            fluid_h = max(1, round(radius * 2 * fill))
+            pygame.draw.circle(surf, color, center, radius)
+            empty_h = radius * 2 - fluid_h
+            if empty_h > 0:
+                cover = pygame.Rect(center[0] - radius - 1, center[1] - radius - 1,
+                                    radius * 2 + 2, empty_h + 1)
+                pygame.draw.rect(surf, empty, cover)
+            meniscus = pygame.Rect(center[0] - radius, center[1] + radius - fluid_h - 1,
+                                   radius * 2, max(2, min(4, fluid_h)))
+            pygame.draw.ellipse(surf, palette.lighten(color, 0.12), meniscus)
+            if count <= 16 or index in {active - 1, active, active + 1}:
+                pygame.draw.circle(surf, palette.lighten(color, 0.55),
+                                   (center[0] - radius // 3, center[1] - radius // 3),
+                                   max(1, radius // 4))
+        else:
+            residue = pygame.Rect(center[0] - radius // 2, center[1] + radius // 2,
+                                  radius, max(1, radius // 4))
+            pygame.draw.ellipse(surf, palette.darken(color, 0.55), residue)
+        pygame.draw.circle(surf, rim if fill > 0 else (68, 48, 58), center, radius, 1)
+        if panic > 0.55 and beat > 0.6 and index in {active - 1, active}:
+            palette.glow(surf, center, radius * 2, color, 0.18 + beat * 0.12)
 
 
 def bar_tail(surf, bx, by, h, color, phase, t):
@@ -288,3 +403,123 @@ class TopStack:
         y = self.y
         self.y += h + self.gap
         return y
+
+
+class CapsuleSpring:
+    """Low-frequency mass-spring-damper for the player HUD capsule.
+
+    The capsule is "massa rigida" in the HUD-anatomy metaphor -- it has its own
+    overshoot on entry and its own tremble on damage / value change. The organs
+    inside (bars, dials) animate on their own, faster rhythms; the spring gives
+    the player something to read as "the container reacted" without naming which
+    organ moved.
+
+    State is a 2D displacement from the resting offset (0, 0). One impulse at
+    a time -- a damage hit AND a value change in the same frame sum into one
+    impulse, capped by ``HUD_SHAKE_HP``. The tremble itself is a separate sine
+    added on top of the spring displacement, gated by ``HUD_SHAKE_DUR``.
+    """
+
+    __slots__ = ('x', 'y', 'vx', 'vy', 'shake_t', 'shake_amp')
+
+    def __init__(self):
+        self.x = 0.0
+        self.y = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+        self.shake_t = 0.0
+        self.shake_amp = 0.0
+
+    def impulse(self, ax, ay):
+        self.vx += ax
+        self.vy += ay
+
+    def start_shake(self, amp):
+        """Start (or raise) a decaying sinusoidal shake of peak amplitude ``amp`` px."""
+        self.shake_amp = max(self.shake_amp, amp)
+        self.shake_t = C.HUD_SHAKE_DUR
+
+    def update(self, dt):
+        # Semi-implicit Euler at 60 Hz is stable for k=38, c=9 -- the system is
+        # overdamped (c^2 > 4*k*m with m=1), so no z-plane is needed and the
+        # spring returns to rest without ringing forever.
+        ax = -C.HUD_SPRING_K * self.x - C.HUD_SPRING_C * self.vx
+        ay = -C.HUD_SPRING_K * self.y - C.HUD_SPRING_C * self.vy
+        self.vx += ax * dt
+        self.vy += ay * dt
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.shake_t = decay(self.shake_t, dt)
+
+    def settle_error(self):
+        """Max of |x| and |y| -- how far the spring is from rest. Used by the
+        check to assert the capsule actually settles after an impulse."""
+        return max(abs(self.x), abs(self.y))
+
+    def offset(self, t):
+        """(ox, oy) pixel offset to add to the panel's resting rect."""
+        ox, oy = self.x, self.y
+        if self.shake_t > 0 and self.shake_amp > 0.01:
+            # linear decay of the envelope; the sine runs on game.time so the
+            # tremor stays phase-locked to the player, not the frame.
+            f = self.shake_t / C.HUD_SHAKE_DUR
+            ox += math.sin(t * 56.0) * self.shake_amp * f
+            oy += math.cos(t * 47.0) * self.shake_amp * f * 0.6
+        return ox, oy
+
+
+class PlayerCapsule:
+    """Per-player HUD state: the panel spring plus last-frame vitals.
+
+    ``last`` is what the capsule compares against to detect a value change
+    inside the panel. ``spring`` is the CapsuleSpring for the panel position.
+    Initialised empty -- the state module fills it in on the first frame.
+    """
+
+    __slots__ = ('spring', 'last_hp', 'last_energy', 'last_xp', 'last_ability')
+
+    def __init__(self):
+        self.spring = CapsuleSpring()
+        self.last_hp = None
+        self.last_energy = None
+        self.last_xp = None
+        self.last_ability = None
+
+
+def detect_changes(capsule, player):
+    """Compare the player's current vitals to the capsule's last frame and fire
+    shakes on the spring when they differ. Returns True if anything moved -- the
+    caller can use this to drive per-organ animations later."""
+    anything = False
+    last = capsule.last_hp
+    if last is not None and player.health < last - 0.5:
+        # damage: stronger tremble, direction taken from the hit normal if the
+        # caller left one on the player; default is straight down
+        capsule.spring.start_shake(C.HUD_SHAKE_HP)
+        anything = True
+    elif last is not None and player.health > last + 0.5:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE)
+        anything = True
+    capsule.last_hp = player.health
+
+    last = capsule.last_energy
+    if last is not None and abs(player.energy - last) > 0.6:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        anything = True
+    capsule.last_energy = player.energy
+
+    last = capsule.last_xp
+    if last is not None and player.xp > last + 0.5:
+        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        anything = True
+    capsule.last_xp = player.xp
+
+    last = capsule.last_ability
+    if last is not None and (player.ability_charge >= 1.0) != (last >= 1.0):
+        # crossing the "ready" threshold is the loudest value change in the
+        # panel -- a different shake amplitude so the player can tell which
+        # organ flipped.
+        capsule.spring.start_shake(C.HUD_SHAKE_HP * 0.6)
+        anything = True
+    capsule.last_ability = player.ability_charge
+    return anything
