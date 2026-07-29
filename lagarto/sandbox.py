@@ -383,19 +383,25 @@ class Sandbox:
 
         Shape matches ``state_camp._roll_shop``'s native offers: ``fn(game)`` runs
         the REAL grant on every player, so ``_apply_buy`` calls it unchanged.
+        That shape includes ``base``/``perm``/``preview`` -- ``_apply_buy``
+        reprices from ``base``, so a debug entry without them raises KeyError.
+        A debug entry is priced flat and has no numeric delta to preview.
         """
         if pool == 'weapon':
             w = weapons.WEAPONS[pid]
             return dict(name=w.name, desc='arma (debug)', cost=SANDBOX_STORE_COST,
+                        base=SANDBOX_STORE_COST, perm=False, preview=None,
                         hue=w.hue, icon=pid,
                         fn=lambda g, pid=pid: [pl.gain_weapon(pid) for pl in g.players])
         if pool == 'item':
             it = items.ITEMS.get(pid)
             return dict(name=it.name, desc=it.desc, cost=SANDBOX_STORE_COST,
+                        base=SANDBOX_STORE_COST, perm=False, preview=None,
                         hue=it.hue, icon=it.icon,
                         fn=lambda g, it=it: [items.give(pl, it, g) for pl in g.players])
         c = charms.CHARMS.get(pid)          # pool == 'charm'
         return dict(name=c.name, desc=c.desc, cost=SANDBOX_STORE_COST,
+                    base=SANDBOX_STORE_COST, perm=False, preview=None,
                     hue=c.hue, icon=pid,
                     fn=lambda g, pid=pid: [pl.gain_charm(pid, g) for pl in g.players])
 

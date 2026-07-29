@@ -90,7 +90,7 @@ chk(107, "loja do sandbox", 'catalog = state_camp._roll_shop(g)' in src(_sb)
     "" if _ss.returncode == 0 else _ss.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
-chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
+chk(105, "shop prices persist", 'shop_buys' in src(state_camp) and 'shop_buys' in src(gameloop)
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
 from lagarto.combat import emitter as emi

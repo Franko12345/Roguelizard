@@ -31,6 +31,7 @@ from ..world.pickups import Bug, Fruit, Egg
 from ..render.fx import FX, shadow
 from ..render.camera import Camera
 from ..world.terrain import World
+from ..flow import rounds
 from ..flow.rounds import RoundManager
 from . import hud
 from . import state_camp
@@ -103,9 +104,12 @@ class Game:
         self.step_once = False       # one-shot: advance the frozen AI exactly one tick
         self.combo_flash = 0.0
         self.pollen = 0
-        # per-RUN shop prices, keyed by item name: a purchase raises the price
-        # and it stays raised in every later camp (see state_camp._roll_shop)
-        self.shop_prices = {}
+        # per-RUN purchase COUNT, keyed by item name: a purchase raises the
+        # price and it stays raised in every later camp (see
+        # state_camp._roll_shop). Counting instead of storing the price keeps
+        # the two axes orthogonal -- the tier multiplier is applied on top,
+        # fresh, so a tier jump also raises what you already bought.
+        self.shop_buys = {}
         self.hitstop = 0.0        # freeze frames on heavy impacts
         self.flash = 0.0          # brief white screen flash
         self.dt_last = C.DT       # boss.py's per-frame barrage tick reads this
@@ -424,7 +428,9 @@ class Game:
             return
         it = self.camp['shop'][i]
         it['fn'](self)
-        it['cost'] = self.shop_prices[it['name']] = int(it['cost'] * C.SHOP_PRICE_MULT)
+        buys = self.shop_buys[it['name']] = self.shop_buys.get(it['name'], 0) + 1
+        it['cost'] = state_camp.shop_price(it['base'], it['perm'], buys,
+                                           self.rounds.wave)
         self.camp['msg'] = it['name']
         self.camp['msg_t'] = 1.4
 
@@ -446,7 +452,9 @@ class Game:
             for pl in self.players:
                 pl.health = pl.max_health
         elif r['bonus'] == 'polen':
-            self.pollen += 25
+            # escala pelo mesmo multiplicador de tier da loja: +25 fixo virava a
+            # rota obviamente pior no late, quando um round rende ~200 de polen
+            self.pollen += int(25 * rounds.tier_price_mult(self.rounds.wave))
         elif r['bonus'] == 'carta':
             for pl in self.alive_players():
                 pl.pending_levelups += 1

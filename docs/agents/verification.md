@@ -32,7 +32,7 @@ regression is visible rather than merely detected.
 | `check_turret.py` | The planted Torreta does not move (not while firing, shoved or beaten), fires through the emitter with `might` on the bullet, answers to `amount`/`area_mult`/`cooldown_mult`, dies to an enemy and leaves `game.friends`, and takes that enemy's aggro off the player. |
 | `check_music.py` | The stem mix, against a REAL mixer (the dummy audio driver no-ops every call). |
 | `check_difficulty.py` | Early waves unchanged, late waves actually ramp. |
-| `check_shop_prices.py` | A shop price raised in one camp is still raised in the next. |
+| `check_shop_prices.py` | A shop price raised in one camp is still raised in the next; tier 0 opens at the shipped prices while tiers 1 and 2 charge 1.7× and 2.4×; recompra compounds 1.45 on a permanent upgrade and 1.25 on a consumable; the count dies with the run and the `polen` route bonus rides the same tier multiplier. |
 | `check_sandbox_store.py` | All three sandbox store paths (manual pick, random N, launch preset) stage a catalog of the native offers plus the wrapped ones. |
 | `check_doc_paths.py` | No doc cites a source path that does not exist. |
 

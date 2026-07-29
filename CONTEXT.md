@@ -301,6 +301,23 @@ Run-scoped currency. Earned from kills and combo. Spent at the camp shop.
 Never persists across runs.
 _Avoid_: coins, gold.
 
+**Shop price**:
+What the beetle tent charges for an offer. Two orthogonal factors on top of the
+offer's `base`: the **Tier price multiplier** (below) and a per-offer inflation
+raised to the number of times the offer was bought this run
+(`SHOP_PRICE_MULT_PERM` 1.45 for a permanent upgrade, `SHOP_PRICE_MULT` 1.25 for
+a consumable). Computed by `state_camp.shop_price`; the run only stores the
+count, in `Game.shop_buys`. See [Camp](docs/concepts/camp.md).
+_Avoid_: cost (say `shop price`), item price.
+
+**Tier price multiplier**:
+`rounds.tier_price_mult(wave)` = `1 + SHOP_TIER_STEP * tier`, so 1.0 / 1.7 / 2.4
+/ 3.1 per **Tier**. Steps on the boss wave and holds until the next boss. Scales
+the shop's base prices and the `polen` **Route** bonus, because pollen income
+grows ~+95% per tier while price grows +70% — the gap is deliberate slack. No
+cap, in either mode. See [Balance](docs/concepts/balance.md).
+_Avoid_: tier tax, inflation (inflation is the per-purchase factor).
+
 **DNA**:
 Meta-progression currency. Persisted in `~/.lagarto/save.json`. Credited at
 end of run. Spent on `UPGRADES` (permanent stats) and `UNLOCKS` (weapons,
