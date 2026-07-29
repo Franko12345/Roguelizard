@@ -34,16 +34,46 @@ TELL_CROUCH = 0.4          # charge: squat_bias drop -- body lowers & squashes
 
 # --------------------------------------------------------------------------- #
 #  Rei Lagarto (plans/03, first authored boss, onda 5): CicatriZ mechanic --   #
-#  every 25% HP lost, a scarred patch (slow + tick damage) appears underfoot;  #
-#  it clears whenever the fight moves to the next phase.                      #
+#  every 25% HP lost, a scarred patch (slow + tick damage) appears on the     #
+#  boss's recent path (issue #123), so the puddle is area denial that          #
+#  interacts with his movement instead of decoration underfoot. Cleared at     #
+#  phase transition.                                                          #
 # --------------------------------------------------------------------------- #
+
+# How many frames of the boss's recent path ``spawn_scar`` may sample
+# from. The ring buffer ``BossAI._path_samples`` grows up to this length;
+# picking from it (instead of ``boss.pos + random_dir(...)``) means the
+# puddle lands where the boss was walking, not in a random radius
+# around where he stands.
+KING_SCAR_PATH_WINDOW = 30
+
 
 def spawn_scar(boss, game):
     from ...combat import weapons
-    pos = boss.pos + random_dir(boss.max_r * 0.6)
+    # Issue #123: with movement, the puddle lands on the boss's RECENT
+    # PATH, not at a random underfoot position. The ring buffer is
+    # filled by ``BossAI.tick`` every frame; if it's empty (the very
+    # first scar before the boss has walked anywhere) fall back to
+    # the legacy underfoot placement so the mechanic still works on
+    # spawn.
+    ai = boss.boss_ai
+    samples = getattr(ai, '_path_samples', None) if ai is not None else None
+    if samples:
+        chosen = random.choice(samples)
+        pos = Vector2(chosen)
+    else:
+        chosen = None
+        pos = boss.pos + random_dir(boss.max_r * 0.6)
     p = weapons.Puddle(pos, boss.max_r * 0.9, C.KING_SCAR_DMG, C.KING_SCAR_LIFE,
                        22, hostile=True, tick=0.5,
                        slow=(C.KING_SCAR_SLOW, C.KING_SCAR_TIME))
+    # Snapshot the path buffer at spawn time so a check can verify the
+    # puddle landed on a position the boss actually occupied. The buffer
+    # itself rolls forward (oldest frame is popped), so without the
+    # snapshot the verification would race against the buffer's
+    # evolution.
+    p._scar_path_snapshot = list(samples) if samples else []
+    p._scar_path_pos = Vector2(pos) if chosen is None else Vector2(chosen)
     game.spawn_puddle(p)
     game.fx.burst(pos, (150, 90, 50), 10, 140)
     return p
@@ -54,15 +84,27 @@ def spawn_scar(boss, game):
 # --------------------------------------------------------------------------- #
 
 class BossAI:
-    def __init__(self, boss, phases=None, personality=None, name=None, on_phase=None):
+    def __init__(self, boss, phases=None, personality=None, name=None, on_phase=None,
+                 invuln_states=None):
         self.boss = boss
         self.phases = phases or default_phases()
         self.personality = personality or default_personality()
         self.name = name
-        self.on_phase = on_phase   # optional (boss, phase_i) hook -- per-boss mechanics
+        self.on_phase = on_phase   # optional (boss, phase_i, game) hook -- per-boss mechanics
+        # Issue #121: extra FSM states during which ``boss.boss_invuln`` is
+        # True. Empty by default (intro + transition are already invulnerable);
+        # a Muralha declares ``('attack', 'recover')`` so the windup stays
+        # punishable but the gap after the strike is not. ``windup`` is
+        # FORBIDDEN to appear here -- the windup is the player's only DPS
+        # window.
+        self.invuln_states = frozenset(invuln_states or ())
         self.phase_i = 0
         self.state = 'intro'
         self.t = C.BOSS_INTRO_TIME
+        # Issue #118: initial cd uses the same MIN..MAX window as the rest of
+        # the cycle (NOT floored) -- the floor protects against later cycles
+        # that hit zero, not against the very first one. The actual fight
+        # cadence lands on the floor within one or two attacks anyway.
         self.cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX)
         self.pattern_id = None
         self.summon_cd = 0.0
@@ -70,7 +112,35 @@ class BossAI:
         self.no_hit_t = 0.0        # time since this boss last connected -- frustration
         self.scar_thresholds = None   # e.g. [0.75, 0.5, 0.25] -- opt-in (Rei Lagarto)
         self.scars = []
+        # Issue #123: ``proud_walk`` keeps a committed direction and a
+        # timer on the BossAI so the move never reverses (a sign flip
+        # would read as retreat). Seeded empty; the first call to
+        # ``move_proud_walk`` initialises from the line to the target.
+        self._pw_dir = Vector2()
+        self._pw_t = 0
+        # Issue #123: ring buffer of recent boss positions. ``spawn_scar``
+        # picks from this buffer so the CicatriZ puddle lands where the
+        # boss WAS in the last ~30 frames, not at a random spot near
+        # its current position. The trail makes the puddle interact
+        # with the boss's movement; without movement, the puddle is
+        # decoration.
+        self._path_samples = []   # list[Vector2], newest at the end
         boss.boss_invuln = True
+        self._last_game = None      # back-ref the per-frame hook keeps for on_phase
+
+    def _apply_invuln(self):
+        """Single source of truth for ``boss_invuln``. Called at every state
+        change so we never accumulate stale flags when the FSM transitions
+        and never set invuln on a state the per-boss slot wouldn't agree
+        with. Issue #121: a Muralha's ``invuln_states={'attack','recover'}``
+        keeps the windup punishable (the player's DPS window) but makes the
+        gap right after a strike invulnerable (the boss's authored "can't be
+        interrupted while it's recovering" slot).
+        """
+        self.boss.boss_invuln = (
+            self.state in ('intro', 'transition')
+            or self.state in self.invuln_states
+        )
 
     def phase(self):
         return self.phases[self.phase_i]
@@ -82,7 +152,7 @@ class BossAI:
             self.phase_i += 1
             self.state = 'transition'
             self.t = C.BOSS_TRANSITION_TIME
-            b.boss_invuln = True
+            self._apply_invuln()              # 'transition' is in the always-invuln set
             b.hit_flash = 1.0
             self.pattern_id = None
             if self.scars:                     # scars don't survive a phase change
@@ -90,7 +160,14 @@ class BossAI:
                     s.dead = True
                 self.scars = []
             if self.on_phase:
-                self.on_phase(b, self.phase_i)
+                # Backward compat: callbacks written before #121 take
+                # (boss, phase_i). Callbacks written for arena shrinkage
+                # take (boss, phase_i, game). Try the 3-arg form first;
+                # fall back if a legacy on_phase didn't get updated.
+                try:
+                    self.on_phase(b, self.phase_i, self._last_game)
+                except TypeError:
+                    self.on_phase(b, self.phase_i)
 
     def _update_mood(self, dt, target):
         if target is None:
@@ -121,9 +198,26 @@ class BossAI:
         so the per-boss ``cd_mul`` carries the rhythm signature. The
         ``BOSS_CD_FLOOR`` keeps a 0 ``cd_mul`` (or a tiny one) from making
         the boss spell out bullets illegibly.
+
+        Per-phase ``cd_jitter`` (#125) widens the cd **above** the floor:
+        the boss draws from ``[floor, floor + BOSS_CD_MAX * cd_mul]`` (no
+        jitter so the lower half coincides with the floor), then multiplies
+        by ``uniform(1 - jitter, 1 + jitter)``. The floor protects
+        legibility against an unlucky zero; above the floor the rhythm is
+        the persona's signature -- Aranha-Rei's 1.0 lands cds across
+        [~0.15, ~0.40] s in calm and a tighter band in enraged, which is
+        how she stays the LEAST regular boss in ``BOSS_POOL``. A boss with
+        cd_jitter unset (default) rides the floor on every cycle: same as
+        before #125, just a tighter band on top.
         """
-        cd_raw = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
-        return max(C.BOSS_CD_FLOOR, cd_raw)
+        cd_mul = self.phase()['cd_mul']
+        jitter = self.phase().get('cd_jitter', 0.0) or 0.0
+        if jitter > 0:
+            cd_base = C.BOSS_CD_FLOOR + random.uniform(0.0, C.BOSS_CD_MAX * cd_mul)
+            cd = cd_base * random.uniform(1.0 - jitter, 1.0 + jitter)
+        else:
+            cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * cd_mul
+        return max(C.BOSS_CD_FLOOR, cd)
 
     def _eff_windup(self, pid):
         """Effective windup for ``pid``, clamped to the 27-frame floor.
@@ -149,7 +243,11 @@ class BossAI:
         Precedence (issue #118): attack > phase > none.
 
         - If the active pattern has a ``move`` binding, it wins.
-        - Else the phase kit's ``moves`` slot drives the boss.
+        - Else the phase kit's ``moves`` slot drives the boss. A list of
+          moves is tried in order (issue #122); the first that returns a
+          non-zero speed drives the boss. ``dive_arc`` only animates
+          during its own windup, so a kit with ``moves=['dive_arc',
+          'flyby']`` falls through to flyby whenever the dive isn't on.
         - Else the default ``reposition`` (move toward the target) takes over.
 
         Mood speed multiplies the result everywhere. The arena (when
@@ -168,15 +266,17 @@ class BossAI:
                 d, s = MOVES[mv](b, game, target, pat)
                 d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
                 return d, s * mood_speed
-        # phase's move (the BACKGROUND between attacks)
+        # phase's moves (the BACKGROUND between attacks). The list is tried
+        # in order -- the first non-zero wins, so a Wasp kit that says
+        # ['dive_arc','flyby'] uses the dive only during its windup and
+        # flyby for the rest.
         phase = self.phase()
-        moves = phase.get('moves') or []
-        if moves:
-            mv = moves[0]
+        for mv in (phase.get('moves') or []):
             if mv in MOVES:
                 d, s = MOVES[mv](b, game, target, phase)
-                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
-                return d, s * mood_speed
+                if s > 0:
+                    d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
+                    return d, s * mood_speed
         # none: default approach (move toward target at approach speed)
         if target is None:
             return Vector2(), 0.0
@@ -186,12 +286,23 @@ class BossAI:
 
     def tick(self, dt, game):
         b = self.boss
+        self._last_game = game      # issue #121: back-ref for on_phase(game)
         game.dt_last = dt          # aimed_barrage's/spiral's per-frame tick reads this
         _tick_barrage(b, game)
         _tick_spiral(b, game)
         _tick_fire_breath(b, game)
         self.summon_cd = decay(self.summon_cd, dt)
         self._maybe_advance_phase()
+        # Issue #123: ring buffer of recent boss positions for the
+        # CicatriZ puddle. Sampling the buffer at ``spawn_scar`` time
+        # means the puddle lands where the boss WAS walking (the trail
+        # of his movement), not at a random underfoot position. The
+        # buffer caps at ``KING_SCAR_PATH_WINDOW`` so a long fight
+        # doesn't grow it unbounded.
+        samples = self._path_samples
+        if len(samples) >= KING_SCAR_PATH_WINDOW:
+            samples.pop(0)
+        samples.append(Vector2(b.pos))
         if self.scar_thresholds:
             frac = b.hp / max(1, b.max_hp)
             while self.scar_thresholds and frac <= self.scar_thresholds[0]:
@@ -206,15 +317,21 @@ class BossAI:
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
-                b.boss_invuln = False
+                self._apply_invuln()           # 'approach' is no longer invuln
             return Vector2(), 0.0
 
         if self.state == 'transition':
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
-                b.boss_invuln = False
+                self._apply_invuln()           # 'approach' is no longer invuln
                 self.cd = self._roll_cd()
+                # Issue #122: phase change invalidates a snapshot dive
+                # start (the new phase's dives begin fresh from the new
+                # position). Without clearing, a transition mid-dive
+                # would carry the stale start into the next phase.
+                if getattr(b, '_dive_start', None) is not None:
+                    b._dive_start = None
             return safe_norm(target.pos - b.pos) * 0.1, 0.15
 
         to = safe_norm(target.pos - b.pos)
@@ -234,6 +351,14 @@ class BossAI:
                 # future mood multiplier respects the same floor.
                 self.t = self._eff_windup(pid)
                 self._windup_target = Vector2(target.pos)
+                # Issue #122: snapshot the dive's start point so the
+                # Bezier the wasp flies is anchored to where the dive
+                # BEGAN (not where the boss is mid-windup). Without this
+                # the dive_arc movement would re-sample every frame and
+                # the wasp would arc around its current self, not its
+                # original line of attack.
+                if pid == 'dive_arc':
+                    b._dive_start = Vector2(b.pos)
                 select = PATTERNS[pid].get('select')
                 if select:
                     select(b, game, target, PATTERNS[pid])
@@ -259,6 +384,12 @@ class BossAI:
                     self._windup_target = Vector2(target.pos)
             if self.t <= 0:
                 pat = PATTERNS[self.pattern_id]
+                # Issue #122: the dive windup ended -- the dive Bezier
+                # is done, clear the snapshot so a subsequent windup
+                # snapshots its OWN start. The wasp stays past the
+                # player; the phase's moves list drives the rest.
+                if self.pattern_id == 'dive_arc' and getattr(b, '_dive_start', None) is not None:
+                    b._dive_start = None
                 if pat.get('burrow'):
                     self.state = 'burrowing'
                     self._burrow_seen_under = False
@@ -277,25 +408,36 @@ class BossAI:
                 else:
                     self.state = 'recover'
                     self.t = self._eff_recover(self.pattern_id)
+                self._apply_invuln()   # 'recover' may now be invuln (Muralha)
             # Movement trail: the active pattern's move (if any) overrides
             # the phase's. charge/burrow/grapple already returned above.
             return self._move(target, game)
 
         if self.state == 'burrowing':
-            # delegates every frame to the regular centipede's OWN dig/erupt
-            # state machine (creatures.ai.burrow) -- one full surface->dig->
-            # under->erupt cycle, then back to the normal pattern rotation
+            # Issue #124: burrow IS the locomotion. Per the precedence from #118,
+            # burrow vetoes the movement trail -- its state machine owns the
+            # motion. The full surface -> dig -> under -> erupt -> surface
+            # cycle is one continuous beat of the boss's body, and the
+            # position updates every frame (the under segment travels to
+            # ``dive_to`` at the body's speed; the surface segment walks
+            # toward the target). What burrow adds on top of movement is the
+            # recognition that the under segment is the BODY MOVING THROUGH
+            # THE DIRT, not "standing still underground" -- and it is also
+            # the invulnerability window (``hit_test`` returns ``None`` while
+            # ``burrowed``), emergent from movement, not authored. No new
+            # window; the existing one is paid for with locomotion.
             d, speed = burrow_ai.burrow_tick(b, game, dt, target)
             if b.burrow_state == 'under':
                 self._burrow_seen_under = True
             elif self._burrow_seen_under and b.burrow_state == 'surface':
                 self.state = 'recover'
                 self.t = self._eff_recover('burrow')
+                self._apply_invuln()
             return d, speed
 
         if self.state == 'grappling':
             # delegates every frame to the regular octopus's OWN reach/snap
-            # cycle (creatures.ai.grapple) -- one windup-to-snap(or-miss)
+            # cycle (creatures/ai/grapple) -- one windup-to-snap(or-miss)
             # cycle, then back to the normal pattern rotation
             d, speed = grapple_ai.grapple_tick(b, game, dt, target)
             if b.grapple_t > 0:
@@ -303,6 +445,7 @@ class BossAI:
             elif self._grapple_seen_windup:
                 self.state = 'recover'
                 self.t = self._eff_recover('grapple')
+                self._apply_invuln()
             return d, speed
 
         if self.state == 'charging':
@@ -313,6 +456,7 @@ class BossAI:
             if self.t <= 0:
                 self.state = 'recover'
                 self.t = self._eff_recover('charge')
+                self._apply_invuln()
                 return Vector2(), 0.0
             return getattr(b, '_charge_dir', to), C.BOSS_CHARGE_SPEED_MULT
 
@@ -320,6 +464,7 @@ class BossAI:
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
+                self._apply_invuln()        # 'approach' clears the recover invuln
                 self.cd = self._roll_cd()
             # Movement trail: phase's move drives the boss during recover.
             return self._move(target, game)

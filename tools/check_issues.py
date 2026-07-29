@@ -15,6 +15,7 @@ import pygame; pygame.init()
 from lagarto.core import config as C
 from lagarto.flow import rounds
 from lagarto.flow.boss import patterns as pat, arena as ar
+from lagarto.flow.boss import ai as bossai
 from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
@@ -23,6 +24,7 @@ from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
 from lagarto.input.controllers import _ACTIONS
+from lagarto.flow.boss.personality import king_personality
 import lagarto
 
 src = lambda m: inspect.getsource(m)
@@ -38,7 +40,7 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
 _bm = subprocess.run([sys.executable, 'tools/check_boss_movement.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
-from lagarto.flow.boss import moves as bossmoves
+from lagarto.flow.boss import moves as bossmoves, ai as bossai
 chk(118, "boss movement trail",
     'MOVES' in src(bossmoves) and 'move_orbit' in src(bossmoves)
     and 'moves.py' in str(bossmoves.__file__)
@@ -49,6 +51,60 @@ chk(118, "boss movement trail",
     and 'moves=' in src(pat)
     and _bm.returncode == 0,
     "" if _bm.returncode == 0 else _bm.stderr.decode()[-90:])
+_kg = subprocess.run([sys.executable, 'tools/check_king_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(123, "rei lagarto -- legibilidade",
+    'proud_walk' in src(bossmoves)
+    and '_pw_dir' in src(bossai)
+    and '_path_samples' in src(bossai)
+    and 'KING_SCAR_PATH_WINDOW' in src(bossai)
+    and "_scar_path_snapshot" in src(bossai.spawn_scar)
+    and "move='proud_walk'" in src(pat)
+    and "moves=['proud_walk']" in src(pat)
+    and C.BOSS_FAN_WINDUP >= 1.0 and C.BOSS_SHOCKWAVE_WINDUP >= 1.0
+    and C.BOSS_RADIAL_WINDUP >= 1.0 and C.BOSS_CHARGE_WINDUP >= 1.0
+    and king_personality().tell_mult == {}
+    and _kg.returncode == 0,
+    "" if _kg.returncode == 0 else _kg.stderr.decode()[-90:])
+_ws = subprocess.run([sys.executable, 'tools/check_wasp_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(122, "wasp signature",
+    'dive_arc' in src(bossmoves) and 'flyby' in src(bossmoves)
+    and 'curve_approach' in src(bossmoves) and 'climb_out' in src(bossmoves)
+    and "'dive_line'" in src(__import__('lagarto.flow.boss.telegraph',
+                                       fromlist=['x']))
+    and "'shadow_circle'" in src(__import__('lagarto.flow.boss.telegraph',
+                                            fromlist=['x']))
+    and 'dive_arc' in src(__import__('lagarto.flow.boss.telegraph',
+                                    fromlist=['x']))
+    and 'terror_alado' in ar.ARENAS
+    and _ws.returncode == 0,
+    "" if _ws.returncode == 0 else _ws.stderr.decode()[-90:])
+_ce = subprocess.run([sys.executable, 'tools/check_centipede_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(124, "centopeiadeira signature -- burrow-as-locomotion",
+    'move_spin_glide' in src(bossmoves) and 'move_lunge' in src(bossmoves)
+    and "move='spin_glide'" in src(pat) and "move='lunge'" in src(pat)
+    and "'burrow IS the locomotion'" in src(bossai)
+    and _ce.returncode == 0,
+    "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
+_sp = subprocess.run([sys.executable, 'tools/check_spider_signature.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+chk(125, "aranha-rei signature -- erratic + siege",
+    'move_erratic_step' in src(bossmoves) and 'move_trap_and_shift' in src(bossmoves)
+    and 'cd_jitter' in src(pat) and 'cd_jitter' in src(bossai)
+    and "move='erratic_step'" in src(pat) and "move='trap_and_shift'" in src(pat)
+    and _sp.returncode == 0,
+    "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
+_ttk = subprocess.run([sys.executable, 'tools/check_boss_ttk.py'], capture_output=True,
+                       env={**os.environ, 'PYTHONPATH': '.'})
+chk(120, "boss time-to-kill harness",
+    os.path.exists('tools/check_boss_ttk.py')
+    and 'PROFILES' in open('tools/check_boss_ttk.py').read()
+    and 'BOSS_POOL' in open('tools/check_boss_ttk.py').read()
+    and 'phase_reached' in open('tools/check_boss_ttk.py').read()
+    and _ttk.returncode == 0,
+    "" if _ttk.returncode == 0 else _ttk.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib
@@ -112,6 +168,16 @@ chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
     and any('ankh' in ids for _, ids in rounds.BOSS_TIER_POOLS))
 chk(74, "A Muralha", rounds.BOSS_POOL.get('muralha', {}).get('species') == 'muralha'
     and species.SPECIES['muralha']['genome'].plan == 'fixed' and 'muralha' in ar.ARENAS)
+_muralha_sig = subprocess.run([sys.executable, 'tools/check_muralha_signature.py'],
+                              capture_output=True, env={**os.environ, 'PYTHONPATH': '.'})
+chk(121, "Muralha signature",
+    'phase_sizes' in src(ar.BossArena)
+    and 'muralha_on_phase' in src(pat)
+    and 'invuln_states' in src(bossai.BossAI)
+    and ('attack', 'recover') == tuple(rounds.BOSS_POOL['muralha'].get('invuln_states') or ())
+    and tuple(ph['cd_mul'] for ph in pat.muralha_phases()) == (1.0, 1.0, 1.0)
+    and _muralha_sig.returncode == 0,
+    "" if _muralha_sig.returncode == 0 else _muralha_sig.stderr.decode()[-90:])
 chk(73, "Olho-Sismico", 'olho_sismico' in rounds.BOSS_POOL
     and species.SPECIES['olho_sismico']['genome'].plan == 'orbital')
 chk(72, "probe_display + __all__", not hasattr(lagarto, '__all__')

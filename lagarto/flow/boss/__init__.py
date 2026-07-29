@@ -31,7 +31,7 @@ from .patterns import (
     primordial_phases, beetle_phases, spider_king_phases, crystal_phases,
     wasp_phases, default_phases,
     eye_phases, eye_on_phase, eye_setup, eye_blink_tick,
-    muralha_phases, ankh_phases,
+    muralha_phases, muralha_on_phase, ankh_phases,
 )
 from .personality import (
     BossPersonality, default_personality,
@@ -40,4 +40,8 @@ from .personality import (
     crystal_personality, wasp_personality, eye_personality, wall_personality,
     ankh_personality,
 )
-from .moves import MOVES, move_orbit, move_strafe, move_retreat, move_hover, move_reposition
+from .moves import (
+    MOVES,
+    move_orbit, move_strafe, move_retreat, move_hover, move_reposition,
+    move_erratic_step, move_trap_and_shift,
+)

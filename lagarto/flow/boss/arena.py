@@ -71,13 +71,20 @@ class BossArena:
     A boss with no arena modifiers (the default for the 8 existing bosses
     as of issue #26) fights in the standard world. A boss WITH modifiers
     gets a tighter, more authored fight -- the shared infrastructure
-    applies whatever the descriptor specifies, so each boss only fills
-    in the modifiers it needs.
+    applies whatever the descriptor specifies, so each boss only fills in
+    the modifiers it needs.
+
+    Issue #121: a fight can also change its modifiers MID-fight via
+    ``phase_sizes`` -- a sequence of (w, h) entries parallel to the boss's
+    ``phases`` list. A Muralha uses this to NARROW its corridor each phase
+    (900x640 -> 800x540 -> 700x440), so the player's space shrinks
+    while the boss itself stays planted. ``apply`` resolves which entry
+    wins for the call (default = phase 0, the spawn size).
     """
 
-    __slots__ = ('size', 'tint')
+    __slots__ = ('size', 'tint', 'phase_sizes')
 
-    def __init__(self, size=None, tint=None):
+    def __init__(self, size=None, tint=None, phase_sizes=None):
         # (width, height) of the play box, CENTERED ON THE BOSS. None = the
         # full world. Centering is the whole point: a box anchored to the
         # world's origin instead just shaves the far corners off a 3200x3200
@@ -87,18 +94,40 @@ class BossArena:
         # (color, alpha) screen tint applied each frame; None = no tint.
         # Color is an (r, g, b) tuple; alpha is 0..255.
         self.tint = tint
+        # Per-phase sizes (issue #121). Parallel to the boss's
+        # ``BOSS_POOL[bid]`` ``phases`` list. Entry [i] wins during phase i;
+        # None entries fall back to ``size`` so a single shrink can leave
+        # some phases untouched. ``apply`` defaults to phase 0 and is
+        # called again at every phase transition by the per-boss
+        # ``on_phase`` callback.
+        self.phase_sizes = phase_sizes
 
-    def apply(self, game, boss_pos):
+    def apply(self, game, boss_pos, phase_i=0):
         """Apply this arena's modifiers to the game state.
 
-        Called by ``RoundManager._spawn_boss`` after the boss is placed.
-        Stores the active arena on the game so ``Lizard.integrate`` and
-        ``Game.draw`` can read it.
+        Called by ``RoundManager._spawn_boss`` after the boss is placed
+        (``phase_i=0``), and by the per-boss ``on_phase`` callback at every
+        HP threshold with the new phase index. Stores the active arena on
+        the game so ``Lizard.integrate`` and ``Game.draw`` can read it.
+
+        A shrink mid-fight does NOT teleport the player out of bounds:
+        ``Lizard.integrate`` already clamps against ``game.arena_bounds``
+        on the next step, so a player standing at the old edge gets pushed
+        inward by the integration frame. The shrink itself is the cue the
+        player feels as "the corridor closes".
         """
         game.arena = self
-        if not self.size:
+        # Resolve the active size for this phase (issue #121):
+        # phase_sizes[phase_i] wins; a None entry falls back to size.
+        resolved = self.size
+        if self.phase_sizes is not None:
+            if phase_i < len(self.phase_sizes):
+                ps = self.phase_sizes[phase_i]
+                if ps:
+                    resolved = ps
+        if not resolved:
             return
-        w, h = self.size
+        w, h = resolved
         # Centre the box on the boss, then push it back inside the world so a
         # boss spawned near an edge still gets its full arena instead of a
         # clipped sliver. Stored as (min_x, min_y, max_x, max_y).
@@ -182,12 +211,19 @@ OLHO_SISMICO_ARENA = BossArena(
     tint=((90, 200, 230), 28),
 )
 
-# A Muralha (issue #74): orange-red tint (the gate is hot) and the tightest
-# box in the game -- a wide, short corridor. The wall occupies one side and
-# there is nowhere to run to, which is the whole fight.
+# A Muralha (issues #74 / #121): orange-red tint (the gate is hot) and the
+# tightest box in the game -- a wide, short corridor. The wall occupies
+# one side and there is nowhere to run to, which is the whole fight.
+# Phase sizes (issue #121): the corridor NARROWS each threshold. Phase 1
+# fights in the 900x640 corridor; phase 2 shrinks to 800x540 (the player
+# has less room to flank the hand_slam); phase 3 to 700x440 (the wall is
+# closing in). The boss doesn't move (plan='fixed'), so the anchor rule
+# from #118 is trivially satisfied -- the box just gets smaller around
+# the same point.
 A_MURALHA_ARENA = BossArena(
     size=(900, 640),
     tint=((220, 80, 40), 32),
+    phase_sizes=((900, 640), (800, 540), (700, 440)),
 )
 
 # ANKH (issue #75): golden tint (the eternal is golden), no bounds shrink

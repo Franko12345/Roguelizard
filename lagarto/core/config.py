@@ -540,11 +540,18 @@ BOSS_APPROACH_SPEED = 0.55  # fracao da velocidade normal enquanto se aproxima
 # "telegraph" stays at >= 0.45s of windup, before any mood multiplier. The
 # clamp lives in BossAI; the rule is documented in enemy-behaviors.md.
 BOSS_WINDUP_FLOOR = 0.45
-BOSS_RADIAL_WINDUP = 0.85   # >27 frames
+# Issue #123: Rei Lagarto's windups sit at the top of the pool -- the
+# longest of the five signatures, the boss where the player learns that
+# a telegraph language exists. These constants are shared with other
+# bosses (Kraken, Beetle, Crystal, Wasp, ANKH also use fan/shockwave/
+# radial) so the bump raises the floor for everyone -- the other four
+# signatures (#121, #122, #124, #125) keep their tighter cadences
+# through ``cd_mul`` and per-pattern overrides.
+BOSS_RADIAL_WINDUP = 1.1
 BOSS_RADIAL_COUNT = 10
 BOSS_RADIAL_SPEED = 230
 BOSS_RADIAL_DMG = 17
-BOSS_FAN_WINDUP = 0.8
+BOSS_FAN_WINDUP = 1.1
 BOSS_FAN_COUNT = 5
 BOSS_FAN_SPREAD = 46         # graus, ponta a ponta
 BOSS_FAN_SPEED = 260
@@ -584,10 +591,15 @@ BOSS_FRUSTRATION_SEC = 5.0   # sem acertar por tanto tempo -> mood 'frustrated'
 # leaves the windup at 0.455s -- the 27-frame rule applies to charge too,
 # not just ranged attacks. The dash itself is the danger; the windup is
 # the only window to react.
-BOSS_CHARGE_WINDUP = 0.7
+# Issue #123: bumped 0.7 -> 1.1 -- Rei's charge windup is part of the
+# "longest telegraph" signature. The dash still kills at contact, the
+# player just gets a longer read.
+BOSS_CHARGE_WINDUP = 1.1
 BOSS_CHARGE_TIME = 0.65      # duracao da investida em si
 BOSS_CHARGE_SPEED_MULT = 2.0 # fracao de max_speed durante a investida
-BOSS_SHOCKWAVE_WINDUP = 0.7
+# Issue #123: bumped 0.7 -> 1.1 -- Rei's shockwave is the longest ring
+# telegraph of the pool. See the docstring in patterns.king_phases.
+BOSS_SHOCKWAVE_WINDUP = 1.1
 BOSS_SHOCKWAVE_RADIUS = 210
 BOSS_SHOCKWAVE_DMG = 19
 BOSS_SPIRAL_WINDUP = 0.7
