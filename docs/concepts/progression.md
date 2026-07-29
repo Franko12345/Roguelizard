@@ -29,6 +29,12 @@ comes back as the default silently.
 `~/.lagarto/save.json`. Corrupt file → tolerant load, defaults, keep
 running. Never wipe. See `progression.py`.
 
+## Visible run level
+
+Run level has a permanent representation in the [anatomical HUD](./hud-anatomy.md).
+Brain size and folds only grow as level rises; XP fluid fills within each level
+and drains when the next level begins.
+
 ## Related
 
 - [Character](./character.md) — locked characters + achievement path.
