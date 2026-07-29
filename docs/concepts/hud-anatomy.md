@@ -54,6 +54,9 @@ the way the menu and level-up screens draw their frames.
 
 Every HUD element obeys the same four beats as the body:
 
+
+Every HUD element obeys the same four beats as the body:
+
 - **Intent** — the readout is *meant* to change. The bio bar's leading
   edge has a meniscus because the player reads "fluid under pressure",
   not "filling up a rectangle".
@@ -122,6 +125,76 @@ HUD_BLOCK_GAP`.
 
 The HP number rides the header band, centred, because the sac row is
 centred in the capsule width — a corner label collided with it.
+
+## O que o topo e
+
+The metaphor covers the **rodape** (the corpus, the body) and runs out of
+room at the top. The `TopStack` is a separate visual language, and
+**that is the decision**, not a gap. Section written in #134, ratified
+here.
+
+### Two languages, declared
+
+| column | metaphor | what lives there | rhythm |
+|---|---|---|---|
+| rodape (P1 left, P2 right) | **lingua do corpo** | your vitais + your cooldowns | organ + capsule, two frequencies |
+| topo (centre column) | **lingua do mundo** | the run, the wave, the threats, the allies | mono — typography, clean bands, status |
+
+The split is **deliberate**, not accidental. The rodape earns the
+anatomy because every organ there is something you *are* — your
+tissue, your air, your breath, your gland. The top is something you
+*are in* — the run's score, the wave's progress, the boss's name,
+the friends' count. Anatomy on the top fails the decision rule:
+"what organ is the score?" has no honest answer, and forcing one
+produces the arbitrary symbol the rodape metaphor was written to
+avoid.
+
+### The six inquilinos, one by one
+
+| element | decision | reason |
+|---|---|---|
+| score | stays as-is | numeric telemetry of the run; nothing anatomizes without invention |
+| linha de onda | stays as-is | same — the run's position, not yours |
+| combo | stays in top, gets a pulse | the only momentary combat state, but it's **the run's** state, not the body's |
+| banner de tema | stays as-is | transient announcement, not a readout |
+| nome do chefe | stays as-is | identifier, not a value |
+| barra do chefe | keeps the ramp | anatomy, but not YOUR anatomy — see [health-hud](./health-hud.md) |
+
+A "stays as-is" is a real decision. If it isn't written, the next
+contributor sees a top that looks like the old rodape and "fixes" it
+with an organ the metaphor doesn't actually cover.
+
+### Combo, the only candidate to move
+
+Combo is the only element that answers "what changed inside the
+fight, just now?" — the closest the top has to an organ. The
+argument for moving it down is honest: it would slot next to the
+body, and the limb that just killed sits inside the body that
+gained the kill.
+
+The argument against: combo is **the run's** kill-streak, not the
+body's. Pulling it into the capsule breaks the rule that the
+capsule holds what you are. The run isn't you; the run is the
+world you're inside.
+
+**Decision:** combo stays in `TopStack`, but the **pulse** it gets
+is louder than the other elements when it ticks — a brief
+amplitude bump on the score line so the eye catches the moment
+the streak grew. The bump is small enough to read as "the run
+moved" not "the body moved". See #135.
+
+### Friends count and the world grammar
+
+The friends counter is "**Amigos N**" today, with **torreta**
+counting as a friend since the build in #111. The number reads
+honest: one friend, two friends, three friends. The HUD shows
+the number, not the meaning.
+
+If the lingua do mundo ever gets grammar, **this counter is the
+first client** — it has the strongest claim to "what does this
+number mean?" because the answer is a body, not a run. Until
+then, the counter stays raw and the next contributor sees the
+unfinished sentence. See #135.
 
 ## Active item, weapons, item corner
 
@@ -211,3 +284,5 @@ confirm both halves of the spring and the bottom anchor are checked.
   read.
 - [ADR-0015](../adr/0015-hud-anatomy.md) — the rule and why it is
   hard to reverse.
+- [ADR-0016](../adr/0016-topo-e-mundo.md) — the rodape/topo split
+  between the lingua do corpo and the lingua do mundo.
