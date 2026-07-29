@@ -48,6 +48,7 @@ introduces a new concept, add it to `CONTEXT.md` in the same commit.
 | [0013](./0013-two-dodge-verbs.md) | Two dodge verbs (Investida + Rolamento), both invulnerable | Two invulnerability buttons looks redundant; the asymmetry is what lets bullet density rise, and the pad's last free input is spent on it |
 | [0014](./0014-bullet-colour-encodes-side.md) | A bullet's colour encodes the side, not the creature | Partially overrides ADR-0001; someone will ask why a shot ignores its owner's hue, and the body sprite cache depends on the answer |
 | [0015](./0015-hud-anatomy.md) | HUD reads as anatomy: capsule framing, organ rhythm, four beats | The metaphor turns "where does this go?" into "what organ is this?" — without it, future HUD additions land by taste |
+| [0016](./0016-topo-e-mundo.md) | The top of the HUD is the lingua do mundo, not the lingua do corpo | Forces the rodape/topo split to be a written decision — without it, the top looks like the old rodape and someone "fixes" it with an organ the metaphor does not cover |
 
 ## Adding a new ADR
 
