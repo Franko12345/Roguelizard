@@ -89,3 +89,8 @@ screen.
 - [Combat](./combat.md) — where hit-stop is called, and the tongue's beats.
 - [Boss](./boss.md) — the 0.22 s freeze on boss death.
 - [Icons & audio](./icons-audio.md) — the adaptive stem mix.
+- [Lighting](./lighting.md) — every `fx.burst` and `fx.spark_burst` also
+  registers a [Fonte de luz][1] that the ambient layer ages out. The layer is
+  what makes the print's "explosion paints the room" beat land at night.
+
+[1]: ../CONTEXT.md#feel

@@ -127,6 +127,13 @@ with `set_alpha` (blit faster than per-pixel alpha). Used by `ui.Fade`,
 Allocating `Surface(SRCALPHA)` every frame cost ~6 ms **and** produced
 garbage.
 
+The [ambient lighting layer](./lighting.md) reuses the same pattern:
+`LightingLayer._ensure_surf` allocates one plain (non-SRCALPHA) surface per
+Game and reuses it. The ceiling is 1.5 ms -- `fill` + N additive blits + 1
+multiplicative blit of 1120x720 -- and `tools/check_lighting.py` enforces it
+under a steady-state load. If it busts, halve the layer resolution and
+`smoothscale` up on the blit; borrows the soft edge anyway.
+
 ## Text cache
 
 `_TEXT_MAX = 700` with `clear()` on overflow — same pattern. See

@@ -29,6 +29,7 @@ from ..combat import charms as charmlib
 from ..world.pickups import Bug, Fruit, Egg
 from ..render.fx import FX, shadow
 from ..render.camera import Camera
+from ..render.lighting import LightingLayer
 from ..world.terrain import World
 from ..flow.rounds import RoundManager
 from . import hud
@@ -60,6 +61,11 @@ class Game:
         self.cam = Camera()
         self.fx = FX()
         self.world = World()
+        # Issue #110: the day->night darkening layer with additive light pools.
+        # Allocated lazily; one per Game; ``blit_count`` is what tools/check_lighting
+        # uses to assert the layer is actually firing (or, with NIGHT_MAX=0,
+        # that it isn't).
+        self.lighting = LightingLayer()
 
         cx, cy = C.WORLD_W / 2, C.WORLD_H / 2
         self.cam.pos = Vector2(cx, cy)
@@ -229,6 +235,21 @@ class Game:
         for p in self.players:
             if not p.dead and not p.down:
                 p.gain_xp(amount, self)
+
+    def dark_level(self):
+        """The run's [0..1] day->night scalar used by the ambient layer.
+
+        Wave 1 = full day (0), wave ``C.RUN_FINAL_WAVE`` = full night (1).
+        ``C.NIGHT_MAX`` is the master knob: 0 disables the layer entirely,
+        any positive value scales the dark so the designer can dial it down
+        without re-rendering the lighting code. Endless mode caps at the
+        wave-20 ceiling -- the screen never goes fully black.
+        """
+        if C.NIGHT_MAX <= 0:
+            return 0.0
+        w = max(1, min(self.wave, C.RUN_FINAL_WAVE))
+        raw = (w - 1) / max(1, C.RUN_FINAL_WAVE - 1)
+        return min(1.0, raw) * C.NIGHT_MAX
 
     def _enter_levelup(self, player):
         self.levelup_player = player
@@ -729,13 +750,30 @@ class Game:
     def draw(self, surf):
         self._draw_bg(surf)
         self.world.draw_decor(surf, self.cam)
-        for pud in self.puddles:                    # acid pools sit on the ground
-            if self.cam.visible(pud.pos, 60):
+        # Issue #110: friend puddles stay on the ground (they hurt enemies, not
+        # the player, so the darkening layer is allowed to swallow them);
+        # hostile puddles move up after the lighting pass -- they are danger
+        # and must read bright against the dark.
+        for pud in self.puddles:
+            if not pud.hostile and self.cam.visible(pud.pos, 60):
                 pud.draw(surf, self.cam)
         self.rounds.draw_world(surf, self.cam)
         if self.state == 'camp' and self.camp:
             # tent + doors, in world space: part of the world pass, not the overlay
             state_camp._draw_camp_pois(self, surf)
+        # The ambient lighting layer (issue #110). Sits between the world pass
+        # and the danger pass; everything drawn AFTER this is untouched. No-op
+        # on day frames (NIGHT_MAX == 0 or wave 1) so the headless checks are
+        # pixel-identical to today.
+        self.lighting.draw(surf, self.cam, self.dark_level(),
+                           self.world.static_lights, self.players,
+                           self.fx.emissions, C.DT)
+        # Hostile puddles: drawn AFTER the layer so their damage footprint
+        # stays bright. The friend-puddle split above keeps Acido / Trail on
+        # the ground where they belong.
+        for pud in self.puddles:
+            if pud.hostile and self.cam.visible(pud.pos, 60):
+                pud.draw(surf, self.cam)
         for group in (self.pickups, self.prey, self.friends, self.enemies, self.players):
             for e in group:
                 if getattr(e, 'dead', False):
