@@ -104,6 +104,13 @@ _Avoid_: wave, sine, wobbler.
 
 ### Combat
 
+**Health Sac**:
+The fixed 25-HP unit in the player's health row. Its shell stays visible when
+empty, so the row shows maximum health; arbitrary health fills the last sac
+fractionally. Eight fit per row and rows stop at two. See
+[Health HUD](docs/concepts/health-hud.md).
+_Avoid_: health segment, heart, pip.
+
 **Weapon**:
 An automatic attack the player owns at a level (`Player.weapons[id] = level`).
 Each ticks every frame; there are 9 weapons and a cap of 6 equipped. Cards
