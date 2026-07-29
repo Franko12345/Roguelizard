@@ -403,9 +403,18 @@ class BossAI:
             return self._move(target, game)
 
         if self.state == 'burrowing':
-            # delegates every frame to the regular centipede's OWN dig/erupt
-            # state machine (creatures.ai.burrow) -- one full surface->dig->
-            # under->erupt cycle, then back to the normal pattern rotation
+            # Issue #124: burrow IS the locomotion. Per the precedence from #118,
+            # burrow vetoes the movement trail -- its state machine owns the
+            # motion. The full surface -> dig -> under -> erupt -> surface
+            # cycle is one continuous beat of the boss's body, and the
+            # position updates every frame (the under segment travels to
+            # ``dive_to`` at the body's speed; the surface segment walks
+            # toward the target). What burrow adds on top of movement is the
+            # recognition that the under segment is the BODY MOVING THROUGH
+            # THE DIRT, not "standing still underground" -- and it is also
+            # the invulnerability window (``hit_test`` returns ``None`` while
+            # ``burrowed``), emergent from movement, not authored. No new
+            # window; the existing one is paid for with locomotion.
             d, speed = burrow_ai.burrow_tick(b, game, dt, target)
             if b.burrow_state == 'under':
                 self._burrow_seen_under = True
