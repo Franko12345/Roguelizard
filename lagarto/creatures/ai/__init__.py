@@ -19,6 +19,7 @@ from ...core import palette
 from ...render import ui
 from ...core.mathutil import clamp, safe_norm, vfrom_angle, decay, pulse, random_dir
 from ..base import Lizard, TAIL_SPRING_STIFFNESS
+from ...world import puddles
 from . import burrow, chase, fly, grapple, posing, ranged
 
 # Personality via animation (plans/01 #11): a boss's mood (already computed by
@@ -571,6 +572,9 @@ class AILizard(Lizard):
         game.fx.burst(self.pos, self.color, 10, 180)
         game.fx.spark_burst(self.pos, C.COL_FX_SPARK, 9, 300)
         self.hp -= dmg
+        # Issue #135: bleed on every successful hit. Darkened species colour
+        # so a green/yellow enemy leaves greenish ichor, not red paint.
+        game.world.add_puddle(self.pos, dmg, puddles.darken_species_color(self.color))
         if self.hp <= 0:
             self.die(game)
 
@@ -589,6 +593,11 @@ class AILizard(Lizard):
         game.fx.burst(self.pos, self.color, 22, 240)
         game.fx.spark_burst(self.pos, palette.lighten(self.color, 0.4), 18, 380)
         game.fx.ring(self.pos, self.color)
+        # Issue #135: death splatter -- two small puddles offset from the body,
+        # so the kill leaves a visible mark, not just one disc.
+        blood = puddles.darken_species_color(self.color)
+        game.world.add_puddle(self.pos + Vector2(8, -4), 6, blood)
+        game.world.add_puddle(self.pos + Vector2(-6, 6), 6, blood)
         if self.kind == 'enemy':
             game.add_combo()
             game.add_score(self.score_value)
