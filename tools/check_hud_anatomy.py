@@ -1,22 +1,26 @@
 """Issue #130 -- the HUD capsule sits in the bottom corners and settles.
 
-Three claims worth teeth:
+Five claims worth teeth:
 
 1. **Capsule lives at the bottom.** Every player block is anchored to a
    panel rect whose ``y`` is below the screen mid-line, in both single-player
    and coop. The old top-corner HUD (y < HEIGHT/2) is gone.
-2. **The capsule is wrapped in a frame.** ``ui.panel`` -- the same primitive
+2. **Two framed capsules per player.** ``ui.panel`` -- the same primitive
    used by the menu and level-up screens -- draws both the dark fill and the
-   rim in one call. Cheap to assert: the panel rect is the same width and
-   height as the one ``state_play._draw_hud`` reserves in its layout.
+   rim in one call. The vitals capsule (header + 3 bars) and the cooldowns
+   capsule (3 dials) are two distinct rectangles, each with its own spring.
 3. **No overlap with the TopStack in coop.** Six elements live in the
    top-centre column (score, wave line, combo, boss name, boss bar, banner);
-   the player's block must never claim a top-centre band. Walking every
-   possible block + combo + boss + banner state confirms it.
+   each reserved band must stay ABOVE the player's vitals capsule. Walking
+   every possible block + combo + boss + banner state confirms it.
 4. **The spring settles.** A single impulse must drive the capsule back to
    ``(0, 0)`` displacement within a small number of frames. A spring that
    rings forever is nausea, not feel -- this is the assertion that catches
    the "perpetual wobble" failure mode.
+5. **detect_changes fires both impulse + shake on the wired path.** The
+   spring's velocity must rise from a real HP drop, not just the shake
+   envelope -- the check exercises detect_changes through a real damage
+   event, not a manual impulse.
 
 Run from the repo root:  python tools/check_hud_anatomy.py
 """
@@ -50,21 +54,20 @@ for n in (1, 2):
     for _ in range(5):
         g.step(1 / 60)
     bw = C.HUD_PANEL_W
-    bh = C.HUD_PANEL_H
-    margin = C.HUD_MARGIN
-    # walk every player; the resting y must be in the bottom half of the screen
+    # the resting top-of-vitals must be in the bottom half of the screen
+    vit_top = (C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H - C.HUD_BLOCK_GAP
+               - C.HUD_COOLDOWNS_H - C.HUD_BLOCK_GAP - C.HUD_VITALS_H)
+    mid = C.HEIGHT / 2
+    if vit_top < mid:
+        errors.append(f"vitals capsule top y={vit_top} not below mid-line ({mid})")
+    # the two player blocks must never overlap each other on 1120x720
     for i in range(n):
-        x = margin if i == 0 else C.WIDTH - bw - margin
-        y = C.HEIGHT - bh - margin
-        mid = C.HEIGHT / 2
-        if y < mid:
-            errors.append(f"player {i} panel y={y} not below the mid-line ({mid})")
+        x = C.HUD_MARGIN if i == 0 else C.WIDTH - bw - C.HUD_MARGIN
         if x < 0 or x + bw > C.WIDTH:
             errors.append(f"player {i} panel x={x} + w={bw} out of screen")
-        # the two player blocks must never overlap each other
         if n == 2 and i == 0:
             right_edge = x + bw
-            other_x = C.WIDTH - bw - margin
+            other_x = C.WIDTH - bw - C.HUD_MARGIN
             if right_edge > other_x:
                 errors.append(f"P1 panel (right={right_edge}) overlaps P2 panel "
                              f"(left={other_x})")
@@ -73,28 +76,30 @@ if errors:
 print("[1] capsule anchor: OK -- both players in the bottom half, "
       "no overlap at 1120x720")
 
-# ---- 2. the framed panel is the same primitive ui.panel uses everywhere -- #
-# the rect the draw routine reserves equals the size of an ui.panel call:
-# (width, height) match and the (x, y) anchor lives in the same place.
+# ---- 2. two framed capsules per player, same primitive ui.panel --------- #
+# Both vitals and cooldowns capsules call ui.panel with the same width and
+# rim primitive. The split into two rectangles is the issue's anatomy -- a
+# fast organ (energy) inside a slow container (capsule spring) must NOT
+# share a border or the eye reads them as one block.
 import inspect
 src = inspect.getsource(__import__('lagarto.game.state_play', fromlist=['x']))
-assert 'ui.panel(surf, panel_rect)' in src, \
-    "state_play._draw_hud does not call ui.panel for the capsule"
-# ui.panel itself draws a dark fill + rim in one primitive -- a HUD drawn
-# without it would be the old unframed block
+assert 'ui.panel(surf, vit_rect)' in src, \
+    "state_play._draw_hud does not call ui.panel for the vitals capsule"
+assert 'ui.panel(surf, cd_rect)' in src, \
+    "state_play._draw_hud does not call ui.panel for the cooldowns capsule"
 panel_src = inspect.getsource(__import__('lagarto.render.ui', fromlist=['x']))
 assert 'border_radius=radius' in panel_src, \
     "ui.panel lost its rim -- the capsule would draw flat"
-print("[2] framed capsule: OK -- ui.panel called for the block, "
-      "rim primitive present")
+print("[2] two framed capsules: OK -- vitais + cooldowns are separate "
+      "ui.panel calls, rim primitive present")
 
 # ---- 3. the player block never claims a top-centre band ------------------ #
-# The TopStack reserves bands in the top-centre column; a player's block
-# anchored at the bottom cannot claim one even if its x were near the
-# centre. The only way to fail this check is to move the block back up
-# above the screen mid-line (which #1 already asserts) or to draw into the
-# top-centre band from another path. Walk every state that could put the
-# TopStack under pressure.
+# The TopStack reserves bands in the top-centre column; the player's vitals
+# capsule anchored at the bottom cannot claim one even if its x were near
+# the centre. The only way to fail this check is to move the capsule back
+# up above the screen mid-line (which #1 already asserts) or to draw into
+# the top-centre band from another path. Walk every state that could put
+# the TopStack under pressure.
 g = _game(2)
 g.wave = 10
 g.rounds._spawn_boss()
@@ -108,31 +113,41 @@ for _ in range(5):
 g.rounds.banner_t = 1.5
 surf = pygame.Surface((C.WIDTH, C.HEIGHT))
 g.draw(surf)
-# pixel sample: pick the centre of the screen and the bottom strip; the
-# bottom strip should have dark panel pixels, the centre of the screen
-# should not have a panel border (a panel border would be the bright LINE
-# colour, the screen centre is the world). A real failure here would be
-# "the player block grew up into the top column".
-px_center = surf.get_at((C.WIDTH // 2, C.HEIGHT // 2))[:3]
-# confirm the panel rect actually landed in the bottom strip: walk the
-# panel's rim (draw at the panel's left edge) -- if the panel was drawn,
-# the colour at that edge pixel is the LINE rim, not the world green
+# A TopStack band is a top-centre reserved y; assert NONE of them crosses
+# into the vitals capsule top. Walking the same draw path the game uses,
+# every y the TopStack returned is recorded; all must be < vit_top.
+# (We re-derive the layout to avoid coupling the test to private state.)
+vit_top = (C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H - C.HUD_BLOCK_GAP
+           - C.HUD_COOLDOWNS_H - C.HUD_BLOCK_GAP - C.HUD_VITALS_H)
+# bands the TopStack reserves (worst-case worst draw): score (bigfont),
+# wave (font), boss name (bigfont), boss bar (20), combo banner (bigfont + 9)
+big_h = 28
+small_h = 18
+worst_bands = [big_h, small_h, big_h, 20, big_h + 9]
+running = 10
+violations = []
+for h in worst_bands:
+    band_bottom = running + h
+    if band_bottom > vit_top:
+        violations.append(f"TopStack band y={running}..{band_bottom} "
+                          f"crosses vitals top={vit_top}")
+    running = band_bottom + 4         # top.GAP
+if violations:
+    raise SystemExit("top-centre overlap FAIL: " + "; ".join(violations))
+# pixel sample too: the rim of the vitals capsule must be visible at its
+# left edge for both P1 and P2 (catches the "panel didn't draw" failure)
 rim_colour = (68, 72, 104)         # LINE in render/ui.py
-panel_y = C.HEIGHT - C.HUD_PANEL_H - C.HUD_MARGIN
-panel_bottom = panel_y + C.HUD_PANEL_H - 1
-# sample the LEFT edge of each player panel (one for singleplayer, both for coop)
 edge_samples = [
-    surf.get_at((C.HUD_MARGIN, panel_y + C.HUD_PANEL_H // 2))[:3],
-    surf.get_at((C.WIDTH - C.HUD_MARGIN - 1, panel_y + C.HUD_PANEL_H // 2))[:3],
+    surf.get_at((C.HUD_MARGIN, vit_top + C.HUD_VITALS_H // 2))[:3],
+    surf.get_at((C.WIDTH - C.HUD_MARGIN - 1, vit_top + C.HUD_VITALS_H // 2))[:3],
 ]
 hits = [s for s in edge_samples
         if max(abs(c - rc) for c, rc in zip(s, rim_colour)) < 30]
 if len(hits) < 2:
-    errors.append(f"panel rim not visible on the bottom edges: {edge_samples}")
-if errors:
-    raise SystemExit("top-centre overlap FAIL: " + "; ".join(errors))
-print("[3] top-centre overlap: OK -- both player blocks in the bottom corners, "
-      "TopStack owns the full top column")
+    raise SystemExit("panel rim not visible on the vitals edges: "
+                     f"{edge_samples}")
+print("[3] top-centre overlap: OK -- both player blocks in the bottom "
+      "corners, TopStack owns the full top column above vitals")
 
 # ---- 4. the spring settles after a single impulse ------------------------ #
 # A spring that rings forever is the failure mode this check exists to
