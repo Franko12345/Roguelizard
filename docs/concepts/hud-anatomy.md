@@ -185,7 +185,7 @@ world you're inside.
 is louder than the other elements when it ticks — a brief
 amplitude bump on the score line so the eye catches the moment
 the streak grew. The bump is small enough to read as "the run
-moved" not "the body moved". See #135.
+moved" not "the body moved". See #153.
 
 ### Friends count and the world grammar
 
@@ -198,7 +198,7 @@ If the lingua do mundo ever gets grammar, **this counter is the
 first client** — it has the strongest claim to "what does this
 number mean?" because the answer is a body, not a run. Until
 then, the counter stays raw and the next contributor sees the
-unfinished sentence. See #135.
+unfinished sentence. See #152.
 
 ## Active item, weapons, item corner
 

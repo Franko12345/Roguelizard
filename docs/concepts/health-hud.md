@@ -61,8 +61,9 @@ does not become silent drift:
   less HP than full" surface in the game — boss included.
 - **If the top ever gets grammar, the boss bar is the first to be
   reconsidered.** The ramp is a lingua do mundo element; if that
-  language earns metaphor (see #135), the boss bar gets re-evaluated
-  then, not before.
+  language earns metaphor (see #152, the friends count follow-up
+  that opens the work), the boss bar gets re-evaluated then, not
+  before.
 
 ## Friends
 
