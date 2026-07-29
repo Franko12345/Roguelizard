@@ -96,6 +96,7 @@ def update(game, dt):
         if game.combo_timer <= 0:
             game.combo = 0
     game.combo_flash = decay(game.combo_flash, dt, 2)
+    game.score_pulse = decay(game.score_pulse, dt, 3.5)
     game._revive()
 
     if game.pending_enemies:        # children queued during this step's deaths
@@ -329,8 +330,12 @@ def _draw_hud(game, surf):
 
     # ---- top-centre column: every element reserves its own band ---- #
     cx = C.WIDTH // 2
-    y = game.top.take(game.bigfont.get_height())
-    ui.text(surf, game.bigfont, str(game.score), (cx, y), C.COL_HUD, align='center')
+    img = ui.text_surface(game.bigfont, str(game.score), C.COL_HUD)
+    if game.score_pulse > 0.01:                 # #153: line-of-score pulse on kill
+        img = img.copy()
+        img.set_alpha(int(255 * (0.55 + 0.45 * game.score_pulse)))
+    y = game.top.take(img.get_height())
+    surf.blit(img, (cx - img.get_width() // 2, y))
 
     y = game.top.take(game.font.get_height())
     ui.text(surf, game.font,
