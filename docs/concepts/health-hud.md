@@ -8,7 +8,10 @@ Bar on the HUD with the `palette.health_color` ramp (green → yellow →
 red). Mixing two stops turns the middle into muddy olive — the ramp has
 **three** stops for that reason.
 
-Alongside: energy bar and XP bar.
+Alongside: energy bar and XP bar. The three sit inside the player
+**capsule** ([HUD anatomy](./hud-anatomy.md)) and animate on their own
+faster rhythm; the capsule itself answers damage with a low-frequency
+spring.
 
 ## Enemies
 
@@ -37,4 +40,6 @@ rim / glow with it.
 - [Hitbox](./hitbox.md) — where damage lands.
 - [UI legibility](./ui-legibility.md) — the top-stack that owns the boss
   bar.
+- [HUD anatomy](./hud-anatomy.md) — the capsule that wraps the player bars
+  and the four beats the HUD obeys.
 - [Balance](./balance.md) — the friend lifetime that drives the fade.

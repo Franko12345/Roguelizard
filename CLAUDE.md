@@ -87,10 +87,14 @@ Cada seção aponta pro doc canônico. Se um doc está desatualizado, esse
 - [UI screens](docs/concepts/ui-screens.md) — level-up / camp entry +
   absorção da escolha.
 - [UI legibility](docs/concepts/ui-legibility.md) — texto + TopStack.
-- [Health HUD](docs/concepts/health-hud.md) · [Juice](docs/concepts/juice.md) ·
+- [Health HUD](docs/concepts/health-hud.md) ·
+  [HUD anatomy](docs/concepts/hud-anatomy.md) ·
+  [Juice](docs/concepts/juice.md) ·
   [Icons & audio](docs/concepts/icons-audio.md).
 - [ADR-0003](docs/adr/0003-zero-assets-with-png-fallback.md) — invariante
   zero-assets quebrada de propósito.
+- [ADR-0015](docs/adr/0015-hud-anatomy.md) — capsule + organ + quatro
+  tempos aplicados ao HUD.
 
 ### Input e runtime
 
