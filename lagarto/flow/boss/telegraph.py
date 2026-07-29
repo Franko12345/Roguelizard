@@ -21,8 +21,14 @@ special cases. The ``ai`` arg is the BossAI instance (so telegraphs can
 read ``ai._windup_target`` etc.); the ``blink`` arg is the pulsing
 factor the caller already computes from ``prog``.
 
-Related: [Enemy behaviors](../../docs/concepts/enemy-behaviors.md) -- the
->= 27 frames rule for telegraphs.
+Issue #122 adds two air-anchored kinds for the Wasp's ``dive_arc``
+pattern: ``dive_line`` (the thin curve along the projected trajectory,
+plus the ground shadow at the predicted landing) and ``shadow_circle``
+(a standalone ground shadow primitive -- useful when the air curve is
+not wanted but the ground read is).
+
+Related: [Enemy behaviors](../../docs/concepts/enemy-behaviors.md) --
+the >= 27 frames rule for telegraphs.
 """
 
 import math
@@ -32,6 +38,7 @@ import pygame
 from ...core import config as C
 from ...core import palette
 from ...core.mathutil import safe_norm, vfrom_angle
+from .moves import _dive_arc_point, _dive_exit_pt
 from pygame import Vector2
 
 
@@ -150,17 +157,80 @@ def telegraph_rain(surf, cam, b, ai, prog, col, blink):
                      (0.12 + 0.2 * prog) * (0.5 + 0.5 * blink))
 
 
+def telegraph_dive_line(surf, cam, b, ai, prog, col, blink):
+    """Air-anchored tell for the Wasp's ``dive_arc``: a thin Bezier curve
+    along the projected trajectory, plus a ground shadow at the exit
+    point (the spot the wasp will pop out the OTHER side).
+
+    The curve samples 12 points along the same Bezier
+    ``move_dive_arc`` uses -- so what the player sees is where the wasp
+    is actually going. The shadow stays full-size (the dive lands or it
+    doesn't, and the mark is the danger zone, not a warning that grows).
+    The line itself brightens with ``prog`` and pulses with ``blink``,
+    same idiom the rain / shockwave drawers use.
+    """
+    start = getattr(b, '_dive_start', None)
+    target = game_target(ai)
+    if start is None or target is None:
+        return
+    exit_pt = _dive_exit_pt(start, target)
+    n_samples = 12
+    pts = [_dive_arc_point(start, target, exit_pt, i / (n_samples - 1))
+           for i in range(n_samples)]
+    width = max(1, int((1 + 2 * prog) * cam.zoom))
+    for i in range(len(pts) - 1):
+        pygame.draw.line(surf, col,
+                         cam.w2s(pts[i]), cam.w2s(pts[i + 1]), width)
+    # ground shadow at the exit point -- the wasp pops out there
+    shadow_col = palette.lighten(col, 0.25)
+    sp = cam.w2s(exit_pt)
+    r = int(b.max_r * (1.0 + 0.4 * prog) * cam.zoom)
+    pygame.draw.circle(surf, shadow_col, sp, r,
+                       max(1, int((1 + prog) * cam.zoom)))
+    palette.glow(surf, sp, int(r * 1.4), shadow_col,
+                 (0.14 + 0.2 * prog) * (0.5 + 0.5 * blink))
+
+
+def telegraph_shadow_circle(surf, cam, b, ai, prog, col, blink):
+    """A standalone ground shadow primitive -- useful when the air curve
+    is not wanted but the ground read is (a future pattern that wants
+    only the "this is where it lands" cue, not the trajectory).
+
+    Reads ``ai._windup_target`` for the spot; falls back to the boss's
+    own position when no target is set. ``prog`` brightens + grows the
+    ring (full size from the first frame, same rule as ``rain`` -- a
+    growing mark understates the danger zone).
+    """
+    target = game_target(ai)
+    pos = target if target is not None else b.spine.joints[0]
+    sp = cam.w2s(pos)
+    r = int(b.max_r * (1.0 + 0.5 * prog) * cam.zoom)
+    shadow_col = palette.lighten(col, 0.2)
+    pygame.draw.circle(surf, shadow_col, sp, r,
+                       max(1, int((1 + prog) * cam.zoom)))
+    palette.glow(surf, sp, int(r * 1.4), shadow_col,
+                 (0.12 + 0.18 * prog) * (0.5 + 0.5 * blink))
+
+
+def game_target(ai):
+    """The currently-tracked player for a BossAI in windup. Centralised so
+    the dive/shadow drawers don't have to import the game just to read it."""
+    return getattr(ai, '_windup_target', None)
+
+
 # Registry: kind string -> drawer function. The kind comes from
 # PATTERNS[pattern_id]['telegraph']. None entries (burrow, grapple) are
 # handled by the caller -- they have no on-screen telegraph because the
 # boss's own body draw already shows the windup (the centipede's dig
 # state, the octopus's arms converging).
 TELEGRAPHS = {
-    'radial':    telegraph_radial,
-    'fan':       telegraph_fan,
-    'line':      telegraph_line,
-    'horn':      telegraph_horn,
-    'shockwave': telegraph_shockwave,
-    'spiral':    telegraph_spiral,
-    'rain':      telegraph_rain,
+    'radial':         telegraph_radial,
+    'fan':            telegraph_fan,
+    'line':           telegraph_line,
+    'horn':           telegraph_horn,
+    'shockwave':      telegraph_shockwave,
+    'spiral':         telegraph_spiral,
+    'rain':           telegraph_rain,
+    'dive_line':      telegraph_dive_line,
+    'shadow_circle':  telegraph_shadow_circle,
 }
