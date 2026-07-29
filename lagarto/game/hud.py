@@ -79,6 +79,114 @@ def bio_bar(surf, x, y, w, h, frac, color, t, flagella=0, glow=None):
                      cap, 2, border_radius=r)
 
 
+class Bellows:
+    def __init__(self, fraction=1.0):
+        self.fraction = fraction
+        self.velocity = 0.0
+
+    def update(self, target, dt):
+        target = max(0.0, min(1.0, target))
+        self.velocity += (target - self.fraction) * 110.0 * dt
+        self.velocity *= math.exp(-12.0 * dt)
+        self.fraction += self.velocity * dt
+        self.fraction = max(0.0, min(1.08, self.fraction))
+
+
+def draw_bellows(surf, rect, bellows, color=(96, 206, 240)):
+    x, y, w, h = rect
+    inflation = max(0.0, min(1.0, bellows.fraction))
+    body_h = max(8, int(h * (0.42 + 0.58 * inflation)))
+    top = y + (h - body_h) // 2
+    body = pygame.Rect(x, top, w, body_h)
+    pygame.draw.ellipse(surf, (16, 18, 28), body)
+    inner = body.inflate(-4, -4)
+    if inner.width > 0 and inner.height > 0:
+        pygame.draw.ellipse(surf, palette.darken(color, 0.22), inner)
+    folds = 7
+    for i in range(1, folds):
+        fx = x + int(w * i / folds)
+        inset = int(2 + (1.0 - inflation) * 5)
+        pygame.draw.line(surf, palette.lighten(color, 0.2),
+                         (fx, top + inset), (fx, top + body_h - inset), 1)
+    pygame.draw.ellipse(surf, palette.lighten(color, 0.18), body, 2)
+
+
+class CranialFluid:
+    POINTS = 16
+    STEP = 1.0 / 30.0
+
+    def __init__(self):
+        self.heights = [0.0] * self.POINTS
+        self.velocities = [0.0] * self.POINTS
+        self.accumulator = 0.0
+        self.last_fraction = 0.0
+
+    def impulse(self, strength):
+        mid = self.POINTS // 2
+        self.velocities[mid] += strength
+        self.velocities[mid - 1] += strength * 0.55
+
+    def update(self, fraction, dt):
+        fraction = max(0.0, min(1.0, fraction))
+        delta = fraction - self.last_fraction
+        if abs(delta) > 0.001:
+            self.impulse(delta * 7.0)
+        self.last_fraction = fraction
+        self.accumulator += min(dt, 0.1)
+        while self.accumulator >= self.STEP:
+            accelerations = []
+            for i, height in enumerate(self.heights):
+                left = self.heights[i - 1] if i else height
+                right = self.heights[i + 1] if i + 1 < self.POINTS else height
+                accelerations.append((left + right - 2.0 * height) * 72.0)
+            for i in range(self.POINTS):
+                self.velocities[i] += accelerations[i] * self.STEP
+                self.velocities[i] *= math.exp(-5.5 * self.STEP)
+                self.heights[i] += self.velocities[i] * self.STEP
+            self.accumulator -= self.STEP
+
+    @property
+    def amplitude(self):
+        return max(abs(height) for height in self.heights)
+
+
+def brain_size(level):
+    return min(0.72, 0.42 + 0.045 * math.sqrt(max(0, level - 1)))
+
+
+def brain_folds(level):
+    return max(1, level * 2 - 1)
+
+
+def draw_skull(surf, rect, level, xp_fraction, fluid):
+    x, y, w, h = rect
+    skull = pygame.Rect(x, y, w, h)
+    bone = (210, 204, 176)
+    pygame.draw.ellipse(surf, (18, 20, 30), skull)
+    fluid_y = y + h - 4 - int((h - 8) * max(0.0, min(1.0, xp_fraction)))
+    points = [(x + 3, y + h - 3)]
+    for i, wave in enumerate(fluid.heights):
+        px = x + 3 + (w - 6) * i / (fluid.POINTS - 1)
+        points.append((px, fluid_y + wave * h * 0.18))
+    points.append((x + w - 3, y + h - 3))
+    if xp_fraction > 0:
+        pygame.draw.polygon(surf, (174, 141, 38), points)
+        pygame.draw.lines(surf, (245, 205, 84), False, points[1:-1], 2)
+    size = brain_size(level)
+    bw = int(w * size)
+    bh = int(h * size * 0.68)
+    brain = pygame.Rect(x + (w - bw) // 2, y + 5, bw, bh)
+    pygame.draw.ellipse(surf, (190, 98, 132), brain)
+    folds = brain_folds(level)
+    for i in range(folds):
+        angle = math.pi * (i + 1) / (folds + 1)
+        cx = brain.centerx + int(math.cos(angle) * bw * 0.35)
+        cy = brain.centery + int(math.sin(angle * 2.0) * bh * 0.18)
+        pygame.draw.arc(surf, (112, 51, 82), (cx - 3, cy - 7, 7, 14),
+                        -math.pi / 2, math.pi / 2, 1)
+    pygame.draw.ellipse(surf, bone, skull, 2)
+
+
 def dial(surf, center, r, frac, color, font, label, t, enabled=True):
     """Radial cooldown dial: fills as the ability recharges, pulses when ready.
 
