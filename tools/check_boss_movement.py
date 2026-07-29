@@ -528,6 +528,10 @@ def main():
         test_teeth()
         print("ALL OK (teeth)")
         return
+    if '--shot' in sys.argv:
+        out = sys.argv[sys.argv.index('--shot') + 1]
+        _screenshot(out)
+        return
     print("issue #118: cadence + floor + single windup + no freeze + no coil + arena")
     test_cadence()
     test_telegraph_floor()
@@ -537,6 +541,42 @@ def main():
     test_arena_anchor()
     test_teeth()
     print("ALL OK")
+
+
+def _screenshot(out):
+    """Save a headless screenshot of a boss moving during windup with
+    the telegraph drawn. The dummy SDL driver can't save PNG directly
+    from the display surface, so we blit to a Surface(..., 0, 24) and
+    save BMP -> PNG via the round-trip trick used elsewhere."""
+    g = _fresh()
+    b = _spawn_boss(g, 'rei_lagarto')
+    # pin the boss to ~50% HP so the mood is 'agitated' (verifies a
+    # moving boss actually moves during windup at multiplier < 1.0)
+    b.hp = int(b.max_hp * 0.5)
+    g.cam.pos = Vector2(b.spine.joints[0])
+    g.cam.zoom = 0.7
+    # Force the FSM into windup for the shot -- pick a long windup,
+    # tick it partway, and draw the projected telegraph on top.
+    b.boss_ai.state = 'windup'
+    b.boss_ai.pattern_id = 'shockwave'
+    b.boss_ai.t = C.BOSS_SHOCKWAVE_WINDUP * 0.6
+    b.boss_ai._windup_target = Vector2(g.players[0].pos)
+    surf = pygame.Surface((C.WIDTH, C.HEIGHT), 0, 24)
+    surf.fill((22, 24, 32))
+    b.draw(surf, g.cam)
+    b.boss_ai.draw(surf, g.cam)
+    g.fx.draw(surf, g.cam, fonts.get(16))
+    # marker: aria text
+    bigfont = fonts.get(26)
+    font = fonts.get(16)
+    label = font.render("boss moving during windup -- telegraph at 60% of BOSS_SHOCKWAVE_WINDUP",
+                        True, (240, 240, 246))
+    surf.blit(label, (12, 12))
+    tmp = out + '.bmp'
+    pygame.image.save(surf, tmp)
+    pygame.image.save(pygame.image.load(tmp), out)
+    os.remove(tmp)
+    print(f"  shot: {out}")
 
 
 if __name__ == '__main__':
