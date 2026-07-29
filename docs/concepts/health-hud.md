@@ -38,6 +38,32 @@ and rounds do already).
 No mini-bar; use the **big top-of-screen bar** (`rounds.draw_boss_bar`).
 See [UI legibility](./ui-legibility.md) for the top-stack rules.
 
+The boss bar keeps `palette.health_color` (green → yellow → red, three
+stops). The decision was made in #134 and the reason is written so it
+does not become silent drift:
+
+- **The boss's body is anatomy, but it is not YOUR anatomy.** The ramp
+  reads as "the other body is weakening" — the same signal the player
+  reads on any enemy. If the boss bar became sacs like the player, the
+  eye would say "your body is on the line" — which is true, but only
+  in the abstract sense of "your run is on the line". The bar has to
+  name the other body, not your own.
+- **Two languages of "life" was also a candidate.** The boss bar as
+  sacs would land in the rodape metaphor (and make the bar alone
+  anatomy-based). It would also collide with the player's row: a boss
+  bar next to a player row, both files of sacs, would invite the
+  comparison the rodape is trying to avoid. The two linger on
+  opposite sides of the screen so the eye doesn't pair them.
+- **The rampa stays useful and three-stops is documented.** Two stops
+  become muddy olive, see the original health-hud rationale. The
+  enemy mini-bar (`AILizard._draw_health`) reuses the same ramp, so
+  the visual signal is consistent across every "that creature has
+  less HP than full" surface in the game — boss included.
+- **If the top ever gets grammar, the boss bar is the first to be
+  reconsidered.** The ramp is a lingua do mundo element; if that
+  language earns metaphor (see #135), the boss bar gets re-evaluated
+  then, not before.
+
 ## Friends
 
 Alongside the mini-bar, the **body colour fades** as they weaken
