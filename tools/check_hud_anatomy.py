@@ -170,22 +170,22 @@ p = g.players[0]
 cap = g.hud_capsules[0]
 # first call: only seeds last_*, must not start a shake
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp == 0.0, \
+assert cap.vitals_spring.shake_amp == 0.0, \
     "first frame fired a shake (last_* should have been None)"
 # no-op frame: shake_amp stays 0
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp == 0.0, "no-op frame fired a shake"
+assert cap.vitals_spring.shake_amp == 0.0, "no-op frame fired a shake"
 # damage: shake_amp rises
 p.health = p.max_health - 5
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp > 0.0, "damage did not fire a shake"
-amp_dmg = cap.spring.shake_amp
+assert cap.vitals_spring.shake_amp > 0.0, "damage did not fire a shake"
+amp_dmg = cap.vitals_spring.shake_amp
 # heal: shake_amp rises again (heal is treated like a value change)
-cap.spring.shake_amp = 0.0
+cap.vitals_spring.shake_amp = 0.0
 p.health = p.max_health
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp > 0.0, "heal did not fire a shake"
-amp_heal = cap.spring.shake_amp
+assert cap.vitals_spring.shake_amp > 0.0, "heal did not fire a shake"
+amp_heal = cap.vitals_spring.shake_amp
 # damage should be louder than a value change
 if amp_dmg <= amp_heal:
     raise SystemExit(

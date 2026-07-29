@@ -5,10 +5,22 @@ it can be called from any state module without dragging the state machine in.
 Anything that has to *read* the run (player health, wave, combo) belongs in the
 state module that draws it, not here.
 
-The ``CapsuleSpring`` and ``PlayerCapsule`` types live here too -- they are
-HUD-specific state, owned by the player capsule (the framed panel that holds
-vitals + dials), not by the run. See ``docs/concepts/hud-anatomy.md`` for the
-metaphor and the budget.
+The ``CapsuleSpring`` and ``PlayerCapsule`` types live here too. Why they live
+with the drawing primitives even though they are mutable state:
+
+- A capsule IS a visual element + its tiny local anim state. Splitting the
+  spring into its own module would force every drawing call to thread both
+  shape arguments and a separate animation object, doubling the call sites
+  with no benefit.
+- Only the *drawing primitives* (bio_bar, dial, vignette, draw_offscreen,
+  TopStack) stay pure. The mutable types here are the HUD's own bookkeeping,
+  not game state.
+- The amount of mutable state is one ``CapsuleSpring`` per capsule per
+  player, with no global lookup. The conventional alternative (put it on
+  the Game class) couples the spring's physics to the whole run object and
+  prevents reusing ``CapsuleSpring.update`` from a sandbox or a check.
+
+See ``docs/concepts/hud-anatomy.md`` for the metaphor and the budget.
 """
 
 import math
@@ -406,7 +418,7 @@ class TopStack:
 
 
 class CapsuleSpring:
-    """Low-frequency mass-spring-damper for the player HUD capsule.
+    """Low-frequency mass-spring-damper for one HUD capsule (the framed panel).
 
     The capsule is "massa rigida" in the HUD-anatomy metaphor -- it has its own
     overshoot on entry and its own tremble on damage / value change. The organs
@@ -414,51 +426,109 @@ class CapsuleSpring:
     the player something to read as "the container reacted" without naming which
     organ moved.
 
-    State is a 2D displacement from the resting offset (0, 0). One impulse at
-    a time -- a damage hit AND a value change in the same frame sum into one
-    impulse, capped by ``HUD_SHAKE_HP``. The tremble itself is a separate sine
-    added on top of the spring displacement, gated by ``HUD_SHAKE_DUR``.
+    State is a 2D displacement from the resting offset (0, 0) plus a decaying
+    sinusoidal shake on top (the tremble). The two run at different scales:
+
+    - Spring (mass-spring-damper) is stepped at ``C.HUD_SIM_HZ`` and rendered
+      with linear interpolation between the prev and cur sub-step positions.
+      30 Hz (instead of 60) halves the simulation cost -- the issue calls it
+      out as the first knob. Render still shows a smooth glide because the
+      offset interpolates between sub-steps each render frame.
+    - Shake (sine envelope) runs on the wall clock, ticking every render
+      frame at ``game.time`` so the tremor stays phase-locked to the player.
+      Amplitude is gated by what's currently *visible* (envelope * amp), so a
+      fresh small impulse never inherits the loudness of a prior large one.
     """
 
-    __slots__ = ('x', 'y', 'vx', 'vy', 'shake_t', 'shake_amp')
+    __slots__ = ('x', 'y', 'vx', 'vy', 'prev_x', 'prev_y', '_sim_acc',
+                 'shake_t', 'shake_amp')
 
     def __init__(self):
         self.x = 0.0
         self.y = 0.0
         self.vx = 0.0
         self.vy = 0.0
+        self.prev_x = 0.0
+        self.prev_y = 0.0
+        self._sim_acc = 0.0
         self.shake_t = 0.0
         self.shake_amp = 0.0
 
     def impulse(self, ax, ay):
+        """Add a velocity impulse -- multiple in one frame sum naturally."""
         self.vx += ax
         self.vy += ay
 
     def start_shake(self, amp):
-        """Start (or raise) a decaying sinusoidal shake of peak amplitude ``amp`` px."""
-        self.shake_amp = max(self.shake_amp, amp)
-        self.shake_t = C.HUD_SHAKE_DUR
+        """Add (or upgrade) a decaying sinusoidal shake of peak ``amp`` px.
 
-    def update(self, dt):
-        # Semi-implicit Euler at 60 Hz is stable for k=38, c=9 -- the system is
-        # overdamped (c^2 > 4*k*m with m=1), so no z-plane is needed and the
-        # spring returns to rest without ringing forever.
+        Only upgrades ``shake_amp`` if the new impulse is louder than what's
+        currently *visible* -- the raw amplitude multiplied by the remaining
+        envelope. This is what stops a damage shake from sticking at its
+        loudness across later value-change events.
+        """
+        dur = C.HUD_SHAKE_DUR
+        f = self.shake_t / dur if dur > 0 else 0.0
+        visible = self.shake_amp * f
+        if amp > visible:
+            self.shake_amp = amp
+        self.shake_t = dur
+
+    def update(self, frame_dt):
+        """Advance the spring to the next frame, stepping at 30 Hz internally.
+
+        Frame_dt is the wall-clock frame delta. The accumulator collects it and
+        runs as many fixed 30 Hz sub-steps as fit. ``prev_x/y`` snapshot the
+        position before the latest sub-step so render-time can interpolate.
+        The shake envelope always ticks on every call -- it is not pegged to
+        the sub-step grid because the perceived tremble is render-rate.
+        """
+        if frame_dt <= 0:
+            return
+        step_dt = 1.0 / C.HUD_SIM_HZ
+        self._sim_acc += frame_dt
+        # cap the accumulator at one sub-step: a long pause (hit-stop, drop)
+        # does not double-run the spring -- the slow container is invisible
+        # anyway, and back-filling tears the interpolation.
+        if self._sim_acc > step_dt:
+            self._sim_acc = step_dt
+        while self._sim_acc >= step_dt and step_dt > 0:
+            self.prev_x = self.x
+            self.prev_y = self.y
+            self._step(step_dt)
+            self._sim_acc -= step_dt
+        # The envelope is a render-side signal; it ticks every frame.
+        self.shake_t = decay(self.shake_t, frame_dt)
+
+    def _step(self, dt):
+        # Semi-implicit Euler at 30 Hz is stable for k=38, c=9. The system is
+        # under-damped (c < 2*sqrt(k*m)) -- which is what produces the issue's
+        # "entra com overshoot" on entry, then settles within ~0.7s. A z-plane
+        # eigenvalue check would be over-engineering for a 1-DOF spring.
         ax = -C.HUD_SPRING_K * self.x - C.HUD_SPRING_C * self.vx
         ay = -C.HUD_SPRING_K * self.y - C.HUD_SPRING_C * self.vy
         self.vx += ax * dt
         self.vy += ay * dt
         self.x += self.vx * dt
         self.y += self.vy * dt
-        self.shake_t = decay(self.shake_t, dt)
 
     def settle_error(self):
         """Max of |x| and |y| -- how far the spring is from rest. Used by the
         check to assert the capsule actually settles after an impulse."""
         return max(abs(self.x), abs(self.y))
 
-    def offset(self, t):
-        """(ox, oy) pixel offset to add to the panel's resting rect."""
-        ox, oy = self.x, self.y
+    def render_offset(self, t):
+        """Render-time (ox, oy) offset. Linearly interpolates between the prev
+        and cur 30 Hz sub-step positions so the glide stays smooth when render
+        runs at 60 fps but the spring steps at 30."""
+        step_dt = 1.0 / C.HUD_SIM_HZ
+        if step_dt > 0:
+            alpha = self._sim_acc / step_dt
+            alpha = 0.0 if alpha < 0.0 else (1.0 if alpha > 1.0 else alpha)
+        else:
+            alpha = 1.0
+        ox = self.prev_x + (self.x - self.prev_x) * alpha
+        oy = self.prev_y + (self.y - self.prev_y) * alpha
         if self.shake_t > 0 and self.shake_amp > 0.01:
             # linear decay of the envelope; the sine runs on game.time so the
             # tremor stays phase-locked to the player, not the frame.
@@ -469,57 +539,98 @@ class CapsuleSpring:
 
 
 class PlayerCapsule:
-    """Per-player HUD state: the panel spring plus last-frame vitals.
+    """Per-player HUD state: TWO CapsuleSprings (vitais + cooldowns) plus last-frame vitals.
 
-    ``last`` is what the capsule compares against to detect a value change
-    inside the panel. ``spring`` is the CapsuleSpring for the panel position.
-    Initialised empty -- the state module fills it in on the first frame.
+    Two springs because the issue's anatomy dictates two capsules -- the vitals
+    frame and the cooldowns frame are distinct rectangles and have their own
+    physics. Both still share the last-frame vitals so ``detect_changes`` only
+    compares against the player once.
+
+    Initialised empty -- the state module fills in the first frame. The state
+    module also calls ``entry_overshoot`` once on entry to play so the spring
+    kicks on the first render frame instead of needing to be primed.
     """
 
-    __slots__ = ('spring', 'last_hp', 'last_energy', 'last_xp', 'last_ability')
+    __slots__ = ('vitals_spring', 'cooldowns_spring',
+                 'last_hp', 'last_energy', 'last_xp', 'last_ability')
 
     def __init__(self):
-        self.spring = CapsuleSpring()
+        self.vitals_spring = CapsuleSpring()
+        self.cooldowns_spring = CapsuleSpring()
         self.last_hp = None
         self.last_energy = None
         self.last_xp = None
         self.last_ability = None
 
+    def entry_overshoot(self, player_index, n_players):
+        """Fire the entry impulse on both springs.
+
+        Plays the issue's "Entra com overshoot": a controlled kick when the
+        capsule first appears (run start, levelup/camp -> play transition).
+        Different X impulse per player so the two capsules don't move in
+        unison; cooldowns get a softer kick because they read faster and a
+        loud one would fight the dial pulses.
+        """
+        sign = 1 if player_index == 0 else -1
+        self.vitals_spring.impulse(sign * C.HUD_IMPULSE_ENTRY_X,
+                                   C.HUD_IMPULSE_ENTRY_Y)
+        self.cooldowns_spring.impulse(sign * C.HUD_IMPULSE_ENTRY_X * 0.6,
+                                      C.HUD_IMPULSE_ENTRY_Y * 0.6)
+
 
 def detect_changes(capsule, player):
     """Compare the player's current vitals to the capsule's last frame and fire
-    shakes on the spring when they differ. Returns True if anything moved -- the
-    caller can use this to drive per-organ animations later."""
+    impulses + shakes on both springs when they differ.
+
+    Returns True if anything moved -- the caller can drive per-organ animations
+    off the same flag. A damage hit AND a value change in the same frame sum
+    (impulses stack; shakes upgrade only above the visible envelope -- see
+    CapsuleSpring.start_shake)."""
     anything = False
+    vit = capsule.vitals_spring
+    cd = capsule.cooldowns_spring
+
     last = capsule.last_hp
     if last is not None and player.health < last - 0.5:
-        # damage: stronger tremble, direction taken from the hit normal if the
-        # caller left one on the player; default is straight down
-        capsule.spring.start_shake(C.HUD_SHAKE_HP)
+        # damage: larger impulse -- vitals feels it more, cooldowns a touch so
+        # the second capsule reads as having reacted without dominating.
+        vit.impulse(0.0, C.HUD_IMPULSE_DMG)
+        cd.impulse(0.0, C.HUD_IMPULSE_DMG * 0.4)
+        vit.start_shake(C.HUD_SHAKE_HP)
+        cd.start_shake(C.HUD_SHAKE_HP * 0.5)
         anything = True
     elif last is not None and player.health > last + 0.5:
-        capsule.spring.start_shake(C.HUD_SHAKE_VALUE)
+        vit.impulse(0.0, C.HUD_IMPULSE_VALUE)
+        cd.impulse(0.0, C.HUD_IMPULSE_VALUE * 0.3)
+        vit.start_shake(C.HUD_SHAKE_VALUE)
+        cd.start_shake(C.HUD_SHAKE_VALUE * 0.5)
         anything = True
     capsule.last_hp = player.health
 
     last = capsule.last_energy
     if last is not None and abs(player.energy - last) > 0.6:
-        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        vit.impulse(0.0, C.HUD_IMPULSE_VALUE * 0.7)
+        cd.impulse(0.0, C.HUD_IMPULSE_VALUE * 0.5)
+        vit.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        cd.start_shake(C.HUD_SHAKE_VALUE * 0.4)
         anything = True
     capsule.last_energy = player.energy
 
     last = capsule.last_xp
     if last is not None and player.xp > last + 0.5:
-        capsule.spring.start_shake(C.HUD_SHAKE_VALUE * 0.7)
+        vit.impulse(0.0, C.HUD_IMPULSE_VALUE * 0.4)
+        vit.start_shake(C.HUD_SHAKE_VALUE * 0.4)
         anything = True
     capsule.last_xp = player.xp
 
     last = capsule.last_ability
     if last is not None and (player.ability_charge >= 1.0) != (last >= 1.0):
         # crossing the "ready" threshold is the loudest value change in the
-        # panel -- a different shake amplitude so the player can tell which
-        # organ flipped.
-        capsule.spring.start_shake(C.HUD_SHAKE_HP * 0.6)
+        # cooldowns capsule -- the item sphere is on the same panel as the
+        # dials, so cooldowns feels the hit, vitals gets a quieter copy.
+        cd.impulse(C.HUD_IMPULSE_VALUE * 0.8, C.HUD_IMPULSE_VALUE * 0.8)
+        vit.impulse(0.0, C.HUD_IMPULSE_VALUE * 0.3)
+        cd.start_shake(C.HUD_SHAKE_HP * 0.6)
         anything = True
     capsule.last_ability = player.ability_charge
     return anything

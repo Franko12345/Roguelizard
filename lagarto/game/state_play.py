@@ -131,9 +131,14 @@ def _draw_hud(game, surf):
     """Draw each player's HUD capsule and the shared top-centre column.
 
     Per-player state lives in ``game.hud_capsules[i]`` -- a ``PlayerCapsule``
-    that owns its spring and the last-frame vitals used to fire shakes. The
-    capsule is a framed panel in the bottom corners; the top-centre column is
-    owned by ``TopStack`` and no player block competes with it.
+    that owns its two CapsuleSprings (vitais + cooldowns -- the two framed
+    panels) and the last-frame vitals used to fire impulses/shakes. The
+    top-centre column is owned by ``TopStack`` and no player block competes
+    with it.
+
+    This commit wires the new spring API; the layout keeps the single framed
+    rectangle but BOTH springs are stepped every frame, so the upcoming split
+    into vitais + cooldowns capsules is a no-op at the state-update level.
     """
     bw = C.HUD_PANEL_W
     bh = C.HUD_PANEL_H
@@ -142,13 +147,19 @@ def _draw_hud(game, surf):
         game.hud_capsules.append(hud.PlayerCapsule())
     for i, p in enumerate(game.players):
         cap = game.hud_capsules[i]
-        # detect value changes BEFORE drawing so the shake is visible this frame
+        # detect value changes BEFORE drawing so the impulse lands this frame
         hud.detect_changes(cap, p)
-        cap.spring.update(game.dt_last)
+        # step both springs now; once the layout splits, each capsule owns
+        # one of them and reads render_offset() from the spring it owns
+        cap.vitals_spring.update(game.dt_last)
+        cap.cooldowns_spring.update(game.dt_last)
 
         base_x = C.HUD_MARGIN if i == 0 else C.WIDTH - bw - C.HUD_MARGIN
         base_y = C.HEIGHT - bh - C.HUD_MARGIN
-        ox, oy = cap.spring.offset(game.time)
+        # temp: both springs drive the same rect, but cooldowns is silent
+        # until the layout split happens. After split, vitais owns the upper
+        # rect (header + bars) and cooldowns owns the lower (3 dials).
+        ox, oy = cap.vitals_spring.render_offset(game.time)
         px, py = int(base_x + ox), int(base_y + oy)
         panel_rect = pygame.Rect(px, py, bw, bh)
 
