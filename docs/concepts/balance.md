@@ -1,7 +1,64 @@
 # Balance
 
-Two passes of balancing recorded here. The design rules are more
-important than the specific numbers.
+Four passes of balancing recorded here, newest first. The design rules
+are more important than the specific numbers.
+
+## 4th pass — shop price scales with the run stage (issue #137)
+
+Income grew with the wave; price did not. Measured, per round:
+
+- **Pollen per kill** is `score_value // 12`, so 3-5 for a common enemy,
+  times the combo (up to 3.4×) and `pollen_mult` (up to 1.5× via
+  Colheita).
+- **A tier-_t_ boss** is `score_value = 500 + 200·t`, so 41+16·t of base
+  pollen, also multiplied by the combo.
+- **Enemies per round** is `wave_budget = (3 + wave·1.1) · theme_budget`,
+  with the 3rd pass's knee accelerating it in the late game.
+
+Averaged across each tier's waves, pre-knee, that is ≈5.8 budget units
+per round at tier 0, 10.7 at tier 1, 16 at tier 2, 22 at tier 3 —
+**roughly +95% per tier, roughly linear**. In practice a wave-12 round
+with ~18 enemies pays on the order of 200 pollen.
+
+Against that, the tent's prices were flat (Néctar 12, Vitalidade 28,
+Vigor 32, Charm 150, Ovo 40) and the only brake was the 1.25× per
+purchase from issue #105. Five Vigors cost 32 → 40 → 50 → 62 → 78, 262
+total — one late round. So pollen piled up and the shop stopped being a
+decision.
+
+The fix is a second factor on the base price, `1 + SHOP_TIER_STEP · tier`
+with `SHOP_TIER_STEP = 0.7`, plus a stiffer per-purchase step for
+permanent upgrades (1.45 vs the consumables' 1.25). See
+[Camp](./camp.md#the-price-has-two-axes) for the formula and where the
+state lives.
+
+**+70% price against +95% income is the whole point**: the target feel is
+_slightly increasing_ purchasing power, so the ~25% gap per tier is the
+sense of progress, not sloppy arithmetic. A price curve that matched
+income would freeze the shop's difficulty forever; one that beat income
+would make the late game poorer than the early game.
+
+Three choices worth their reasons:
+
+- **Per tier, not per wave.** The step lands on the boss wave and holds
+  until the next one, so the player attributes it to the boss they just
+  killed.
+- **Linear, not exponential.** Income is roughly linear per tier; matching
+  its shape is what keeps the gap constant instead of collapsing or
+  exploding.
+- **No cap, in either mode.** In `endless` income keeps growing too, and
+  an offer that priced itself out of reach is the anti-spam brake doing
+  its job.
+
+DNA stayed out: its income already scales with the wave reached
+(`score/90 + wave·4 + kills·0.4`) and its cost already scales with the
+level (`30 + 25·l`). It is not the same hole, and tuning both curves in
+one pass would make neither legible.
+
+`SHOP_TIER_STEP` is the number that still needs playtest (issue #142) —
+the *shape* is what the arithmetic above fixes. If `endless` income
+plateaus somewhere, the fix is a ceiling on the tier multiplier, not a
+different shape.
 
 ## 3rd pass — steeper mid/late-game scaling (issue #23)
 
@@ -153,6 +210,8 @@ it (or "OPEN" if still unresolved).
 | Higher enemy count budget past wave 10 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
 | Higher live-enemy cap past wave 8 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
 | Faster champion ramp past wave 7 | (issue #23) | done | [triage-issue-23.md](../agents/triage-issue-23.md) |
+| Shop price flat while pollen income grows | 4th pass (issue #137) | done | `SHOP_TIER_STEP`, `rounds.tier_price_mult`, [Camp](./camp.md#the-price-has-two-axes) |
+| Tune `SHOP_TIER_STEP` by playtest | 4th pass (issue #137) | OPEN | issue #142; 0.7 is the arithmetic's starting point, not a measured number |
 | Passive-play can't clear wave 1 | "Open" | OPEN | design decision, needs user call |
 | Boss HP scaling review | (implicit) | OPEN | boss HP `90 + 200 * tier` unchanged; not asked for in #23 |
 
@@ -163,6 +222,7 @@ tracking table in the same commit.
 
 - [Damage](./damage.md) — player-side HP flow.
 - [Combat](./combat.md) — dash / whip damage scaling.
+- [Camp](./camp.md) — the shop's two price axes.
 - [Round](./round.md) — theme caps, wave scale.
 - [Species](./species.md) — genome HP baselines.
 - [triage-issue-23.md](../agents/triage-issue-23.md) — 3rd-pass scaling
