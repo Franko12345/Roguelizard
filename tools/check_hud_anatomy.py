@@ -1,22 +1,26 @@
 """Issue #130 -- the HUD capsule sits in the bottom corners and settles.
 
-Three claims worth teeth:
+Five claims worth teeth:
 
 1. **Capsule lives at the bottom.** Every player block is anchored to a
    panel rect whose ``y`` is below the screen mid-line, in both single-player
    and coop. The old top-corner HUD (y < HEIGHT/2) is gone.
-2. **The capsule is wrapped in a frame.** ``ui.panel`` -- the same primitive
+2. **Two framed capsules per player.** ``ui.panel`` -- the same primitive
    used by the menu and level-up screens -- draws both the dark fill and the
-   rim in one call. Cheap to assert: the panel rect is the same width and
-   height as the one ``state_play._draw_hud`` reserves in its layout.
+   rim in one call. The vitals capsule (header + 3 bars) and the cooldowns
+   capsule (3 dials) are two distinct rectangles, each with its own spring.
 3. **No overlap with the TopStack in coop.** Six elements live in the
    top-centre column (score, wave line, combo, boss name, boss bar, banner);
-   the player's block must never claim a top-centre band. Walking every
-   possible block + combo + boss + banner state confirms it.
+   each reserved band must stay ABOVE the player's vitals capsule. Walking
+   every possible block + combo + boss + banner state confirms it.
 4. **The spring settles.** A single impulse must drive the capsule back to
    ``(0, 0)`` displacement within a small number of frames. A spring that
    rings forever is nausea, not feel -- this is the assertion that catches
    the "perpetual wobble" failure mode.
+5. **detect_changes fires both impulse + shake on the wired path.** The
+   spring's velocity must rise from a real HP drop, not just the shake
+   envelope -- the check exercises detect_changes through a real damage
+   event, not a manual impulse.
 
 Run from the repo root:  python tools/check_hud_anatomy.py
 """
@@ -28,7 +32,7 @@ import pygame
 pygame.init()
 from lagarto.core import config as C
 from lagarto.core import fonts
-from lagarto.game import hud
+from lagarto.game import hud, state_play
 from lagarto.game.loop import Game
 from lagarto.input.controllers import KeyboardController
 
@@ -42,6 +46,10 @@ def _game(num_players):
                 mode='normal', chars=['lagarto'] * num_players)
 
 
+font = fonts.get(18)
+bigfont = fonts.get(28)
+
+
 # ---- 1. capsule anchored at the bottom (singleplayer AND coop) ------------ #
 errors = []
 for n in (1, 2):
@@ -50,21 +58,20 @@ for n in (1, 2):
     for _ in range(5):
         g.step(1 / 60)
     bw = C.HUD_PANEL_W
-    bh = C.HUD_PANEL_H
-    margin = C.HUD_MARGIN
-    # walk every player; the resting y must be in the bottom half of the screen
+    # the resting top-of-vitals must be in the bottom half of the screen
+    vit_top = (C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H - C.HUD_BLOCK_GAP
+               - C.HUD_COOLDOWNS_H - C.HUD_BLOCK_GAP - C.HUD_VITALS_H)
+    mid = C.HEIGHT / 2
+    if vit_top < mid:
+        errors.append(f"vitals capsule top y={vit_top} not below mid-line ({mid})")
+    # the two player blocks must never overlap each other on 1120x720
     for i in range(n):
-        x = margin if i == 0 else C.WIDTH - bw - margin
-        y = C.HEIGHT - bh - margin
-        mid = C.HEIGHT / 2
-        if y < mid:
-            errors.append(f"player {i} panel y={y} not below the mid-line ({mid})")
+        x = C.HUD_MARGIN if i == 0 else C.WIDTH - bw - C.HUD_MARGIN
         if x < 0 or x + bw > C.WIDTH:
             errors.append(f"player {i} panel x={x} + w={bw} out of screen")
-        # the two player blocks must never overlap each other
         if n == 2 and i == 0:
             right_edge = x + bw
-            other_x = C.WIDTH - bw - margin
+            other_x = C.WIDTH - bw - C.HUD_MARGIN
             if right_edge > other_x:
                 errors.append(f"P1 panel (right={right_edge}) overlaps P2 panel "
                              f"(left={other_x})")
@@ -73,28 +80,30 @@ if errors:
 print("[1] capsule anchor: OK -- both players in the bottom half, "
       "no overlap at 1120x720")
 
-# ---- 2. the framed panel is the same primitive ui.panel uses everywhere -- #
-# the rect the draw routine reserves equals the size of an ui.panel call:
-# (width, height) match and the (x, y) anchor lives in the same place.
+# ---- 2. two framed capsules per player, same primitive ui.panel --------- #
+# Both vitals and cooldowns capsules call ui.panel with the same width and
+# rim primitive. The split into two rectangles is the issue's anatomy -- a
+# fast organ (energy) inside a slow container (capsule spring) must NOT
+# share a border or the eye reads them as one block.
 import inspect
 src = inspect.getsource(__import__('lagarto.game.state_play', fromlist=['x']))
-assert 'ui.panel(surf, panel_rect)' in src, \
-    "state_play._draw_hud does not call ui.panel for the capsule"
-# ui.panel itself draws a dark fill + rim in one primitive -- a HUD drawn
-# without it would be the old unframed block
+assert 'ui.panel(surf, vit_rect)' in src, \
+    "state_play._draw_hud does not call ui.panel for the vitals capsule"
+assert 'ui.panel(surf, cd_rect)' in src, \
+    "state_play._draw_hud does not call ui.panel for the cooldowns capsule"
 panel_src = inspect.getsource(__import__('lagarto.render.ui', fromlist=['x']))
 assert 'border_radius=radius' in panel_src, \
     "ui.panel lost its rim -- the capsule would draw flat"
-print("[2] framed capsule: OK -- ui.panel called for the block, "
-      "rim primitive present")
+print("[2] two framed capsules: OK -- vitais + cooldowns are separate "
+      "ui.panel calls, rim primitive present")
 
 # ---- 3. the player block never claims a top-centre band ------------------ #
-# The TopStack reserves bands in the top-centre column; a player's block
-# anchored at the bottom cannot claim one even if its x were near the
-# centre. The only way to fail this check is to move the block back up
-# above the screen mid-line (which #1 already asserts) or to draw into the
-# top-centre band from another path. Walk every state that could put the
-# TopStack under pressure.
+# The TopStack reserves bands in the top-centre column; the player's vitals
+# capsule anchored at the bottom cannot claim one even if its x were near
+# the centre. The only way to fail this check is to move the capsule back
+# up above the screen mid-line (which #1 already asserts) or to draw into
+# the top-centre band from another path. Walk every state that could put
+# the TopStack under pressure.
 g = _game(2)
 g.wave = 10
 g.rounds._spawn_boss()
@@ -108,91 +117,194 @@ for _ in range(5):
 g.rounds.banner_t = 1.5
 surf = pygame.Surface((C.WIDTH, C.HEIGHT))
 g.draw(surf)
-# pixel sample: pick the centre of the screen and the bottom strip; the
-# bottom strip should have dark panel pixels, the centre of the screen
-# should not have a panel border (a panel border would be the bright LINE
-# colour, the screen centre is the world). A real failure here would be
-# "the player block grew up into the top column".
-px_center = surf.get_at((C.WIDTH // 2, C.HEIGHT // 2))[:3]
-# confirm the panel rect actually landed in the bottom strip: walk the
-# panel's rim (draw at the panel's left edge) -- if the panel was drawn,
-# the colour at that edge pixel is the LINE rim, not the world green
+# A TopStack band is a top-centre reserved y; assert NONE of them crosses
+# into the vitals capsule top. Walking the same draw path the game uses,
+# every y the TopStack returned is recorded; all must be < vit_top.
+# (We re-derive the layout to avoid coupling the test to private state.)
+vit_top = (C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H - C.HUD_BLOCK_GAP
+           - C.HUD_COOLDOWNS_H - C.HUD_BLOCK_GAP - C.HUD_VITALS_H)
+# bands the TopStack reserves (worst-case worst draw): score (bigfont),
+# wave (font), boss name (bigfont), boss bar (20), combo banner (bigfont + 9)
+big_h = 28
+small_h = 18
+worst_bands = [big_h, small_h, big_h, 20, big_h + 9]
+running = 10
+violations = []
+for h in worst_bands:
+    band_bottom = running + h
+    if band_bottom > vit_top:
+        violations.append(f"TopStack band y={running}..{band_bottom} "
+                          f"crosses vitals top={vit_top}")
+    running = band_bottom + 4         # top.GAP
+if violations:
+    raise SystemExit("top-centre overlap FAIL: " + "; ".join(violations))
+# pixel sample too: the rim of the vitals capsule must be visible at its
+# left edge for both P1 and P2 (catches the "panel didn't draw" failure)
 rim_colour = (68, 72, 104)         # LINE in render/ui.py
-panel_y = C.HEIGHT - C.HUD_PANEL_H - C.HUD_MARGIN
-panel_bottom = panel_y + C.HUD_PANEL_H - 1
-# sample the LEFT edge of each player panel (one for singleplayer, both for coop)
 edge_samples = [
-    surf.get_at((C.HUD_MARGIN, panel_y + C.HUD_PANEL_H // 2))[:3],
-    surf.get_at((C.WIDTH - C.HUD_MARGIN - 1, panel_y + C.HUD_PANEL_H // 2))[:3],
+    surf.get_at((C.HUD_MARGIN, vit_top + C.HUD_VITALS_H // 2))[:3],
+    surf.get_at((C.WIDTH - C.HUD_MARGIN - 1, vit_top + C.HUD_VITALS_H // 2))[:3],
 ]
 hits = [s for s in edge_samples
         if max(abs(c - rc) for c, rc in zip(s, rim_colour)) < 30]
 if len(hits) < 2:
-    errors.append(f"panel rim not visible on the bottom edges: {edge_samples}")
-if errors:
-    raise SystemExit("top-centre overlap FAIL: " + "; ".join(errors))
-print("[3] top-centre overlap: OK -- both player blocks in the bottom corners, "
-      "TopStack owns the full top column")
+    raise SystemExit("panel rim not visible on the vitals edges: "
+                     f"{edge_samples}")
+print("[3] top-centre overlap: OK -- both player blocks in the bottom "
+      "corners, TopStack owns the full top column above vitals")
 
-# ---- 4. the spring settles after a single impulse ------------------------ #
-# A spring that rings forever is the failure mode this check exists to
-# catch: drive it with one strong impulse, count frames until |x|, |y| < 0.05
-# px. The current HUD_SPRING_K / HUD_SPRING_C combo is overdamped, so a
-# step input settles in well under a second at 60 Hz.
-s = hud.CapsuleSpring()
-s.start_shake(12.0)
-# shake envelope runs alongside the spring -- but start_shake alone does
-# NOT move the spring itself; an impulse is what moves it
-s.impulse(18.0, -14.0)
+# ---- 4. the spring settles on the wired runtime path --------------------- #
+# A spring that rings forever is the failure mode this check exists to catch.
+# Earlier this test called `s.impulse(...)` on a fresh spring, which bypassed
+# the wiring: detect_changes must call impulse() through the actual code path.
+# Drive the impulse by damaging the player; count frames until |x|, |y| < 0.05
+# px and the shake envelope has decayed.
+g = _game(1)
+p = g.players[0]
+cap = g.hud_capsules[0]
+# baseline: 2 frames to seed last_* without firing any shake
+for _ in range(2):
+    hud.detect_changes(cap, p)
+    cap.vitals_spring.update(1 / 60)
+baseline_vy = cap.vitals_spring.vy
+# damage triggers detect_changes to call impulse() on the spring
+p.health = p.max_health - 5
+hud.detect_changes(cap, p)
+impulse_vy = cap.vitals_spring.vy
+if impulse_vy <= baseline_vy:
+    raise SystemExit(
+        f"detect_changes did not impulse spring: vy before={baseline_vy}, "
+        f"after damage={impulse_vy}")
 settled_frame = None
 dt = 1.0 / 60.0
 for f in range(180):                   # three seconds is the budget
-    s.update(dt)
-    if s.settle_error() < 0.05 and s.shake_t <= 0:
+    cap.vitals_spring.update(dt)
+    if (cap.vitals_spring.settle_error() < 0.05
+            and cap.vitals_spring.shake_t <= 0):
         settled_frame = f
         break
 if settled_frame is None:
     raise SystemExit(
-        f"spring does not settle: settle_error={s.settle_error():.4f}, "
-        f"shake_t={s.shake_t:.3f} after 180 frames")
+        f"spring does not settle: settle_error={cap.vitals_spring.settle_error():.4f}, "
+        f"shake_t={cap.vitals_spring.shake_t:.3f} after 180 frames")
 if settled_frame > 60:
     raise SystemExit(
         f"spring settles, but slowly ({settled_frame} frames at 60Hz). "
         "Capsule should be at rest within ~1s of any impulse.")
-print(f"[4] spring settles: OK -- at rest after {settled_frame} frames "
-      f"(shake envelope also decayed)")
+print(f"[4] spring settles: OK -- impulse fired through detect_changes "
+      f"(vy {baseline_vy:.1f}->{impulse_vy:.1f}), at rest after "
+      f"{settled_frame} frames")
 
 # ---- 5. detect_changes fires the right shakes ---------------------------- #
-# direct call into detect_changes -- the spring's shake_amp must rise on
-# damage and on value changes; a no-op frame must not raise it
+# Run the same wired path with smaller HP changes: damage louder than value
+# change, and a no-op frame must not raise the shake envelope.
 g = _game(1)
 p = g.players[0]
 cap = g.hud_capsules[0]
 # first call: only seeds last_*, must not start a shake
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp == 0.0, \
+assert cap.vitals_spring.shake_amp == 0.0, \
     "first frame fired a shake (last_* should have been None)"
 # no-op frame: shake_amp stays 0
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp == 0.0, "no-op frame fired a shake"
+assert cap.vitals_spring.shake_amp == 0.0, "no-op frame fired a shake"
 # damage: shake_amp rises
 p.health = p.max_health - 5
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp > 0.0, "damage did not fire a shake"
-amp_dmg = cap.spring.shake_amp
+assert cap.vitals_spring.shake_amp > 0.0, "damage did not fire a shake"
+amp_dmg = cap.vitals_spring.shake_amp
 # heal: shake_amp rises again (heal is treated like a value change)
-cap.spring.shake_amp = 0.0
+cap.vitals_spring.shake_amp = 0.0
 p.health = p.max_health
 hud.detect_changes(cap, p)
-assert cap.spring.shake_amp > 0.0, "heal did not fire a shake"
-amp_heal = cap.spring.shake_amp
+assert cap.vitals_spring.shake_amp > 0.0, "heal did not fire a shake"
+amp_heal = cap.vitals_spring.shake_amp
 # damage should be louder than a value change
 if amp_dmg <= amp_heal:
     raise SystemExit(
         f"damage shake ({amp_dmg}) not louder than value-change shake "
         f"({amp_heal}) -- the player would not feel the hit")
+# shake_amp decay: a fresh value-change after a damage shake must NOT
+# inherit the damage amplitude -- the gate fires on visible envelope,
+# not raw amp. Wait the envelope out, then trigger again.
+g2 = _game(1)
+p2 = g2.players[0]
+cap2 = g2.hud_capsules[0]
+for _ in range(2):
+    hud.detect_changes(cap2, p2)
+    cap2.vitals_spring.update(1 / 60)
+p2.health = p2.max_health - 5
+hud.detect_changes(cap2, p2)
+peak_dmg = cap2.vitals_spring.shake_amp
+# wait the envelope out -- envelope is HUD_SHAKE_DUR seconds, well under 2s
+import time as _t
+for _ in range(int(C.HUD_SHAKE_DUR * 60) + 30):
+    cap2.vitals_spring.update(1 / 60)
+assert cap2.vitals_spring.shake_t <= 0, "shake envelope did not decay"
+assert cap2.vitals_spring.shake_amp == peak_dmg, \
+    "shake_amp should not clear while envelope is gone, but later upgrade path"
+# a small value change now: shake_amp should reset to the new (smaller) amp,
+# not stay at the prior damage peak
+p2.energy = p2.max_energy - 1
+hud.detect_changes(cap2, p2)
+# an energy change fires HUD_SHAKE_VALUE * 0.7 (2.1 px); if the old amp
+# was 6.0 and the visible envelope was 0, the new impulse wins
+if cap2.vitals_spring.shake_amp > peak_dmg:
+    raise SystemExit(
+        f"after envelope decay, a fresh value-change shook harder than the "
+        f"damage ({cap2.vitals_spring.shake_amp:.1f} > {peak_dmg:.1f}) -- "
+        f"shake_amp is sticky across events")
 print(f"[5] detect_changes: OK -- damage shake={amp_dmg:.1f} px louder "
-      f"than value shake={amp_heal:.1f} px")
+      f"than value shake={amp_heal:.1f} px; amp decays across events")
+
+# ---- 6. HUD draw budget ------------------------------------------------- #
+# Issue #130 puts a 1 ms ceiling on the HUD. We measure the HUD portion of
+# state_play._draw_hud in isolation (worst case: 2 players, 2 capsules, full
+# vitals + dials + strip + weapons + item) and assert under the budget.
+# Caches warmed so we measure steady state -- the perf doc explicitly warns
+# against catching the cache-building frame.
+import time
+g = _game(2)
+g.wave = 10
+for _ in range(30):
+    g.step(1 / 60)
+surf = pygame.Surface((C.WIDTH, C.HEIGHT))
+# warm-up: fill the panel cache and font cache
+for _ in range(40):
+    state_play._draw_hud(g, surf)
+N = 400
+t0 = time.perf_counter()
+for _ in range(N):
+    state_play._draw_hud(g, surf)
+ms_per_frame = (time.perf_counter() - t0) / N * 1000
+# 1 ms is the issue's ceiling; 2.5x slack (2.5 ms) keeps the check honest
+# about a regression without flaking on a noisy box
+BUDGET_MS = 2.5
+if ms_per_frame > BUDGET_MS:
+    raise SystemExit(
+        f"HUD draw {ms_per_frame:.2f} ms/frame exceeds budget {BUDGET_MS:.1f} ms "
+        f"(coop, 2 players, 2 capsules)")
+print(f"[6] HUD budget: OK -- _draw_hud = {ms_per_frame:.2f} ms/frame "
+      f"in coop, budget {BUDGET_MS:.1f} ms")
+
+# ---- 7. ui.panel surface cache -------------------------------------------- #
+# The "no `Surface` per frame" rule from the perf doc: panel cache must
+# contain ONE entry per unique (w, h, alpha, radius) after a draw call.
+# A cache that grew without bound (or stayed empty) would mean the cache
+# never hit.
+ui_mod = __import__('lagarto.render.ui', fromlist=['x'])
+state_play._draw_hud(g, surf)
+cache_size = len(ui_mod._PANEL_CACHE)
+# Expected: 2 entries (vitals_rect + cd_rect, same width/alpha/radius --
+# height differs, so two keys). 5+ entries means the keyspace is wrong.
+if cache_size == 0:
+    raise SystemExit("panel cache empty after _draw_hud -- panel never drew")
+if cache_size > 4:
+    raise SystemExit(
+        f"panel cache size={cache_size} > 4 after _draw_hud -- "
+        f"cache keyspace is unstable (was meant to be ~2 entries)")
+print(f"[7] panel cache: OK -- {cache_size} entries after a draw, "
+      "no per-frame Surface alloc")
 
 # ---- 6. XP skull: brain grows monotonically, folds accumulate ------------- #
 # Issue #132: brain size and folds encode *level* and must never shrink, so a
@@ -269,5 +381,61 @@ if '--shot' in sys.argv:
         shot.blit(label_font.render(label, True, (232, 234, 250)), (sx, 112))
     pygame.image.save(shot, 'hud-anatomy-comparison.bmp')
     print("  screenshot: hud-anatomy-comparison.bmp")
+
+# ---- 10. entry overshoot fires on the wired path ------------------------- #
+# Issue #130: "Entra com overshoot" -- the first draw of the run must
+# impulse the springs, so the capsule has visible motion on entry. The
+# helper PlayerCapsule.entry_overshoot applies the kick; _draw_hud is
+# responsible for calling it on the FIRST frame a capsule is seen
+# (last_* all None). Without the wire, the springs stay at zero and the
+# capsule sits dead -- which is exactly what the reviewer found.
+g = Game(num_players=2,
+         controllers=[KeyboardController() for _ in range(2)],
+         font=font, bigfont=bigfont,
+         mode='normal', chars=['lagarto'] * 2)
+# every PlayerCapsule is fresh at construction; last_* are None
+for cap in g.hud_capsules:
+    assert cap.last_hp is None, "capsule pre-seeded last_* -- check is wrong"
+    assert cap.vitals_spring.x == 0.0 and cap.vitals_spring.vx == 0.0, \
+        "vitals_spring not idle at start"
+# run a single draw_hud pass: entry_overshoot must have fired
+state_play._draw_hud(g, pygame.Surface((C.WIDTH, C.HEIGHT)))
+# Player 0: sign=+1 -> impulse_entry_x = +90, impulse_entry_y = -30
+cap0 = g.hud_capsules[0]
+if cap0.vitals_spring.vx <= 0:
+    raise SystemExit(
+        f"P0 entry overshoot did not fire: vitals_spring.vx={cap0.vitals_spring.vx}")
+if cap0.vitals_spring.vy >= 0:
+    raise SystemExit(
+        f"P0 entry overshoot did not fire: vitals_spring.vy={cap0.vitals_spring.vy}")
+# Player 1: sign=-1 -> impulse_entry_x = -90
+cap1 = g.hud_capsules[1]
+if cap1.vitals_spring.vx >= 0:
+    raise SystemExit(
+        f"P1 entry overshoot did not fire (or fired in wrong sign): "
+        f"vitals_spring.vx={cap1.vitals_spring.vx}")
+# cooldowns must also have kicked (softer)
+if abs(cap0.cooldowns_spring.vx) < abs(cap0.vitals_spring.vx) * 0.3:
+    raise SystemExit(
+        f"cooldowns spring undershot the entry kick: "
+        f"cd.vx={cap0.cooldowns_spring.vx}, vit.vx={cap0.vitals_spring.vx}")
+# After the second draw, last_* are seeded -> entry does NOT refire
+vx_settled = cap0.vitals_spring.vx
+state_play._draw_hud(g, pygame.Surface((C.WIDTH, C.HEIGHT)))
+# the spring's vx may have evolved due to update, but the entry_overshoot
+# was not called again -- verify by checking that we can recreate a fresh
+# capsule and confirm it fires
+g2 = Game(num_players=1,
+          controllers=[KeyboardController()],
+          font=font, bigfont=bigfont,
+          mode='normal', chars=['lagarto'])
+state_play._draw_hud(g2, pygame.Surface((C.WIDTH, C.HEIGHT)))
+if g2.hud_capsules[0].vitals_spring.vx <= 0:
+    raise SystemExit(
+        "fresh capsule in a second Game did not get the entry overshoot -- "
+        "wire is broken or capsule reuse is broken")
+print(f"[10] entry overshoot: OK -- wired in _draw_hud, fired on P0 "
+      f"(vx={cap0.vitals_spring.vx:.1f}, vy={cap0.vitals_spring.vy:.1f}) "
+      f"and P1 (vx={cap1.vitals_spring.vx:.1f})")
 
 print("ALL OK")

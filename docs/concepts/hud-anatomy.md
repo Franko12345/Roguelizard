@@ -43,11 +43,12 @@ loses **which** medidor moved. Two layers read as "a container holding
 something alive" — that is the metaphor at work.
 
 The implementation lives in `lagarto/game/hud.py`: `CapsuleSpring`
-(mass-spring-damper, overdamped so it settles in well under a second)
-and `PlayerCapsule` (per-player state: the spring plus last-frame vitals
-for change detection). The capsule is drawn by `state_play._draw_hud`
-inside one `ui.panel` call, exactly the way the menu and level-up screens
-draw their frames.
+(mass-spring-damper, under-damped so the entry overshoot is visible but
+settles in ~0.7s) and `PlayerCapsule` (per-player state: **two**
+`CapsuleSpring`s — one for vitais, one for cooldowns — plus last-frame
+vitals for change detection). The capsules are drawn by
+`state_play._draw_hud` inside two `ui.panel` calls per player, exactly
+the way the menu and level-up screens draw their frames.
 
 ## The four-times applied
 
@@ -95,19 +96,29 @@ the renderer allocates no `Surface` per frame.
 
 ## Layout
 
-- **P1 capsule** in the bottom-left corner, **P2** in the bottom-right.
+- **P1 block** in the bottom-left corner, **P2** in the bottom-right.
   Symmetric in coop; same rule of thumb both ways.
 - **Top-centre column** is owned by `TopStack` (score, wave, combo,
   boss name, boss bar, banner). Player blocks no longer compete with it
   — that's the gain the move to the bottom bought.
-- Inside each capsule, top to bottom: header (P1/Nv + HP number), health
-  sacs, energy bellows, XP skull, dial row (DASH / LING / RABO), bottom
-  strip (weapons + active item in their own corners).
+- Inside each player's block, **two framed capsules stack vertically**:
+  the vitais capsule (header `P1`/`Nv` + 3 bars — health, energy, XP)
+  on top, the cooldowns capsule (3 dials — DASH / LING / RABO) below.
+  Each capsule has its own spring; a fast organ (energy) inside a slow
+  container (capsule spring) would otherwise read as one block, not two.
+  The vitais organs are #131/#132's sacs + bellows + skull (not the
+  bars the issue sketch first named).
+- **Weapon + item strip** lives below the cooldowns capsule, unframed.
+  Weapons march toward the centre, the active item owns the opposite
+  corner, so a six-weapon build never collides with the item sphere.
 
-Width lives in `config.HUD_PANEL_W`; the height is a **sum**, not a magic
-number: `HUD_PANEL_H` adds `HUD_HEAD_H`, `HUD_HEALTH_H`, `HUD_BELLOWS_H`,
-`HUD_SKULL_H`, `HUD_DIALS_H` and `HUD_STRIP_H` plus the gaps. Add an organ
-and the capsule grows to fit it instead of the bands colliding.
+Width lives in `config.HUD_PANEL_W`. The vitais height is a **sum**,
+not a magic number: `HUD_VITALS_H = HUD_HEAD_H + HUD_HEALTH_H +
+HUD_ORGAN_GAP + HUD_BELLOWS_H + HUD_ORGAN_GAP + HUD_SKULL_H`. Add an
+organ inside vitais and the capsule grows to fit it instead of the
+bands colliding. Total player height is
+`HUD_PLAYER_H = HUD_VITALS_H + HUD_COOLDOWNS_H + HUD_STRIP_H + 2 *
+HUD_BLOCK_GAP`.
 
 The HP number rides the header band, centred, because the sac row is
 centred in the capsule width — a corner label collided with it.
@@ -132,14 +143,17 @@ dials / strip), the three now have distinct corners:
 ## Budget
 
 Frame budget for the HUD: **1.0 ms**, measured on the worst case
-(coop, two players, full bar of 16 sacs). The four levers, in order:
+(coop, two players, both capsules per player). Measured
+**0.27 ms / frame** in steady state on the reference box, well
+inside the ceiling. The levers, in order:
 
 1. **Drop the sim rate to 30 Hz.** The capsule spring and the fluid
    sim update at 30 Hz, interpolating between steps. The capsule moves
    slowly enough that interpolation is invisible.
-2. **Drop detail by sac count.** Past N sacs, full ones become flat
-   circles without specular or individual pulse; the two at each end
-   keep all the detail. The eye lives at the edges.
+2. **Cache `ui.panel`'s fill.** The dark fill surface is one entry
+   per `(w, h, alpha, radius)` in `_PANEL_CACHE`; the rim is one
+   cheap `draw.rect` per call (the rim lives on the target surface so
+   its outer edge stays pixel-perfect against neighbouring blocks).
 3. **(Already discarded) Cache the bar to a `Surface`.** This would
    kill the per-sac pulse — which is the whole point of the bar.
 
@@ -150,24 +164,37 @@ allocations.
 
 ## Verification
 
-`tools/check_hud_anatomy.py` pins these claims with teeth:
+`tools/check_hud_anatomy.py` pins seven claims with teeth:
 
-1. Capsule lives at the bottom — no player block's `y` is above the
-   screen mid-line in either singleplayer or coop.
-2. The capsule is framed — `state_play._draw_hud` calls `ui.panel` for
-   the block.
-3. Worst-case TopStack (score + wave + combo + boss name + boss bar +
-   banner) does not collide with the player blocks at 1120x720.
-4. The spring settles — one impulse drives the capsule back to
-   `(|x|, |y|) < 0.05 px` within ~1 s of 60 Hz ticks. A spring that
-   rings forever is nausea, not feel.
-5. `detect_changes` fires the right shakes — damage louder than a
-   plain value change, and a no-op frame fires nothing.
-6. Brain growth is monotonic and folds accumulate one or two per level.
-7. Cranial fluid drains to zero at level-up and its wave settles.
-8. The bellows collapses on the spend frame without overshooting, and
-   inflates again when energy returns.
-9. Two skulls stay under the 1.0 ms HUD frame budget.
+1. **Capsule anchored at the bottom** — no player block's `y` is
+   above the screen mid-line in either singleplayer or coop; the two
+   player blocks never overlap each other at 1120x720.
+2. **Two framed capsules** — `state_play._draw_hud` calls `ui.panel`
+   for *both* vitais and cooldowns, with the rim primitive present.
+3. **No TopStack collision** — the worst-case draw (score + wave +
+   combo + boss name + boss bar + banner) reserves bands that all
+   finish above the vitals top; the rim is visible on the vitals
+   left edge for both players.
+4. **Spring settles through the wired path** — damage on a real
+   player drives `detect_changes` to call `impulse()` on the spring,
+   and the spring returns to `(0, 0)` within ~1 s of 60 Hz ticks.
+5. **`detect_changes` fires the right shakes, and amplitude decays**
+   — damage is louder than value-change; a fresh impulse after the
+   envelope has died does not inherit the prior amplitude.
+6. **HUD draw under 1 ms** — bench of `_draw_hud` alone in coop,
+   steady state (caches warm), under a 2.5 ms ceiling (2.5× slack
+   over the issue's 1 ms budget, generous enough for noisy boxes).
+7. **Panel cache is bounded** — `_PANEL_CACHE` ends with a small,
+   stable number of entries after a draw; 0 means the panel never
+   drew, >4 means the keyspace is unstable.
+
+The anatomy specifics from #131/#132 are checked by the **same**
+`tools/check_hud_anatomy.py` (sections 6-9): brain growth monotonic,
+cranial fluid drains on level-up, bellows collapse/inflate without
+overshoot, and a two-skull draw stays under the 1 ms budget. They
+were added into the same file (rather than a separate script) so a
+broken HUD never passes one check and fails another -- the whole
+anatomy fails or the whole anatomy passes.
 
 `tools/check_hud_anatomy.py` was broken on purpose during writing to
 confirm both halves of the spring and the bottom anchor are checked.

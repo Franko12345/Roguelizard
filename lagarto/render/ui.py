@@ -82,13 +82,6 @@ def text_size(font, s):
     return font.size(s)
 
 
-def panel(surf, rect, alpha=190, accent=None, radius=16):
-    s = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-    s.fill((16, 18, 30, alpha))
-    surf.blit(s, (rect.x, rect.y))
-    pygame.draw.rect(surf, accent or LINE, rect, 2, border_radius=radius)
-
-
 def title(surf, font, text, y, color, t=0.0, glow=True):
     cx = C.WIDTH // 2
     im = font.render(text, True, color)
@@ -204,6 +197,35 @@ def footer(surf, font, text):
 
 
 _TINT = {}
+
+# Cached framed-panel FILL surface. ui.panel used to allocate a
+# `pygame.Surface(SRCALPHA)` per call per frame -- exactly the "no full-screen
+# `Surface` per frame" rule the perf doc warns against. The HUD alone called
+# it 2-4 times a frame, and the alpha-blit is the slow part. The rim is drawn
+# on the target surface (one draw.rect, fixed colour, always cheap) so the
+# panel's outer edge stays pixel-perfect against its neighbour blocks.
+_PANEL_CACHE = {}
+_PANEL_CACHE_MAX = 24
+
+
+def panel(surf, rect, alpha=190, accent=None, radius=16):
+    """Pre-rendered framed panel: cached dark fill, live rim, one blit.
+
+    The cached surface is **shared** -- do not mutate it. The cap is small
+    (24 entries) because panel sizes in this game are a known handful: the
+    player HUD capsules plus the menu/level-up cards.
+    """
+    key = (rect.width, rect.height, alpha, radius)
+    s = _PANEL_CACHE.get(key)
+    if s is None:
+        s = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(s, (16, 18, 30, alpha),
+                         (0, 0, rect.width, rect.height), border_radius=radius)
+        if len(_PANEL_CACHE) >= _PANEL_CACHE_MAX:
+            _PANEL_CACHE.clear()
+        _PANEL_CACHE[key] = s
+    surf.blit(s, (rect.x, rect.y))
+    pygame.draw.rect(surf, accent or LINE, rect, 2, border_radius=radius)
 
 
 def _tint(surf, color, alpha):

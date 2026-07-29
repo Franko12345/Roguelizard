@@ -128,62 +128,96 @@ def draw(game, surf):
 
 
 def _draw_hud(game, surf):
-    """Draw each player's HUD capsule and the shared top-centre column.
+    """Draw each player's two HUD capsules + weapon strip + the top-centre column.
 
-    Per-player state lives in ``game.hud_capsules[i]`` -- a ``PlayerCapsule``
-    that owns its spring and the last-frame vitals used to fire shakes. The
-    capsule is a framed panel in the bottom corners; the top-centre column is
-    owned by ``TopStack`` and no player block competes with it.
-    """
+    The issue (#130) wants vitals and cooldowns in their own framed capsules
+    so a fast organ (energy) inside a slow container (capsule spring) reads
+    as two things, not one. Each capsule has its own spring.
+
+    Layout (bottom corner of the screen, per player):
+        [ vitals capsule  : header + 3 bars      ]
+        [ cooldowns capsule: 3 dials + labels    ]
+        [ strip          : weapons + item, no frame ]
+
+    Downed prompt swaps into the vitals header right edge instead of dropping
+    over the strip (which would have collided with the tap targets)."""
     bw = C.HUD_PANEL_W
-    bh = C.HUD_PANEL_H
     # grow the capsule list defensively in case num_players changes after init
     while len(game.hud_capsules) < len(game.players):
         game.hud_capsules.append(hud.PlayerCapsule())
     for i, p in enumerate(game.players):
         cap = game.hud_capsules[i]
-        # detect value changes BEFORE drawing so the shake is visible this frame
+        # Entry overshoot: a fresh capsule (last_* all None) is the first
+        # draw of the run -- kick both springs so the issue's "entra com
+        # overshoot" plays once. detect_changes on the same frame seeds
+        # last_* from current values, so the entry kick is the ONLY impulse
+        # this frame and the impulse lands visible on the first render.
+        if cap.last_hp is None and cap.last_energy is None:
+            cap.entry_overshoot(i, len(game.players))
+        # detect value changes BEFORE drawing so the impulse lands this frame
         hud.detect_changes(cap, p)
-        cap.spring.update(game.dt_last)
+        # step both springs now; each capsule reads its OWN spring's offset
+        cap.vitals_spring.update(game.dt_last)
+        cap.cooldowns_spring.update(game.dt_last)
 
+        # X anchor: shared by vitals + cooldowns + strip; P2 mirrors.
         base_x = C.HUD_MARGIN if i == 0 else C.WIDTH - bw - C.HUD_MARGIN
-        base_y = C.HEIGHT - bh - C.HUD_MARGIN
-        ox, oy = cap.spring.offset(game.time)
-        px, py = int(base_x + ox), int(base_y + oy)
-        panel_rect = pygame.Rect(px, py, bw, bh)
+        # Y stack from the bottom: strip, gap, cooldowns, gap, vitals.
+        strip_top = C.HEIGHT - C.HUD_MARGIN - C.HUD_STRIP_H
+        cd_top = strip_top - C.HUD_BLOCK_GAP - C.HUD_COOLDOWNS_H
+        vit_top = cd_top - C.HUD_BLOCK_GAP - C.HUD_VITALS_H
 
-        # the framed capsule (one ui.panel call per player; panel already
-        # draws both the dark fill and the bright rim in the same primitive)
-        ui.panel(surf, panel_rect)
+        # vitals: header + bars; each spring adds its own offset so the two
+        # capsules move independently. Impulse direction matches the player's
+        # slide direction so the spring always points "back to rest".
+        vx, vy = base_x, vit_top
+        cdx, cdy = base_x, cd_top
 
-        # explicit vertical layout: each band is laid out from py, so the
-        # header / organs / dials / strip never collide even when the spring
-        # is trembling. Sum of heights + gaps = HUD_PANEL_H.
-        head_y = py + 4                         # P1 / Nv (18 px tall)
-        bar_x = px + C.HUD_PAD
+        # ---- vitals capsule ----
+        # Two-capsule foundation (issue #130): vitals framed in its own panel
+        # so the slow container (capsule spring) reads as one thing, while the
+        # organs inside (sacs / bellows / skull from #131/#132) animate on
+        # their own faster rhythms.
+        vit_rect = pygame.Rect(vx, vy, bw, C.HUD_VITALS_H)
+        ui.panel(surf, vit_rect)
+
+        # explicit vertical layout inside the vitals capsule: each band is
+        # laid out from vy, so the header / organs never collide even when the
+        # spring is trembling. Sum of organ heights + gaps + header = vitais.
+        head_y = vy + 4                                # P1 / Nv (HUD_HEAD_H = 20)
+        bar_x = vx + C.HUD_PAD
         bar_w = bw - 2 * C.HUD_PAD
-        health_top = py + C.HUD_HEAD_H
-        # draw_health_sacs takes a baseline: the bottom row sits on it and the
-        # rows above grow upward, so the band spans health_top..+HUD_HEALTH_H
+        health_top = vy + C.HUD_HEAD_H                 # baseline for sacs
+        # draw_health_sacs grows upward from its baseline; bottom row sits on
+        # it, rows above stack up. Bottom row y = health_top + HUD_HEALTH_H - 18.
         hy = health_top + C.HUD_HEALTH_H - 18
-        ey = health_top + C.HUD_HEALTH_H + 4    # energy bellows
-        xy = ey + C.HUD_BELLOWS_H + 4           # xp skull
-        dy = xy + C.HUD_SKULL_H + 4             # dials row
-        dial_cx = bar_x + 12
-        dial_pitch = 68
+        ey = health_top + C.HUD_HEALTH_H + C.HUD_ORGAN_GAP    # bellows
+        xy = ey + C.HUD_BELLOWS_H + C.HUD_ORGAN_GAP           # skull
+        # dials live in the SEPARATE cooldowns capsule, not the vitals one;
+        # the y for dials is computed below as cd_inner_y inside that capsule.
 
-        # ---- header band: P1/P2 + level ---------------------------------
         col = p.colorset[0]
         ui.text(surf, game.font, f"P{i+1}", (bar_x, head_y), col)
-        ui.text(surf, game.font, f"Nv {p.level}",
-                (px + bw - C.HUD_PAD, head_y), (226, 228, 244), align='right')
+        # downed prompt replaces the Nv label so it never lands on the strip
+        # (issue #130 review finding 5).
+        if p.down:
+            ui.text(surf, game.font, f"CAIDO {p.revive:0.0f}s",
+                    (vx + bw - C.HUD_PAD, head_y), C.COL_ENEMY, align='right')
+            ui.text(surf, game.smallfont, "toque p/ reviver",
+                    (vx + bw - C.HUD_PAD, head_y + game.font.get_height()),
+                    C.COL_ENEMY, align='right')
+        else:
+            ui.text(surf, game.font, f"Nv {p.level}",
+                    (vx + bw - C.HUD_PAD, head_y),
+                    (226, 228, 244), align='right')
         # HP number rides the header, not the sacs: the sac row is centred in
         # the capsule and any corner label collided with it.
         ui.text(surf, game.smallfont,
                 f"{int(p.health)}/{int(p.max_health)}",
-                (px + bw // 2, head_y + 3), (230, 210, 216), align='center')
+                (vx + bw // 2, head_y + 3), (230, 210, 216), align='center')
 
         # ---- health: the sac row (organ reaction on the hit frame) ------
+        # issue #131: discrete sacs of HEALTH_SAC_HP, not a bar.
         previous_health = getattr(p, '_hud_health', p.health)
         impact = min(1.0, abs(previous_health - p.health) / hud.HEALTH_SAC_HP)
         p._hud_health = p.health
@@ -191,6 +225,8 @@ def _draw_hud(game, surf):
                              game.time, impact=impact)
 
         # ---- energy bellows + XP skull: one organ each ------------------
+        # issue #132: bellows for energy, cranial fluid for XP, both with
+        # their own per-player animation state cached in _HUD_ANATOMY.
         bellows, fluid = _anatomy_state(p)
         energy_fraction = clamp(p.energy / p.max_energy, 0, 1)
         xp_fraction = clamp(p.xp / p.xp_to_next, 0, 1)
@@ -199,43 +235,46 @@ def _draw_hud(game, surf):
         hud.draw_bellows(surf, (bar_x, ey, bar_w, C.HUD_BELLOWS_H), bellows)
         hud.draw_skull(surf, (bar_x, xy, bar_w, C.HUD_SKULL_H), p.level,
                        xp_fraction, fluid)
-        # ability cooldown dials (dash / tongue) -> readable "can I act?" feedback
-        # three dials in a 216px panel: 78px pitch overflowed, so 11px radius
-        # on a 68px pitch, with short labels
+
+        # ---- cooldowns capsule ----
+        # issue #130 foundation: second framed capsule holds the dials so a
+        # fast organ (energy) inside a slow container (vitals spring) reads as
+        # two things, not one.
+        cd_rect = pygame.Rect(cdx, cdy, bw, C.HUD_COOLDOWNS_H)
+        ui.panel(surf, cd_rect)
+
+        # 3 dials evenly spaced across the bar_w interior, with a single
+        # label row above
+        cd_inner_y = cdy + 4
+        dial_pitch = bar_w // 3
+        dial_cx = bar_x + dial_pitch // 2
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
-        hud.dial(surf, (dial_cx, dy + 14), 11, dash_frac, p.colorset[0],
+        hud.dial(surf, (dial_cx, cd_inner_y + 14), 11, dash_frac, p.colorset[0],
                  game.smallfont, "DASH", game.time,
                  enabled=p.energy >= C.DASH_COST)
         t_frac = 0.0 if p.tongue_t > 0 else 1.0
-        hud.dial(surf, (dial_cx + dial_pitch, dy + 14), 11, t_frac,
+        hud.dial(surf, (dial_cx + dial_pitch, cd_inner_y + 14), 11, t_frac,
                  (235, 90, 120), game.smallfont, "LING", game.time,
                  enabled=p.energy >= C.TONGUE_COST)
         w_frac = 1.0 - clamp(p.whip_cd / max(0.001, p.whip_cooldown), 0, 1)
-        hud.dial(surf, (dial_cx + dial_pitch * 2, dy + 14), 11, w_frac,
+        hud.dial(surf, (dial_cx + dial_pitch * 2, cd_inner_y + 14), 11, w_frac,
                  (250, 190, 90), game.smallfont, "RABO", game.time,
                  enabled=p.energy >= C.WHIP_COST)
 
-        if p.down:
-            ui.text(surf, game.font,
-                    f"CAIDO {p.revive:0.0f}s - toque p/ reviver",
-                    (bar_x, dy + 36), C.COL_ENEMY)
-
         # ---- bottom strip: weapons + active item, each in its own corner
-        # the strip sits below the dials inside the same capsule; weapons
-        # march toward the centre, the active item lives in the opposite
-        # corner so a fourth dial could never have competed with it
-        wy = py + bh - 24                # weapon / item vertical centre
+        # weapons step 28 -- with six weapons and the item circle (28 px wide)
+        # the strip fits in 196 px (bw - 2*PAD) without overlap. Step was 34
+        # and overflowed past the item zone on a six-weapon build.
+        wy = strip_top + C.HUD_STRIP_H // 2
         weapons_list = list(p.weapons.items())
-        # P1: weapons left-to-right, item at the right edge.
-        # P2: weapons right-to-left, item at the left edge.
         if i == 0:
-            wx_start = bar_x + 16
-            wx_step = 34
-            item_cx = px + bw - C.HUD_PAD - 22
+            wx_start = vx + C.HUD_PAD + 6
+            wx_step = 28
+            item_cx = vx + bw - C.HUD_PAD - 22
         else:
-            wx_start = px + bw - C.HUD_PAD - 16
-            wx_step = -34
-            item_cx = bar_x + 22
+            wx_start = vx + bw - C.HUD_PAD - 6
+            wx_step = -28
+            item_cx = vx + C.HUD_PAD + 22
         for wi, (wid, lvl) in enumerate(weapons_list):
             w = weapons.WEAPONS[wid]
             cwx = wx_start + wi * wx_step
@@ -249,7 +288,7 @@ def _draw_hud(game, surf):
                     C.COL_WHITE, align='center')
 
         # Active item: dedicated corner of the strip. Co-op gives each player
-        # the same corner of their own capsule, so they never share a slot.
+        # the same corner of their own strip, so they never share a slot.
         if p.ability:
             from ..combat import items as itemlib
             it = itemlib.ITEMS.get(p.ability)
@@ -269,8 +308,6 @@ def _draw_hud(game, surf):
                                     math.pi / 2,
                                     math.pi / 2 + p.ability_charge * C.TAU,
                                     2)
-                # button hint sits beside the icon (right for P1, left for P2)
-                # so the icon's centre stays clean
                 lbl = "E" if i == 0 else "U"
                 if i == 0:
                     lbl_x = item_cx - 18
