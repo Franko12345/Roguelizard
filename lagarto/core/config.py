@@ -294,7 +294,12 @@ CAMP_DOOR_DELAY = 0.30   # 1a porta; as outras escalonam por CAMP_DOOR_STAGGER
 CAMP_DOOR_STAGGER = 0.14
 # o preco de um item da loja sobe a cada compra e PERSISTE pela run inteira
 # (era 1.6x resetando a cada camp -- dava pra farmar cura barata pra sempre)
-SHOP_PRICE_MULT = 1.25
+SHOP_PRICE_MULT = 1.25       # recompra de consumivel (Nectar, Ovo)
+SHOP_PRICE_MULT_PERM = 1.45  # recompra de upgrade permanente (Vitalidade, Vigor, Charm)
+# o preco base tambem sobe com o estagio da run: +70% por tier. A renda de
+# polen cresce ~+95% por tier, entao a folga cresce de proposito -- poder de
+# compra levemente crescente. Ver rounds.tier_price_mult e docs/concepts/balance.md.
+SHOP_TIER_STEP = 0.7
 
 # --- ritmo das telas de jogo (level-up / acampamento) ---------------------- #
 # Estados que animam a propria entrada/saida (veu + dropdown + absorcao):
