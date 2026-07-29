@@ -31,6 +31,8 @@ wrong.
 - [Character](./character.md) — playable genomes + exclusive mechanic
 - [Champion](./champion.md) — named variant + orthogonal modifier
 - [Boss](./boss.md) — FSM + personality + phase transitions
+- [Boss movement](./boss-movement.md) — the movement trail, the cadence
+  by overlap, the windup floor
 - [AI](./ai.md) — behavior branches
 - [Enemy behaviors](./enemy-behaviors.md) — phase-2 species and telegraphs
 

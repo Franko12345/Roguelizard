@@ -19,6 +19,8 @@ from ...combat.emitter import _tick_barrage, _tick_spiral, _tick_fire_breath
 from .patterns import PATTERNS, default_phases
 from .telegraph import TELEGRAPHS
 from .personality import default_personality
+from .moves import MOVES
+from .arena import clamp_to_anchor
 
 # --- #13 body telegraph: spring-driven tells fired DURING the windup. Each
 # scales with windup progress (0->1) and the mood's speed (angrier = snappier),
@@ -112,6 +114,76 @@ class BossAI:
         weights = [self.personality.weight(p, self.mood) for p in pats]
         return random.choices(pats, weights=weights, k=1)[0]
 
+    def _roll_cd(self):
+        """Cooldown between attacks, with the global floor.
+
+        The default ``BOSS_CD_MIN``/``BOSS_CD_MAX`` collapsed to near zero
+        so the per-boss ``cd_mul`` carries the rhythm signature. The
+        ``BOSS_CD_FLOOR`` keeps a 0 ``cd_mul`` (or a tiny one) from making
+        the boss spell out bullets illegibly.
+        """
+        cd_raw = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
+        return max(C.BOSS_CD_FLOOR, cd_raw)
+
+    def _eff_windup(self, pid):
+        """Effective windup for ``pid``, clamped to the 27-frame floor.
+
+        The floor is the 27-frame rule (0.45s at SIM_HZ=60) made code; a
+        mood multiplier cannot drag a real telegraph below it. Burrow and
+        grapple are exempt (``telegraph=None`` -- their body IS the tell).
+        """
+        pat = PATTERNS.get(pid, {})
+        if pat.get('telegraph') is None:
+            return pat.get('windup', C.BOSS_WINDUP_FLOOR)
+        base = pat.get('windup', 0.0) * self.personality.windup_mult(self.mood)
+        return max(C.BOSS_WINDUP_FLOOR, base)
+
+    def _eff_recover(self, pid):
+        """Per-pattern recover duration; the default lives in config."""
+        pat = PATTERNS.get(pid, {})
+        return pat.get('recover', C.BOSS_RECOVER_TIME)
+
+    def _move(self, target, game):
+        """The movement trail: ``(direction, speed)`` for the current frame.
+
+        Precedence (issue #118): attack > phase > none.
+
+        - If the active pattern has a ``move`` binding, it wins.
+        - Else the phase kit's ``moves`` slot drives the boss.
+        - Else the default ``reposition`` (move toward the target) takes over.
+
+        Mood speed multiplies the result everywhere. The arena (when
+        present) is the hard wall: an intended move that would step
+        outside the box is re-pointed at the box's centre. ``Lizard.integrate``
+        also clamps, so this is a one-line guard against the boss painting
+        the corner of the arena with ghost moves.
+        """
+        mood_speed = self.personality.mood_speed.get(self.mood, 1.0)
+        b = self.boss
+        # active attack's move (may be None if the pattern doesn't override)
+        if self.pattern_id:
+            pat = PATTERNS.get(self.pattern_id, {})
+            mv = pat.get('move')
+            if mv and mv in MOVES:
+                d, s = MOVES[mv](b, game, target, pat)
+                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
+                return d, s * mood_speed
+        # phase's move (the BACKGROUND between attacks)
+        phase = self.phase()
+        moves = phase.get('moves') or []
+        if moves:
+            mv = moves[0]
+            if mv in MOVES:
+                d, s = MOVES[mv](b, game, target, phase)
+                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
+                return d, s * mood_speed
+        # none: default approach (move toward target at approach speed)
+        if target is None:
+            return Vector2(), 0.0
+        d = safe_norm(target.pos - b.pos)
+        d, s = clamp_to_anchor(b.pos, d, C.BOSS_APPROACH_SPEED, b.max_r, game.arena_bounds)
+        return d, s * mood_speed
+
     def tick(self, dt, game):
         b = self.boss
         game.dt_last = dt          # aimed_barrage's/spiral's per-frame tick reads this
@@ -127,7 +199,6 @@ class BossAI:
                 self.scars.append(spawn_scar(b, game))
         target = game.nearest_player(b.pos)
         self._update_mood(dt, target)
-        speed_mul = self.personality.mood_speed.get(self.mood, 1.0)
         if target is None:
             return Vector2(), 0.0
 
@@ -143,7 +214,7 @@ class BossAI:
             if self.t <= 0:
                 self.state = 'approach'
                 b.boss_invuln = False
-                self.cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
+                self.cd = self._roll_cd()
             return safe_norm(target.pos - b.pos) * 0.1, 0.15
 
         to = safe_norm(target.pos - b.pos)
@@ -158,19 +229,34 @@ class BossAI:
                 pid = self._choose_pattern(pats) if pats else 'fan'
                 self.pattern_id = pid
                 self.state = 'windup'
-                self.t = PATTERNS[pid]['windup'] * self.personality.windup_mult(self.mood)
+                # Issue #118: windup floor (0.45s, the 27-frame rule). The
+                # clamp lives in _eff_windup, applied via the FSM so any
+                # future mood multiplier respects the same floor.
+                self.t = self._eff_windup(pid)
                 self._windup_target = Vector2(target.pos)
                 select = PATTERNS[pid].get('select')
                 if select:
                     select(b, game, target, PATTERNS[pid])
-                return Vector2(), 0.0
-            speed = C.BOSS_APPROACH_SPEED * speed_mul if dist > 240 else 0.0
-            return to, speed
+            # Movement trail: attack > phase > none. The approach vector
+            # was the only "movement" before; now the phase's moves slot
+            # drives the boss (the per-boss signatures (#121-#125) fill
+            # in the rich moves).
+            return self._move(target, game)
 
         if self.state == 'windup':
             self.t -= dt
             b.squat_bias = 0.85     # coiling for whatever's coming -- same
                                     # anticipation hook regular AI wind-ups use
+            # Issue #118: fan/line telegraphs re-aim live. The other kinds
+            # (radial, shockwave, spiral, horn) read the boss's own joints
+            # live and stay honest to the boss's position; fan/line used
+            # to freeze the aim at windup start, which made a walking
+            # boss draw a cone that rotated while the shot left from the
+            # new position. Now the aim tracks the player each frame.
+            if self.pattern_id:
+                pat = PATTERNS[self.pattern_id]
+                if pat.get('telegraph') in ('fan', 'line'):
+                    self._windup_target = Vector2(target.pos)
             if self.t <= 0:
                 pat = PATTERNS[self.pattern_id]
                 if pat.get('burrow'):
@@ -190,8 +276,10 @@ class BossAI:
                     self.t = C.BOSS_CHARGE_TIME
                 else:
                     self.state = 'recover'
-                    self.t = 0.5
-            return Vector2(), 0.0
+                    self.t = self._eff_recover(self.pattern_id)
+            # Movement trail: the active pattern's move (if any) overrides
+            # the phase's. charge/burrow/grapple already returned above.
+            return self._move(target, game)
 
         if self.state == 'burrowing':
             # delegates every frame to the regular centipede's OWN dig/erupt
@@ -202,7 +290,7 @@ class BossAI:
                 self._burrow_seen_under = True
             elif self._burrow_seen_under and b.burrow_state == 'surface':
                 self.state = 'recover'
-                self.t = 0.5
+                self.t = self._eff_recover('burrow')
             return d, speed
 
         if self.state == 'grappling':
@@ -214,7 +302,7 @@ class BossAI:
                 self._grapple_seen_windup = True
             elif self._grapple_seen_windup:
                 self.state = 'recover'
-                self.t = 0.6
+                self.t = self._eff_recover('grapple')
             return d, speed
 
         if self.state == 'charging':
@@ -224,7 +312,7 @@ class BossAI:
                 self.no_hit_t = 0.0
             if self.t <= 0:
                 self.state = 'recover'
-                self.t = 0.4
+                self.t = self._eff_recover('charge')
                 return Vector2(), 0.0
             return getattr(b, '_charge_dir', to), C.BOSS_CHARGE_SPEED_MULT
 
@@ -232,8 +320,9 @@ class BossAI:
             self.t -= dt
             if self.t <= 0:
                 self.state = 'approach'
-                self.cd = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
-            return Vector2(), 0.0
+                self.cd = self._roll_cd()
+            # Movement trail: phase's move drives the boss during recover.
+            return self._move(target, game)
 
         return Vector2(), 0.0
 
@@ -252,7 +341,10 @@ class BossAI:
         if self.state != 'windup' or not self.pattern_id:
             return
         pat = PATTERNS[self.pattern_id]
-        windup = pat['windup'] * self.personality.windup_mult(self.mood)
+        # issue #118: progress is computed against the FLOORED windup to
+        # match the FSM's countdown -- a pattern clamped to 0.45s reports
+        # prog 0->1 across exactly 0.45s, not the table value
+        windup = self._eff_windup(self.pattern_id)
         prog = 1.0 - clamp(self.t / max(1e-4, windup), 0, 1)   # 0 -> 1
         kick = clamp(prog, 0, 1) * speed
         if pat.get('charge'):
@@ -290,7 +382,8 @@ class BossAI:
         # on-screen telegraph to draw here.
         if kind is None:
             return
-        windup_dur = PATTERNS[self.pattern_id]['windup'] * self.personality.windup_mult(self.mood)
+        # issue #118: progress matches the FSM's countdown (floored windup)
+        windup_dur = self._eff_windup(self.pattern_id)
         prog = 1.0 - clamp(self.t / max(1e-4, windup_dur), 0, 1)   # 0 -> 1
         # blink pulses faster as prog approaches 1 -- the "any moment now" cue
         blink = 0.5 + 0.5 * math.sin(prog * prog * 40)
