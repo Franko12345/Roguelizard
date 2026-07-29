@@ -20,6 +20,7 @@ from .patterns import PATTERNS, default_phases
 from .telegraph import TELEGRAPHS
 from .personality import default_personality
 from .moves import MOVES
+from .arena import clamp_to_anchor
 
 # --- #13 body telegraph: spring-driven tells fired DURING the windup. Each
 # scales with windup progress (0->1) and the mood's speed (angrier = snappier),
@@ -158,13 +159,14 @@ class BossAI:
         the corner of the arena with ghost moves.
         """
         mood_speed = self.personality.mood_speed.get(self.mood, 1.0)
+        b = self.boss
         # active attack's move (may be None if the pattern doesn't override)
         if self.pattern_id:
             pat = PATTERNS.get(self.pattern_id, {})
             mv = pat.get('move')
             if mv and mv in MOVES:
-                d, s = MOVES[mv](self.boss, game, target, pat)
-                d, s = self._arena_clamp(d, s, target, game)
+                d, s = MOVES[mv](b, game, target, pat)
+                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
                 return d, s * mood_speed
         # phase's move (the BACKGROUND between attacks)
         phase = self.phase()
@@ -172,41 +174,15 @@ class BossAI:
         if moves:
             mv = moves[0]
             if mv in MOVES:
-                d, s = MOVES[mv](self.boss, game, target, phase)
-                d, s = self._arena_clamp(d, s, target, game)
+                d, s = MOVES[mv](b, game, target, phase)
+                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
                 return d, s * mood_speed
         # none: default approach (move toward target at approach speed)
         if target is None:
             return Vector2(), 0.0
-        d = safe_norm(target.pos - self.boss.pos)
-        d, s = self._arena_clamp(d, C.BOSS_APPROACH_SPEED, target, game)
+        d = safe_norm(target.pos - b.pos)
+        d, s = clamp_to_anchor(b.pos, d, C.BOSS_APPROACH_SPEED, b.max_r, game.arena_bounds)
         return d, s * mood_speed
-
-    def _arena_clamp(self, d, s, target, game):
-        """Re-point ``d`` toward the arena centre if the next step would
-        leave the box. ``integrate`` already clamps, so this is a
-        one-frame guard against the boss queuing an off-arena move.
-
-        A boss with no arena (open world) or with ``max_speed == 0``
-        (A Muralha's ``plan='fixed'``) is left alone.
-        """
-        b = self.boss
-        bounds = game.arena_bounds
-        if not bounds or b.max_speed <= 0 or s <= 0:
-            return d, s
-        # small lookahead so the clamp anticipates, not corrects
-        lookahead = d * s * b.max_speed * 0.1
-        next_pos = b.pos + lookahead
-        lo_x, lo_y, hi_x, hi_y = bounds
-        m = b.max_r
-        if (next_pos[0] < lo_x + m or next_pos[0] > hi_x - m or
-                next_pos[1] < lo_y + m or next_pos[1] > hi_y - m):
-            cx = (lo_x + hi_x) * 0.5
-            cy = (lo_y + hi_y) * 0.5
-            inward = Vector2(cx - b.pos[0], cy - b.pos[1])
-            if inward.length_squared() > 1e-6:
-                return safe_norm(inward), s
-        return d, s
 
     def tick(self, dt, game):
         b = self.boss
