@@ -188,10 +188,13 @@ allocations.
    stable number of entries after a draw; 0 means the panel never
    drew, >4 means the keyspace is unstable.
 
-`tools/check_anatomical_hud.py` (added by #131/#132) covers the
-anatomy specifics: brain growth monotonic, cranial fluid drains on
-level-up, bellows collapse/inflate without overshoot, and a
-two-skull draw stays under the 1 ms budget.
+The anatomy specifics from #131/#132 are checked by the **same**
+`tools/check_hud_anatomy.py` (sections 6-9): brain growth monotonic,
+cranial fluid drains on level-up, bellows collapse/inflate without
+overshoot, and a two-skull draw stays under the 1 ms budget. They
+were added into the same file (rather than a separate script) so a
+broken HUD never passes one check and fails another -- the whole
+anatomy fails or the whole anatomy passes.
 
 `tools/check_hud_anatomy.py` was broken on purpose during writing to
 confirm both halves of the spring and the bottom anchor are checked.
