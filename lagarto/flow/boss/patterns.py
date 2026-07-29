@@ -25,9 +25,23 @@ PATTERNS = {
     # ``moves`` slot drives the boss instead. Charge / burrow / grapple
     # veto by being ``None`` AND short-circuiting the FSM (their own
     # state machines own the motion).
-    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
-    'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
-    'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
+    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial',
+                cd_jitter=0.18),
+    # Issue #122: per-attack ``move=`` binding (the Wasp uses fan/barrage/
+    # lead_fan with a movement glued to the attack). ``flyby``/``curve_approach``
+    # /``dive_arc`` exist in MOVES; the binding here is the glue. Other bosses
+    # that share these rows fall back to the phase's ``moves`` slot (their
+    # own kit decides). ``cd_jitter`` adds +/- jitter to the post-phase cd so
+    # the Wasp's inter-attack intervals have measurable variance (uniform
+    # spacing reads as a tower, not a hunter) -- applied after the phase's
+    # cd_mul, then the BOSS_CD_FLOOR safety net clips the low side.
+    'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan',
+                move='flyby', cd_jitter=0.20),
+    'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP,
+                    telegraph='line', move='curve_approach', cd_jitter=0.30),
+    'lead_fan': dict(fn=emitter.fan_shot, windup=0.7, telegraph='fan',
+                     count=5, spread=30, shot_speed=280, dmg=15, lead=0.6,
+                     move='dive_arc'),
     'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
     'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
     'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
@@ -72,7 +86,7 @@ PATTERNS = {
     'grapple': dict(fn=None, windup=0.05, telegraph=None, grapple=True),
     'spiral': dict(fn=emitter.spiral_pattern, windup=C.BOSS_SPIRAL_WINDUP, telegraph='spiral'),
     'charge': dict(fn=emitter.charge_attack, windup=C.BOSS_CHARGE_WINDUP, telegraph='line',
-                   charge=True),
+                   charge=True, cd_jitter=0.25),
     # Olho-Sismico. seismic_pulse = the existing 'shockwave' (reused in eye_phases).
     'gaze': dict(fn=emitter.gaze, windup=C.EYE_GAZE_WINDUP, telegraph='line',
                  shots=C.EYE_GAZE_SHOTS, turn=C.EYE_GAZE_TURN, gap=C.EYE_GAZE_GAP,
@@ -120,8 +134,22 @@ PATTERNS = {
                         count=22, shot_speed=150, dmg=11),
     # Leque antecipado: the cone aims where you are GOING (same lead formula as
     # the barrage and the ANTECIPADOR), so dodging sideways into it is the trap.
+    # ``move='dive_arc'`` is the Wasp's per-attack binding (issue #122) --
+    # the lead cone dives WHILE it leads. The row above is the Wasp's slot;
+    # the binding here keeps the same identity shared if another boss picks
+    # it up later (the move is a no-op for non-flyers since dive_arc only
+    # fires during a dive windup).
     'lead_fan': dict(fn=emitter.fan_shot, windup=0.7, telegraph='fan',
-                     count=5, spread=30, shot_speed=280, dmg=15, lead=0.6),
+                     count=5, spread=30, shot_speed=280, dmg=15, lead=0.6,
+                     move='dive_arc'),
+    # Issue #122: the Wasp's signature pattern. Same ``pincha_bite`` (contact
+    # damage on the reach), but the windup IS the dive -- ``move='dive_arc'``
+    # flies the boss THROUGH the target and out the other side, and the
+    # ``dive_line`` telegraph draws the Bezier the boss is actually flying
+    # (curve in the air + ground shadow at the exit point). Windup respects
+    # the 27-frame floor (0.7s -- same as charge, the windup IS the action).
+    'dive_arc': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='dive_line',
+                     move='dive_arc', reach=1.6, dmg=18),
 }
 
 
@@ -245,12 +273,45 @@ def crystal_phases():
 # --------------------------------------------------------------------------- #
 
 def wasp_phases():
+    """Terror Alado (B8, endless, tier 5+).
+
+    Issue #122: ``moves`` is the by-phase binding the Wasp lives on. Three
+    distinct shapes, each a phase:
+
+    - **Phase 1 (calm)**: ``['curve_approach','climb_out']`` -- the wasp
+      dips in and pulls back. A hunting rhythm, not a tower. Short burst
+      followed by longer pause reads as hunting; uniform spacing reads as
+      a metronome.
+    - **Phase 2 (agitated)**: ``['dive_arc']`` -- dives start appearing.
+      ``dive_arc`` only animates while its pattern is on; outside that
+      windup the move returns zero and the FSM falls through to
+      ``reposition`` (the default), which keeps the wasp approaching when
+      no dive is in flight.
+    - **Phase 3 (enraged)**: ``['dive_arc','flyby']`` -- the wasp becomes
+      a hunter. ``dive_arc`` fires during its pattern's windup; between
+      dives, ``flyby`` keeps it curving toward you.
+
+    ``dive_arc`` is also added as a phase-3 pattern -- the dive is the
+    Wasp's signature move, it appears in the pattern list at the same HP
+    threshold as the movement kit that animates it.
+
+    The Wasp owns the open world (no arena, see ``docs/concepts/boss.md``),
+    so the dive and flyby are free to cross the whole 3200x3200 map.
+    ``Lizard.integrate`` clamps to the world bounds; nothing caged or
+    caged-out, just bounded.
+    """
     return [
-        dict(hp_frac=1.0, patterns=['charge', 'fan'], cd_mul=0.9, moves=['orbit']),
-        dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85, moves=['orbit']),
+        dict(hp_frac=1.0, patterns=['charge', 'fan'], cd_mul=0.9,
+             moves=['curve_approach', 'climb_out']),
+        dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85,
+             moves=['dive_arc']),
         # 'mergulha e mira onde voce VAI estar': lead_fan e o mesmo lead do
-        # barrage aberto em leque -- so dials (issue #104)
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan'], cd_mul=0.6, moves=['orbit']),
+        # barrage aberto em leque -- so dials (issue #104). Phase 3 adds
+        # dive_arc as a pattern (the Wasp's signature -- the dive is the
+        # movement, and the dive is the attack). The move kit couples
+        # dive_arc (during its windup) with flyby (between dives).
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan', 'dive_arc'],
+             cd_mul=0.6, moves=['dive_arc', 'flyby']),
     ]
 
 

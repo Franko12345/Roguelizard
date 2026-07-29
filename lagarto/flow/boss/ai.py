@@ -121,8 +121,18 @@ class BossAI:
         so the per-boss ``cd_mul`` carries the rhythm signature. The
         ``BOSS_CD_FLOOR`` keeps a 0 ``cd_mul`` (or a tiny one) from making
         the boss spell out bullets illegibly.
+
+        Issue #122: a per-pattern ``cd_jitter`` field adds +/- jitter to the
+        post-multiplier cd. The Wasp's rhythm signature is "bursts, not
+        metronome" -- uniform spacing reads as a tower, a hunter's gaps
+        vary. The BOSS_CD_FLOOR clips the low side, so the jitter
+        contributes UP-side variance; high-side is preserved.
         """
         cd_raw = random.uniform(C.BOSS_CD_MIN, C.BOSS_CD_MAX) * self.phase()['cd_mul']
+        if self.pattern_id:
+            jitter = PATTERNS.get(self.pattern_id, {}).get('cd_jitter', 0.0)
+            if jitter:
+                cd_raw += random.uniform(-jitter, jitter)
         return max(C.BOSS_CD_FLOOR, cd_raw)
 
     def _eff_windup(self, pid):
@@ -149,7 +159,11 @@ class BossAI:
         Precedence (issue #118): attack > phase > none.
 
         - If the active pattern has a ``move`` binding, it wins.
-        - Else the phase kit's ``moves`` slot drives the boss.
+        - Else the phase kit's ``moves`` slot drives the boss. A list of
+          moves is tried in order (issue #122); the first that returns a
+          non-zero speed drives the boss. ``dive_arc`` only animates
+          during its own windup, so a kit with ``moves=['dive_arc',
+          'flyby']`` falls through to flyby whenever the dive isn't on.
         - Else the default ``reposition`` (move toward the target) takes over.
 
         Mood speed multiplies the result everywhere. The arena (when
@@ -168,15 +182,17 @@ class BossAI:
                 d, s = MOVES[mv](b, game, target, pat)
                 d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
                 return d, s * mood_speed
-        # phase's move (the BACKGROUND between attacks)
+        # phase's moves (the BACKGROUND between attacks). The list is tried
+        # in order -- the first non-zero wins, so a Wasp kit that says
+        # ['dive_arc','flyby'] uses the dive only during its windup and
+        # flyby for the rest.
         phase = self.phase()
-        moves = phase.get('moves') or []
-        if moves:
-            mv = moves[0]
+        for mv in (phase.get('moves') or []):
             if mv in MOVES:
                 d, s = MOVES[mv](b, game, target, phase)
-                d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
-                return d, s * mood_speed
+                if s > 0:
+                    d, s = clamp_to_anchor(b.pos, d, s, b.max_r, game.arena_bounds)
+                    return d, s * mood_speed
         # none: default approach (move toward target at approach speed)
         if target is None:
             return Vector2(), 0.0
@@ -215,6 +231,12 @@ class BossAI:
                 self.state = 'approach'
                 b.boss_invuln = False
                 self.cd = self._roll_cd()
+                # Issue #122: phase change invalidates a snapshot dive
+                # start (the new phase's dives begin fresh from the new
+                # position). Without clearing, a transition mid-dive
+                # would carry the stale start into the next phase.
+                if getattr(b, '_dive_start', None) is not None:
+                    b._dive_start = None
             return safe_norm(target.pos - b.pos) * 0.1, 0.15
 
         to = safe_norm(target.pos - b.pos)
@@ -234,6 +256,14 @@ class BossAI:
                 # future mood multiplier respects the same floor.
                 self.t = self._eff_windup(pid)
                 self._windup_target = Vector2(target.pos)
+                # Issue #122: snapshot the dive's start point so the
+                # Bezier the wasp flies is anchored to where the dive
+                # BEGAN (not where the boss is mid-windup). Without this
+                # the dive_arc movement would re-sample every frame and
+                # the wasp would arc around its current self, not its
+                # original line of attack.
+                if pid == 'dive_arc':
+                    b._dive_start = Vector2(b.pos)
                 select = PATTERNS[pid].get('select')
                 if select:
                     select(b, game, target, PATTERNS[pid])
@@ -259,6 +289,12 @@ class BossAI:
                     self._windup_target = Vector2(target.pos)
             if self.t <= 0:
                 pat = PATTERNS[self.pattern_id]
+                # Issue #122: the dive windup ended -- the dive Bezier
+                # is done, clear the snapshot so a subsequent windup
+                # snapshots its OWN start. The wasp stays past the
+                # player; the phase's moves list drives the rest.
+                if self.pattern_id == 'dive_arc' and getattr(b, '_dive_start', None) is not None:
+                    b._dive_start = None
                 if pat.get('burrow'):
                     self.state = 'burrowing'
                     self._burrow_seen_under = False
