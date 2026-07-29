@@ -22,6 +22,116 @@ from ..core import palette
 from ..render import ui
 
 
+HEALTH_SAC_HP = 25.0
+HEALTH_SACS_PER_ROW = 8
+HEALTH_SAC_MAX_ROWS = 2
+HEALTH_SAC_SIZE = 18
+HEALTH_SAC_GAP = 4
+
+
+def health_sac_fills(health, max_health):
+    count = max(1, math.ceil(max(0.0, max_health) / HEALTH_SAC_HP))
+    remaining = max(0.0, min(float(health), float(max_health)))
+    return [max(0.0, min(1.0, (remaining - i * HEALTH_SAC_HP) / HEALTH_SAC_HP))
+            for i in range(count)]
+
+
+def health_sac_layout(max_health, width):
+    count = max(1, math.ceil(max(0.0, max_health) / HEALTH_SAC_HP))
+    rows = min(HEALTH_SAC_MAX_ROWS, math.ceil(count / HEALTH_SACS_PER_ROW))
+    columns = math.ceil(count / rows)
+    size = min(HEALTH_SAC_SIZE, (width - HEALTH_SAC_GAP * (columns - 1)) / columns)
+    return count, rows, columns, max(6.0, size)
+
+
+def health_panic_rate(frac):
+    frac = max(0.0, min(1.0, frac))
+    return 2.2 + (1.0 - frac) * 7.8
+
+
+def health_sacs_bounds(x, y, max_health, width):
+    count, rows, columns, size = health_sac_layout(max_health, width)
+    used_columns = min(columns, count)
+    used_width = used_columns * size + max(0, used_columns - 1) * HEALTH_SAC_GAP
+    used_height = rows * size + max(0, rows - 1) * HEALTH_SAC_GAP
+    return pygame.Rect(x, y - used_height + size, math.ceil(used_width), math.ceil(used_height))
+
+
+def _draw_artery(surf, centers, color):
+    if len(centers) < 2:
+        return
+    root = palette.darken(color, 0.35)
+    for a, b in zip(centers, centers[1:]):
+        distance = Vector2(b).distance_to(a)
+        steps = max(2, int(distance / 3))
+        for step in range(steps + 1):
+            f = step / steps
+            p = Vector2(a).lerp(b, f)
+            pygame.draw.circle(surf, root, (round(p.x), round(p.y)), max(1, round(2.4 - f)))
+
+
+def draw_health_sacs(surf, x, y, width, health, max_health, t, impact=0.0):
+    fills = health_sac_fills(health, max_health)
+    count, rows, columns, size = health_sac_layout(max_health, width)
+    frac = max(0.0, min(1.0, health / max(0.001, max_health)))
+    panic = 1.0 - frac
+    rate = health_panic_rate(frac)
+    beat = (0.5 + 0.5 * math.sin(t * rate)) * panic
+    color = palette.mix((148, 54, 62), (255, 42, 58), min(1.0, panic * 0.85 + beat * 0.35))
+    row_counts = [min(columns, count - row * columns) for row in range(rows)]
+    centers = []
+    positions = []
+    index = 0
+    for row in range(rows):
+        row_width = row_counts[row] * size + max(0, row_counts[row] - 1) * HEALTH_SAC_GAP
+        row_x = x + (width - row_width) / 2
+        cy = y - row * (size + HEALTH_SAC_GAP) + size / 2
+        row_centers = []
+        for column in range(row_counts[row]):
+            cx = row_x + column * (size + HEALTH_SAC_GAP) + size / 2
+            sway = math.sin(t * 4.1 + index * 1.7) * impact * (1.5 + row * 0.5)
+            row_centers.append((cx, cy + sway))
+            positions.append((cx, cy + sway, index))
+            index += 1
+        centers.append(row_centers)
+    for row_centers in centers:
+        _draw_artery(surf, row_centers, color)
+    shell = (52, 30, 38)
+    empty = (25, 20, 29)
+    rim = palette.lighten(color, 0.12)
+    active = next((i for i, fill in enumerate(fills) if fill < 1.0), count - 1)
+    for cx, cy, index in positions:
+        fill = fills[index]
+        neighbour = max(0.0, 1.0 - abs(index - active) / 2.0)
+        bulge = impact * neighbour * 1.8 + beat * 0.8
+        radius = max(3, round(size * 0.42 + bulge))
+        center = (round(cx), round(cy))
+        pygame.draw.circle(surf, shell, center, radius + 1)
+        pygame.draw.circle(surf, empty, center, radius)
+        if fill > 0:
+            fluid_h = max(1, round(radius * 2 * fill))
+            pygame.draw.circle(surf, color, center, radius)
+            empty_h = radius * 2 - fluid_h
+            if empty_h > 0:
+                cover = pygame.Rect(center[0] - radius - 1, center[1] - radius - 1,
+                                    radius * 2 + 2, empty_h + 1)
+                pygame.draw.rect(surf, empty, cover)
+            meniscus = pygame.Rect(center[0] - radius, center[1] + radius - fluid_h - 1,
+                                   radius * 2, max(2, min(4, fluid_h)))
+            pygame.draw.ellipse(surf, palette.lighten(color, 0.12), meniscus)
+            if count <= 16 or index in {active - 1, active, active + 1}:
+                pygame.draw.circle(surf, palette.lighten(color, 0.55),
+                                   (center[0] - radius // 3, center[1] - radius // 3),
+                                   max(1, radius // 4))
+        else:
+            residue = pygame.Rect(center[0] - radius // 2, center[1] + radius // 2,
+                                  radius, max(1, radius // 4))
+            pygame.draw.ellipse(surf, palette.darken(color, 0.55), residue)
+        pygame.draw.circle(surf, rim if fill > 0 else (68, 48, 58), center, radius, 1)
+        if panic > 0.55 and beat > 0.6 and index in {active - 1, active}:
+            palette.glow(surf, center, radius * 2, color, 0.18 + beat * 0.12)
+
+
 def bar_tail(surf, bx, by, h, color, phase, t):
     """A little lizard TAIL wagging off the top of the bar.
 

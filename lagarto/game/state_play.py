@@ -161,27 +161,26 @@ def _draw_hud(game, surf):
         ui.text(surf, game.font, f"Nv {p.level}",
                 (px + bw - C.HUD_PAD, head_y), (226, 228, 244), align='right')
 
-        # ---- vitals (organs) -- each on its own faster rhythm ----------
-        # health: the big organic sac, with swaying flagella
-        hr = clamp(p.health / p.max_health, 0, 1)
-        hud.bio_bar(surf, bar_x, hy, bar_w, 16, hr, palette.health_color(hr),
-                    game.time, flagella=3, glow=True)
-        # light glyphs + dark rim, not dark-on-bar: the fill shifts green ->
-        # orange -> red under it, and dark ink lost contrast on every shade.
-        ui.text(surf, game.font, f"{int(p.health)}/{int(p.max_health)}",
-                (px + bw // 2, hy), (255, 255, 255), align='center')
+        hy = y + 26
+        previous_health = getattr(p, '_hud_health', p.health)
+        impact = min(1.0, abs(previous_health - p.health) / hud.HEALTH_SAC_HP)
+        p._hud_health = p.health
+        hud.draw_health_sacs(surf, x, hy, bw, p.health, p.max_health, game.time,
+                             impact=impact)
+        ui.text(surf, game.smallfont, f"{int(p.health)}/{int(p.max_health)}",
+                (x + bw, hy + 2), (230, 210, 216), align='right')
 
         # energy + xp: slim sacs (no flagella -- too short to read)
-        hud.bio_bar(surf, bar_x, ey, bar_w, 8, p.energy / p.max_energy,
-                    (96, 206, 240), game.time)
-        hud.bio_bar(surf, bar_x, xy, bar_w, 6,
-                    clamp(p.xp / p.xp_to_next, 0, 1), (245, 205, 84),
-                    game.time + 1.7)
-
-        # ---- ability cooldown dials (dash / tongue / whip) -------------
-        # dedicated row, three dials evenly spaced across the bar_w interior
-        dial_pitch = bar_w // 3
-        dial_cx = bar_x + dial_pitch // 2
+        ey = hy + 42
+        hud.bio_bar(surf, x, ey, bw, 8, p.energy / p.max_energy, (96, 206, 240),
+                    game.time)
+        xy = ey + 12
+        hud.bio_bar(surf, x, xy, bw, 6, clamp(p.xp / p.xp_to_next, 0, 1),
+                    (245, 205, 84), game.time + 1.7)
+        # ability cooldown dials (dash / tongue) -> readable "can I act?" feedback
+        dy = xy + 16
+        # three dials in a 216px panel: 78px pitch overflowed, so 11px radius
+        # on a 68px pitch, with short labels
         dash_frac = 1.0 - clamp(p.dash_cd / max(0.001, p.dash_cooldown), 0, 1)
         hud.dial(surf, (dial_cx, dy + 14), 11, dash_frac, p.colorset[0],
                  game.smallfont, "DASH", game.time,
