@@ -520,6 +520,11 @@ COL_FX_REVIVE   = (255, 240, 160)   # segundo folego: ouro claro (ring+spark+pop
 # --- Fase 5: framework de chefes (boss.py) ---------------------------------- #
 # Telegrafo >=27 frames (0.45s a 60Hz) e regra dura do projeto (fase 2). Windups
 # dos padroes ficam bem acima disso -- e tempo E visibilidade, nunca so um.
+# Issue #118: a regra vira codigo -- BOSS_WINDUP_FLOOR e o piso aplicado via
+# BossAI._eff_windup. Cada windup abaixo e dimensionado para que
+# PATTERNS[pid]['windup'] * windup_mult(mood) >= 0.45 mesmo no enraivecido
+# (o multiplicador mais agressivo, 0.65), entao nenhum telegrafo real cai
+# abaixo do piso em qualquer humor.
 BOSS_INTRO_TIME = 1.0       # entrada: invulneravel, corpo ainda assentando
 BOSS_TRANSITION_TIME = 1.0  # troca de fase: invulneravel (~1s), no maximo 2 coisas mudam
 # Issue #118: cadence is now a MOVES trail, not a long pause. The default
@@ -575,10 +580,14 @@ BOSS_HIT_FLASH = 0.45        # pico de hit_flash num acerto em chefe: continua
 # --- BossAI 2.0 (plans/02_sistema_chefes.md): mood + novos padroes ---------- #
 BOSS_CORNERED_DIST = 120     # jogador mais perto que isso -> mood 'cornered'
 BOSS_FRUSTRATION_SEC = 5.0   # sem acertar por tanto tempo -> mood 'frustrated'
-BOSS_CHARGE_WINDUP = 0.5
+# charge: bumped from 0.5 to 0.7 so even the enraged (0.65) multiplier
+# leaves the windup at 0.455s -- the 27-frame rule applies to charge too,
+# not just ranged attacks. The dash itself is the danger; the windup is
+# the only window to react.
+BOSS_CHARGE_WINDUP = 0.7
 BOSS_CHARGE_TIME = 0.65      # duracao da investida em si
 BOSS_CHARGE_SPEED_MULT = 2.0 # fracao de max_speed durante a investida
-BOSS_SHOCKWAVE_WINDUP = 0.6
+BOSS_SHOCKWAVE_WINDUP = 0.7
 BOSS_SHOCKWAVE_RADIUS = 210
 BOSS_SHOCKWAVE_DMG = 19
 BOSS_SPIRAL_WINDUP = 0.7
@@ -594,7 +603,11 @@ KING_SCAR_TIME = 2.5
 KING_SCAR_DMG = 6
 KING_SCAR_LIFE = 14.0        # some na transicao de fase de qualquer forma
 
-BOSS_PINCHA_WINDUP = 0.3     # rapido de proposito (pinca, nao investida)
+# pincha: bumped from 0.3 to 0.7 (issue #118). The pincer is no longer
+# "fast" in the windup sense; the danger is the contact damage, not the
+# tell. The 27-frame rule is the floor for every telegraph, including
+# contact bites -- the player reads the body posture, not the snap.
+BOSS_PINCHA_WINDUP = 0.7
 BOSS_PINCHA_REACH = 1.5      # x max_r
 BOSS_PINCHA_DMG = 20
 BOSS_DEATHROLL_SHOTS = 40    # spiral bem mais denso/rapido -- reusa spiral_pattern
@@ -606,7 +619,7 @@ CENT_BOSS_SHRINK = 0.18      # genome.length perdido por transicao
 CENT_BOSS_SPEED_BUMP = 1.25  # genome.speed x por transicao
 
 # Kraken-Mor (onda 15 / tier 3)
-BOSS_ARMS_RAIN_WINDUP = 0.6
+BOSS_ARMS_RAIN_WINDUP = 0.7
 BOSS_ARMS_RAIN_COUNT = 3
 BOSS_ARMS_RAIN_SPREAD = 220  # raio em volta do alvo onde os pontos caem
 BOSS_ARMS_RAIN_RADIUS = 90
@@ -622,7 +635,7 @@ BOSS_SKY_SLAM_PUDDLE_DMG = 6
 BOSS_SKY_SLAM_PUDDLE_LIFE = 5.0
 
 # Mae-Escaravelho (endless, tier5+)
-BOSS_WEB_TRAP_WINDUP = 0.6
+BOSS_WEB_TRAP_WINDUP = 0.7
 BOSS_WEB_TRAP_R = 85
 BOSS_WEB_TRAP_DMG = 2
 BOSS_WEB_TRAP_LIFE = 6.0
@@ -637,16 +650,22 @@ EYE_BLINK_DMG_MULT = 0.25       # golpe durante a piscada = 75% menos dano
 # (lo, hi) do intervalo entre piscadas por fase: entediado -> constante. O flip
 # do <33% e abrupto (a fase 3 pisca sem parar), casando com eye_personality.
 EYE_BLINK_INTERVAL = ((3.5, 5.0), (2.0, 3.2), (0.45, 0.9))
-EYE_GAZE_WINDUP = 0.6           # iris brilha 0.6s * 60 = 36 frames (> 27); a
+EYE_GAZE_WINDUP = 0.7           # iris brilha 0.7s * 60 = 42 frames (> 27); a
                                  # eye_personality zera o encurtamento de tell, entao
-                                 # o gaze fica 36 frames em TODO mood (regra do telegrafo)
+                                 # o gaze fica 42 frames em TODO mood (regra do telegrafo)
 EYE_GAZE_SHOTS = 22
 EYE_GAZE_GAP = 0.04
 EYE_GAZE_TURN = 9               # varredura lenta (graus por tiro) -- "varre lentamente"
 EYE_GAZE_SPEED = 300
 EYE_GAZE_DMG = 10
 EYE_GAZE_ARC = 70               # comeca a varredura ARC/2 antes do jogador
-EYE_SWIPE_WINDUP = 0.4          # tentaculo levanta
+# bumped from 0.4 to 0.7 -- eye_personality zeroes tell_mult, so the
+# multiplier is 1.0 across moods for the eye, but the safety check
+# uses the worst-case multiplier (0.65) to catch any future pattern
+# being reused by a boss with the default personality. The eye's multiplier
+# leaves 0.7 untouched; a future re-user with the default multiplier
+# still hits 0.455s in enraged.
+EYE_SWIPE_WINDUP = 0.7
 EYE_SWIPE_REACH = 2.6          # x max_r (o tentaculo alcanca longe)
 EYE_SWIPE_DMG = 18
 EYE_ORB_WINDUP = 0.7           # glow nos tentaculos
@@ -672,21 +691,26 @@ MURALHA_BREATH_GAP = 0.12       # gap between bursts
 MURALHA_BREATH_SPEED = 220
 MURALHA_BREATH_DMG = 12
 MURALHA_BREATH_SPREAD = 60      # degrees; the breath cone when a pattern omits it
-# Hand slam: stone hands from sides
-MURALHA_HAND_WINDUP = 0.5
+# Hand slam: stone hands from sides. Bumped from 0.5 to 0.7 so the
+# wall_personality's default enraged multiplier (0.65) still leaves the
+# windup at 0.455s -- the floor applies to the wall too.
+MURALHA_HAND_WINDUP = 0.7
 MURALHA_HAND_DMG = 22
 MURALHA_HAND_RADIUS = 80
 MURALHA_HAND_SPRING_STIFF = 8.0
 MURALHA_HAND_SPRING_DAMP = 0.7
-# Eye laser (beam barrage): multiple eyes firing beams
-MURALHA_EYE_WINDUP = 0.6
+# Eye laser (beam barrage): multiple eyes firing beams. Bumped 0.6 -> 0.7
+# for the same reason; the eye laser is the wall's most dangerous attack
+# and got the shortest windup, which violated the floor.
+MURALHA_EYE_WINDUP = 0.7
 MURALHA_EYE_BEAMS = 3
 MURALHA_EYE_SPEED = 400
 MURALHA_EYE_DMG = 10
 MURALHA_EYE_GAP = 0.08
 MURALHA_EYE_SPREAD = 45         # degrees between the outermost beams
-# Bouncing bullets (ricochete)
-MURALHA_BOUNCE_WINDUP = 0.5
+# Bouncing bullets (ricochete). Bumped 0.5 -> 0.7 -- the ricochet fans
+# out from a wide arc, so the wall's windup is the only signal.
+MURALHA_BOUNCE_WINDUP = 0.7
 MURALHA_BOUNCE_COUNT = 5
 MURALHA_BOUNCE_SPEED = 280
 MURALHA_BOUNCE_DMG = 14
@@ -701,12 +725,11 @@ MURALHA_GRID_WINDUP = 0.8
 MURALHA_GRID_CELL = 120
 MURALHA_GRID_DMG = 8
 MURALHA_GRID_TICK = 0.3
-# Tem que ser MENOR que o intervalo que reaplica o padrao (recover 0.5 +
-# BOSS_CD_MIN * cd_mul da fase 3 + windup encurtado pelo mood = 1.4 s), senao
-# duas grades se sobrepoem e o dano empilha -- a mesma regra do Acido, da poca
-# de veneno e do slow do ferrao. Era 4.0 enquanto o ataque errava a arena
-# inteira e portanto nunca empilhou de fato. Ver tools/check_muralha.py.
-MURALHA_GRID_LIFE = 1.2
+# Tem que ser MENOR que o intervalo que reapplica o padrao (recover +
+# BOSS_CD_FLOOR * cd_mul da fase 3 + windup = ~1.0 s), senao duas grades
+# se sobrepoem e o dano empilha -- a mesma regra do Acido, da poca de
+# veneno e do slow do ferrao. Ver tools/check_muralha.py.
+MURALHA_GRID_LIFE = 1.0
 # Arena fire pushes player
 MURALHA_FIRE_PUSH = 350        # px/s push toward wall
 MURALHA_FIRE_DMG = 6           # dps from ground fire

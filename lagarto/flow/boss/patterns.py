@@ -32,8 +32,9 @@ PATTERNS = {
     'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
     'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
-    # reach via the dials -- no new logic for a longer arm
-    'swipe': dict(fn=emitter.pincha_bite, windup=0.5, telegraph='line', reach=2.4, dmg=19),
+    # reach via the dials -- no new logic for a longer arm. Bumped 0.5 -> 0.7
+    # so the enraged (0.65) multiplier still leaves the windup at 0.455s.
+    'swipe': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line', reach=2.4, dmg=19),
     'arms_rain': dict(fn=emitter.arms_rain, select=emitter._select_arms_rain,
                       windup=C.BOSS_ARMS_RAIN_WINDUP, telegraph='rain'),
     'sky_slam': dict(fn=emitter.sky_slam, select=emitter._select_arms_rain,
@@ -49,10 +50,15 @@ PATTERNS = {
     'web_dome': dict(fn=emitter.web_trap, select=emitter._select_arms_rain, windup=0.8,
                      telegraph='rain', count=5, spread=180, radius=70, life=9.0),
     # Aranha-Rei's poison bite: same pincha_bite, roots instead of poisoning
-    # (the player has no poison status -- see pincha_bite's docstring)
-    'poison_bite': dict(fn=emitter.pincha_bite, windup=0.3, telegraph='line',
+    # (the player has no poison status -- see pincha_bite's docstring). Bumped
+    # 0.3 -> 0.7 for the 27-frame rule; the bite is still a bite, just with
+    # the floor respected.
+    'poison_bite': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line',
                         reach=1.6, dmg=15, slow=(0.5, 1.4)),
-    'deathroll': dict(fn=emitter.spiral_pattern, windup=0.5, telegraph='spiral',
+    # deathroll: bumped 0.5 -> 0.7 so the floor holds in enraged. The dense
+    # spiral still reads as "bullet hell" -- the windup is the same as the
+    # basic spiral, but the SHOTS dial is what makes it dense.
+    'deathroll': dict(fn=emitter.spiral_pattern, windup=0.7, telegraph='spiral',
                       shots=C.BOSS_DEATHROLL_SHOTS, turn=C.BOSS_DEATHROLL_TURN,
                       gap=C.BOSS_DEATHROLL_GAP, shot_speed=260, shot_dmg=12),
     # burrow has no `fn`/instant fire -- BossAI.tick special-cases `burrow=True`
