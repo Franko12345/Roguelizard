@@ -630,7 +630,7 @@ CONTROLS = (
     "P2 (gamepad):  sticks  -  A dash  -  X lingua  -  Y rabada  -  LT/RT rolamento",
     "",
     "armas atacam sozinhas - suba de nivel p/ evoluir  -  [R] rerrola as cartas - 1x por round (LAGARTO)",
-    "F11 tela cheia  -  F3 medidor de FPS  -  ESC pausa",
+    "F11 tela cheia  -  F3 medidor de FPS  -  TAB grid de stats  -  ESC pausa",
 )
 
 
