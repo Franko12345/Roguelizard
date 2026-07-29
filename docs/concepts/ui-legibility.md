@@ -58,7 +58,7 @@ ratified by #134:
 - Every element here is *the run* (score, wave), *the world's
   announcement* (banner), or *the other body* (boss name, boss bar).
   None is an organ of the player.
-- The `TopStack` is therefore the **only place** the liga do mundo
+- The `TopStack` is therefore the **only place** the lingua do mundo
   is allowed to grow. The seed for adding a new element is "is this
   about the world, or about me?" — about-me goes to the capsule in
   the rodape; about-world goes to the `TopStack`.
