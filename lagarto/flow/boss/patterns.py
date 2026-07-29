@@ -25,26 +25,26 @@ PATTERNS = {
     # ``moves`` slot drives the boss instead. Charge / burrow / grapple
     # veto by being ``None`` AND short-circuiting the FSM (their own
     # state machines own the motion).
-    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial',
-                cd_jitter=0.18),
-    # Issue #122: per-attack ``move=`` binding (the Wasp uses fan/barrage/
-    # lead_fan with a movement glued to the attack). ``flyby``/``curve_approach``
-    # /``dive_arc`` exist in MOVES; the binding here is the glue. Other bosses
-    # that share these rows fall back to the phase's ``moves`` slot (their
-    # own kit decides). ``cd_jitter`` adds +/- jitter to the post-phase cd so
-    # the Wasp's inter-attack intervals have measurable variance (uniform
-    # spacing reads as a tower, not a hunter) -- applied after the phase's
-    # cd_mul, then the BOSS_CD_FLOOR safety net clips the low side.
+    # Per-attack ``move=`` binding (issues #122/#123/#125): the row carries
+    # ONE movement signature, applied per-attack. Shared rows pick the
+    # canonical: proud_walk (king's legibility, #123) for radial/fan/
+    # shockwave. Wasp gets its own rows (barrage, lead_fan) and its
+    # cd_jitter dial stays on the row.
+    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP,
+                   telegraph='radial', move='proud_walk', cd_jitter=0.18),
     'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan',
-                move='flyby', cd_jitter=0.20),
+                move='proud_walk', cd_jitter=0.20),
     'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP,
                     telegraph='line', move='curve_approach', cd_jitter=0.30),
-    'lead_fan': dict(fn=emitter.fan_shot, windup=0.7, telegraph='fan',
-                     count=5, spread=30, shot_speed=280, dmg=15, lead=0.6,
-                     move='dive_arc'),
     'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
-    'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
-    'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
+    'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP,
+                      telegraph='shockwave', move='proud_walk'),
+    'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line',
+                   move='lunge'),       # issue #124: per-attack lunge on pincha
+    # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
+    # reach via the dials -- no new logic for a longer arm. Bumped 0.5 -> 0.7
+    # so the enraged (0.65) multiplier still leaves the windup at 0.455s.
+    'swipe': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='line', reach=2.4, dmg=19),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
     # reach via the dials -- no new logic for a longer arm. Bumped 0.5 -> 0.7
     # so the enraged (0.65) multiplier still leaves the windup at 0.455s.
@@ -157,14 +157,33 @@ def king_phases():
     """3 fases (66/33 -- doc's own thresholds for this boss). Fase 2 adds
     Radial Burst (1 thing); fase 3 swaps Fan for Spiral + faster cd (2 things).
 
-    ``moves`` is the MOVES trail (issue #118) -- the BACKGROUND movement
-    between attacks. The rich per-boss signatures (#121-#125) fill these
-    in; today the slot exists so every phase kit compiles.
+    Issue #123: Rei Lagarto is the **first boss of the game** and the
+    legibility canonical. His signature is "the most readable of the
+    five" -- the simplest movement (``proud_walk``, a committed walk that
+    never retreats), the longest windups (see ``BOSS_FAN_WINDUP`` /
+    ``BOSS_SHOCKWAVE_WINDUP`` / ``BOSS_RADIAL_WINDUP`` / ``BOSS_CHARGE_WINDUP``
+    bumped in config), and the loosest rhythm of the pool (1.0/0.95/0.85 --
+    the player's first encounter with cadence still has breath).
+
+    The ``moves=['proud_walk']`` slot is the BACKGROUND between attacks;
+    the per-attack ``move='proud_walk'`` (fan / shockwave / radial) keeps
+    the boss walking through the windup so the player reads the
+    direction the fight is going. Charge vetoes (its own dash owns the
+    motion).
+
+    Explicit and on purpose: Rei Lagarto has no authored invulnerability
+    window. The authored slot of this boss lot is A Muralha's (#121);
+    the Centopeiadeira's (#124) is emergent from ``burrow``. The first
+    boss of the game doesn't teach "sometimes shooting doesn't work" --
+    that's the second lesson, not the first.
     """
     return [
-        dict(hp_frac=1.0, patterns=['fan', 'shockwave', 'charge'], cd_mul=1.0, moves=['orbit']),
-        dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'], cd_mul=1.0, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'], cd_mul=0.7, moves=['orbit']),
+        dict(hp_frac=1.0,  patterns=['fan', 'shockwave', 'charge'],
+             cd_mul=1.0,  moves=['proud_walk']),
+        dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'],
+             cd_mul=0.95, moves=['proud_walk']),
+        dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'],
+             cd_mul=0.85, moves=['proud_walk']),
     ]
 
 
