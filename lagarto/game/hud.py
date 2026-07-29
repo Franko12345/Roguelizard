@@ -321,16 +321,16 @@ def gland(surf, center, r, frac, color, fn, t, enabled=True):
     The three states the player has to read:
 
     - **charging** (``frac < 1``): the silhouette is shrunk to
-      ``r * (0.4 + 0.6 * frac)`` and drawn grey. Size grows monotonically with
-      ``frac`` and reaches the full radius *exactly* at ``frac == 1`` -- never
-      before (a glandula cheia com habilidade em cooldown e mentira, issue #133).
-    - **ready-but-no-energy** (``frac >= 1`` and ``not enabled``): full radius,
-      grey. The charge is back but the budget is not; the grey colour is the
-      difference vs. ``ready`` and the missing pulse keeps the eye off the
-      'can I press this?' answer until the bellows #132 lets the player act.
-    - **ready** (``frac >= 1`` and ``enabled``): full radius, full colour, slow
-      pulse glow. This is the only state where ``palette.glow`` fires on the
-      silhouette, so the read survives without a label.
+      ``r * (0.4 + 0.6 * frac)`` and drawn grey. **Size is a function of
+      the recharge fraction alone** -- ``enabled`` does not enter it. A
+      glandula cheia com habilidade em cooldown is a mentira (issue #133
+      review): the silhouette is the recharge read, not the budget read.
+    - **ready-but-no-energy** (``frac >= 1`` and ``not enabled``): full
+      radius, grey. The charge is back but the budget is not; the grey
+      colour (no glow) is the difference vs. ``ready``.
+    - **ready** (``frac >= 1`` and ``enabled``): full radius, full colour,
+      slow pulse glow. This is the only state where ``palette.glow`` fires
+      on the silhouette, so the read survives without a label.
 
     ``fn`` is a procedural icon drawer from ``lagarto.render.icons`` -- the
     silhouette is the body part that performs the action (dash = leg muscle,
@@ -344,15 +344,21 @@ def gland(surf, center, r, frac, color, fn, t, enabled=True):
     frac = max(0.0, min(1.0, frac))
     ready = frac >= 0.999 and enabled
     grey = (78, 82, 104)
-    if ready:
-        palette.glow(surf, center, int(r * 2.0), color, 0.30 + 0.25 * pulse(t, 6))
+    # Size is purely a function of frac. It reaches the full radius exactly
+    # at frac == 1.0 (with int truncation the curve plateaus at 10 px for
+    # 0.909 < frac < 1.0 and snaps to 11 at frac == 1.0, which is the
+    # visible "almost ready -> ready" beat).
+    if frac >= 1.0:
         size = r
-        draw_color = color
-    elif not enabled:
-        size = r
-        draw_color = grey
     else:
         size = max(3, int(r * (0.4 + 0.6 * frac)))
+    # Colour and glow carry the energy check (the threshold question the
+    # bellows #132 deliberately leaves out). Grey while cooling down OR
+    # ready but unaffordable; full colour + pulse glow when both true.
+    if ready:
+        palette.glow(surf, center, int(r * 2.0), color, 0.30 + 0.25 * pulse(t, 6))
+        draw_color = color
+    else:
         draw_color = grey
     fn(surf, center, size, draw_color)
 
