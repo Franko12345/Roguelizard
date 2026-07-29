@@ -25,12 +25,17 @@ PATTERNS = {
     # ``moves`` slot drives the boss instead. Charge / burrow / grapple
     # veto by being ``None`` AND short-circuiting the FSM (their own
     # state machines own the motion).
-    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial'),
+    'radial': dict(fn=emitter.radial_burst, windup=C.BOSS_RADIAL_WINDUP, telegraph='radial',
+                   move='proud_walk'),
     'fan': dict(fn=emitter.fan_shot, windup=C.BOSS_FAN_WINDUP, telegraph='fan'),
     'barrage': dict(fn=emitter.aimed_barrage, windup=C.BOSS_BARRAGE_WINDUP, telegraph='line'),
     'summon': dict(fn=emitter.summon_adds, windup=C.BOSS_SUMMON_WINDUP, telegraph='horn'),
     'shockwave': dict(fn=emitter.shockwave, windup=C.BOSS_SHOCKWAVE_WINDUP, telegraph='shockwave'),
-    'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line'),
+    # Issue #124: pincha bites the target -- the body commits forward
+    # during the windup (move='lunge', windup-only commit). After fire
+    # the lunge releases so the body doesn't keep driving.
+    'pincha': dict(fn=emitter.pincha_bite, windup=C.BOSS_PINCHA_WINDUP, telegraph='line',
+                   move='lunge'),
     # Kraken-Mor's tentacle swipe: same pincha_bite fn, just a longer/harder
     # reach via the dials -- no new logic for a longer arm. Bumped 0.5 -> 0.7
     # so the enraged (0.65) multiplier still leaves the windup at 0.455s.
@@ -57,20 +62,32 @@ PATTERNS = {
                         reach=1.6, dmg=15, slow=(0.5, 1.4)),
     # deathroll: bumped 0.5 -> 0.7 so the floor holds in enraged. The dense
     # spiral still reads as "bullet hell" -- the windup is the same as the
-    # basic spiral, but the SHOTS dial is what makes it dense.
+    # basic spiral, but the SHOTS dial is what makes it dense. Issue #124:
+    # the body spins through the air during fire (move='spin_glide' --
+    # forward + perpendicular wobble, the spin being the bullet pattern).
     'deathroll': dict(fn=emitter.spiral_pattern, windup=0.7, telegraph='spiral',
                       shots=C.BOSS_DEATHROLL_SHOTS, turn=C.BOSS_DEATHROLL_TURN,
-                      gap=C.BOSS_DEATHROLL_GAP, shot_speed=260, shot_dmg=12),
+                      gap=C.BOSS_DEATHROLL_GAP, shot_speed=260, shot_dmg=12,
+                      move='spin_glide'),
     # burrow has no `fn`/instant fire -- BossAI.tick special-cases `burrow=True`
     # and delegates every frame to the boss's OWN ai.burrow.tick (the
     # regular centipede's dig/erupt state machine, telegraphs included for
-    # free -- AILizard.draw() already checks self.burrowed/burrow_state)
+    # free -- AILizard.draw() already checks self.burrowed/burrow_state).
+    # Issue #124: burrow IS the locomotion. The full surface -> dig -> under
+    # -> erupt -> surface cycle drives the body's position every frame;
+    # burrow vetoes the movement trail because its own state machine owns
+    # motion. The `under` segment is also the invulnerability window
+    # (hit_test -> None while burrowed), emergent from movement.
     'burrow': dict(fn=None, windup=0.05, telegraph=None, burrow=True),
     # same idea as burrow: no `fn`, BossAI.tick delegates every frame to the
     # octopus's own ai.grapple.tick (reach/root/snap+pull+slow, telegraph
     # included -- Lizard.draw already shows the arms converging via arm_target)
     'grapple': dict(fn=None, windup=0.05, telegraph=None, grapple=True),
-    'spiral': dict(fn=emitter.spiral_pattern, windup=C.BOSS_SPIRAL_WINDUP, telegraph='spiral'),
+    # Issue #124: spiral's body is the bullet pattern. move='spin_glide' =
+    # forward + perpendicular wobble, so the spiral reads as fired from a
+    # curving body instead of a stationary spinner.
+    'spiral': dict(fn=emitter.spiral_pattern, windup=C.BOSS_SPIRAL_WINDUP, telegraph='spiral',
+                   move='spin_glide'),
     'charge': dict(fn=emitter.charge_attack, windup=C.BOSS_CHARGE_WINDUP, telegraph='line',
                    charge=True),
     # Olho-Sismico. seismic_pulse = the existing 'shockwave' (reused in eye_phases).

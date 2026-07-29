@@ -107,6 +107,76 @@ def move_reposition(boss, game, target, dials):
     return safe_norm(to), 0.6
 
 
+# --------------------------------------------------------------------------- #
+#  Issue #124: Centopeiadeira signatures (glued to the attacks that remain).   #
+#  Burrow IS the locomotion (veto per #118). These three are the moves the    #
+#  body uses while the OTHER patterns (spiral / pincha / radial / deathroll)  #
+#  are in windup or recover -- per-attack binding from #118. The boss's long  #
+#  segmented body reads as part of the bullet pattern when it spins, so the   #
+#  movement is the bullets, in practice.                                       #
+# --------------------------------------------------------------------------- #
+
+def move_spin_glide(boss, game, target, dials):
+    """Centopeiadeira: glide toward the target with a sin-wave perpendicular
+    oscillation. The spiral/deathroll pattern fires from a body that is
+    CURVING through space; the perpendicular wobble is what makes the spiral
+    read as emitted-from-a-moving body instead of emitted-from-a-stationary
+    spinner (the frozen-fight case the no-coil check from #118 catches).
+
+    The phase of the oscillation rides ``boss.wobble`` (the per-creature
+    clock the oscillators already read) so the body keeps its rate across
+    phases -- phase 3 is the same machine running faster, not a different
+    gait.
+    """
+    if target is None:
+        return Vector2(), 0.0
+    to = target.pos - boss.pos
+    if to.length_squared() < 1e-4:
+        return Vector2(1, 0), 0.0
+    rim = safe_norm(to)
+    perp = Vector2(-rim.y, rim.x)
+    # amplitude ~0.3 of base speed; period via wobble (every creature has its own)
+    amp = 0.32 * math.sin(boss.wobble * 1.6)
+    v = rim + perp * amp
+    if v.length_squared() < 1e-4:
+        return rim, 0.0
+    return v.normalize(), 0.7
+
+
+def move_lunge(boss, game, target, dials):
+    """Centopeiadeira: short forward commit on the bite windup, then stop.
+
+    The lunge fires only while the FSM is in ``windup`` -- the body leans
+    into the bite's reach. During recover the lunge releases (returns 0),
+    so the body doesn't keep driving forward after contact. Outside an
+    active windup the move is silent.
+    """
+    if target is None:
+        return Vector2(), 0.0
+    ai = getattr(boss, 'boss_ai', None)
+    if ai is None or ai.state != 'windup':
+        return Vector2(), 0.0
+    to = target.pos - boss.pos
+    if to.length_squared() < 1e-4:
+        return Vector2(1, 0), 0.0
+    return safe_norm(to), 0.85
+
+
+def move_proud_walk(boss, game, target, dials):
+    """Centopeiadeira: confident forward walk, no oscillation.
+
+    The radial burst reads as "get away from me" -- the boss is asserting
+    space, not chasing. A straight commit reads as the long body holding
+    the line; orbit/lunge would make the radial fire feel evasive.
+    """
+    if target is None:
+        return Vector2(), 0.0
+    to = target.pos - boss.pos
+    if to.length_squared() < 1e-4:
+        return Vector2(1, 0), 0.0
+    return safe_norm(to), 0.5
+
+
 # Registry: id -> move function. The id is the string you write in
 # PATTERNS['foo']['move'] or in a phase kit's 'moves' list. Adding a
 # move = one function + one entry, no editing of dispatch.
@@ -116,4 +186,8 @@ MOVES = {
     'retreat':    move_retreat,
     'hover':      move_hover,
     'reposition': move_reposition,
+    # Centopeiadeira signatures (issue #124)
+    'spin_glide':  move_spin_glide,
+    'lunge':       move_lunge,
+    'proud_walk':  move_proud_walk,
 }
