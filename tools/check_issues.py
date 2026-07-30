@@ -162,6 +162,22 @@ chk(101, "shared emitter", bool(_fns)
     and all(list(inspect.signature(f).parameters) == ['shooter', 'game', 'target', 'dials']
             for f in _fns)
     and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
+_new_hooks = ('chain_link', 'chain_damage', 'wave', 'boomerang', 'burst_stop', 'spiral_arc')
+_new_hook_defs = {n: getattr(projlib, n, None) for n in _new_hooks}
+_new_rows = ('chain_arc', 'wave_fan', 'boomerang_burst', 'burst_stop_burst', 'spiral_arc')
+_csrc = src(C)
+chk(167, "5 bullet hooks + slow_homing dial",
+    all(callable(_new_hook_defs[n]) for n in _new_hooks)
+    and 'CHAIN_LINK_DIST = ' in _csrc and 'BOOMERANG_RETURN_TIME = ' in _csrc
+    and 'BURST_STOP_TRAVEL = ' in _csrc and 'SPIRAL_OMEGA = ' in _csrc
+    and 'def chain_link(pr, dt, game)' in src(projlib)
+    and 'def chain_damage(pr, victim, game)' in src(projlib)
+    and "home_mult = dials.get('home_mult', 1.0)" in src(emi)
+    and all(pid in pat.PATTERNS for pid in _new_rows)
+    and all(inspect.getsource(pat.PATTERNS[pid]['fn']).count('proj.') >= 1
+            for pid in _new_rows)
+    and _pj.returncode == 0,
+    "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
