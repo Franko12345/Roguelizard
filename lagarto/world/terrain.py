@@ -15,6 +15,7 @@ import pygame
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import vfrom_angle, pulse
+from .puddles import Puddle, PUDDLE_CAP
 
 CELL = 128          # ground tile size (world units)
 VOID = (14, 12, 26)
@@ -77,6 +78,11 @@ class World:
                        self.rng.uniform(0, C.TAU), self.rng.uniform(6, 14))
                       for _ in range(130)]
 
+        # blood puddles: scars left by hits (issue #135). Drawn between ground
+        # and decor so the flora/rocks still sit on top of the dried blood.
+        self.puddle_list = []
+        self._puddle_layer = pygame.Surface((C.WIDTH, C.HEIGHT), pygame.SRCALPHA)
+
     # ---- biome lookup --------------------------------------------------- #
     def biome_at(self, pos):
         best, bd = 'meadow', 1e18
@@ -111,6 +117,30 @@ class World:
 
     def update(self, dt):
         self.time += dt
+        self.update_puddles(dt)
+
+    def add_puddle(self, pos, dmg, color, permanent=False):
+        """Drop a new puddle at ``pos``. Permanent puddles always append;
+        non-permanent ones evict the oldest non-permanent when at the cap."""
+        p = Puddle.make(pos, dmg, color, permanent=permanent)
+        if permanent:
+            self.puddle_list.append(p)
+            return
+        if len(self.puddle_list) >= PUDDLE_CAP:
+            for i, q in enumerate(self.puddle_list):
+                if q.lifetime >= 0.0:                # FIFO among non-permanent
+                    self.puddle_list.pop(i)
+                    break
+        self.puddle_list.append(p)
+
+    def update_puddles(self, dt):
+        """Tick every puddle and reap fully-faded ones."""
+        alive = []
+        for p in self.puddle_list:
+            p.update(dt)
+            if p.alpha > 0.0:
+                alive.append(p)
+        self.puddle_list = alive
 
     # ---- drawing -------------------------------------------------------- #
     def draw_ground(self, surf, cam):
@@ -142,6 +172,21 @@ class World:
             if not cam.visible((x, y), 90):
                 continue
             _PROP[typ](surf, cam, x, y, size * z, phase, color, t)
+
+    def draw_puddles(self, surf, cam):
+        """Render every puddle to one SRCALPHA surface, blit onto ``surf``.
+
+        One composite surface keeps the per-frame allocation churn down (see
+        the same rationale in ``render.ui._tint``); individual puddles share
+        the alpha channel so the blends compose correctly.
+        """
+        if not self.puddle_list:
+            return
+        layer = self._puddle_layer
+        layer.fill((0, 0, 0, 0))
+        for p in self.puddle_list:
+            p.draw(layer, cam)
+        surf.blit(layer, (0, 0))
 
     def draw_ambient(self, surf, cam):
         z = cam.zoom

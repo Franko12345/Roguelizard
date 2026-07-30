@@ -16,6 +16,7 @@ from ..core import palette
 from ..combat import weapons
 from ..core.mathutil import clamp, approach, vfrom_angle, safe_norm, angle_of, decay
 from .base import Lizard
+from ..world.puddles import COL_BLOOD
 
 
 class Player(Lizard):
@@ -311,6 +312,11 @@ class Player(Lizard):
         self.hit_flash = 1.0
         if not self.knockback_immune:   # COURACADO does not get moved, by anything
             self.vel = src_dir * (140 + dmg * 6)
+        # Issue #135: bleed where the hit landed. Trail behind the knockback
+        # vector so the blood reads as coming FROM the player, not ahead.
+        back = safe_norm(self.vel) * -20 if self.vel.length_squared() > 1e-6 \
+            else Vector2()
+        game.world.add_puddle(self.pos + back, dmg, COL_BLOOD, permanent=True)
         game.fx.burst(self.pos, self.color, 10 + int(dmg / 2), 200)
         game.fx.spark_burst(self.pos, C.COL_FX_SPARK, 8 + int(dmg / 3), 320)
         game.shake(4 + dmg * 0.4)

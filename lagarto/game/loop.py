@@ -728,6 +728,7 @@ class Game:
     # ---- draw ----------------------------------------------------------- #
     def draw(self, surf):
         self._draw_bg(surf)
+        self.world.draw_puddles(surf, self.cam)            # blood over ground (issue #135)
         self.world.draw_decor(surf, self.cam)
         for pud in self.puddles:                    # acid pools sit on the ground
             if self.cam.visible(pud.pos, 60):
