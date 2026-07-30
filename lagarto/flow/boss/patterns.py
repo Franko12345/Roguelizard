@@ -318,13 +318,12 @@ def primordial_phases():
 # --------------------------------------------------------------------------- #
 
 def beetle_phases():
+    """3 fases. Issue #167: phase 3 swaps ``fan`` for ``boomerang_burst`` +
+    ``burst_stop_burst`` -- two of the new hooks dial into the same Mao a
+    support caster goes late, turning her from a buffer into a mine layer."""
     return [
         dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9, moves=['orbit']),
-        # issue #167: phase 3 swaps ``fan`` for ``boomerang_burst`` +
-        # ``burst_stop_burst`` -- two of the new hooks dial into the same
-        # Mao a support caster goes late, turning her from a buffer into a
-        # mine layer.
         dict(hp_frac=0.33, patterns=['summon', 'boomerang_burst', 'burst_stop_burst'],
              cd_mul=0.65, moves=['orbit']),
     ]
