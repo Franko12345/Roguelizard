@@ -389,3 +389,102 @@ def draw_all(surf, cam, creature):
         draw_extra_eyes(surf, cam, creature)
     if g.fangs:
         draw_fangs(surf, cam, creature)
+
+
+# --------------------------------------------------------------------------- #
+#  Issue #165: ANKH multi-corpo fantasma                                      #
+# --------------------------------------------------------------------------- #
+# ANKH carries 4 ``Phantombody`` ghosts (one per phase), each a translucent
+# copy of a different species skeleton, painted underneath the boss body
+# with per-pixel alpha + tint so the four layers cross-fade on phase
+# transitions. The ghosts reuse the SAME ``Lizard`` / ``parts.draw_all`` /
+# ``spine.body_render_smooth`` every other creature uses -- they are paint
+# only, no AI, no hit-test, no collision. ADR-0001 (genome is the creature)
+# still holds: ANKH remains one Lizard; the ghosts are decoration.
+
+class Phantombody:
+    """A translucent ghost silhouette of a species, painted under the boss.
+
+    ``alpha`` is the current visible alpha; ``target_alpha`` is where the
+    cross-fade is heading (set by the phase transition, advanced each
+    frame). ``tint`` recolours the silhouette per-pixel via ``BLEND_RGBA_MULT``.
+    """
+    __slots__ = ('species_key', 'alpha', 'target_alpha', 'tint')
+
+    def __init__(self, species_key, alpha=0.0, target_alpha=0.0,
+                 tint=(255, 255, 255)):
+        self.species_key = species_key
+        self.alpha = alpha
+        self.target_alpha = target_alpha
+        self.tint = tuple(tint)
+
+
+# Cache for the ghost Lizard, keyed on (species, tint, size_mul). The same
+# species shows up under multiple tints (the two horns bosses are both
+# 'horned' but different colours), so the tint has to be in the key. Bounded
+# by the number of (species, tint) pairs that ever get a phantom -- ANKH has
+# 4, so 4 entries max in practice; no eviction needed.
+_PHANTOM_CACHE = {}
+# Display-sized scratch reused across phantoms in the same frame. Allocating
+# a fresh full-screen SRCALPHA surface on every draw (which the first version
+# did, 4x per frame for ANKH at phase 4) cost ~3.2 MB / 14 400 calls =
+# 46 GB of churn across check_bosses; one per-game surface amortises to zero.
+_PHANTOM_SCRATCH = None
+
+
+def _scratch(size):
+    """Lazy display-sized SRCALPHA scratch; reused so each phantom draw is
+    just a fill + paint + tint-mult, no allocation."""
+    global _PHANTOM_SCRATCH
+    s = _PHANTOM_SCRATCH
+    if s is None or s.get_size() != size:
+        from ..core import config as C
+        s = pygame.Surface((C.WIDTH, C.HEIGHT), pygame.SRCALPHA)
+        _PHANTOM_SCRATCH = s
+    return s
+
+
+def draw_phantom_body(surf, cam, species_key, boss_pos, facing, alpha, tint,
+                      size_mul=2.3):
+    """Paint a translucent ghost of ``species_key`` at ``boss_pos``.
+
+    Builds the species' own Lizard once (cached on the module) at ``size_mul``
+    scale so the silhouette matches the boss body, resolves the spine under
+    ``boss_pos`` every frame so it tracks the boss, and composites onto
+    ``surf`` via a reused SRCALPHA scratch + ``BLEND_RGBA_MULT``: a single
+    fill tints per-pixel and multiplies the alpha into the existing pixels,
+    so the boss body underneath shows through. No integrate() call: the
+    ghost has no feet to plant, no arms to whip, no pupils to lag.
+    """
+    if alpha < 0.005:
+        return
+    from . import species as _sp
+    from .ai import AILizard
+    spec = _sp.SPECIES[species_key]
+    cache_key = (species_key, tuple(tint), round(size_mul, 3))
+    ghost = _PHANTOM_CACHE.get(cache_key)
+    if ghost is None:
+        g = spec['genome'].copy()
+        g.size *= size_mul
+        ghost = AILizard(boss_pos, 'enemy', genome=g)
+        ghost.color = tuple(tint)
+        _PHANTOM_CACHE[cache_key] = ghost
+    ghost.pos = Vector2(boss_pos)
+    ghost.facing = Vector2(facing) if (facing is not None
+                                       and (facing[0] * facing[0] +
+                                            facing[1] * facing[1]) > 0) \
+                                   else Vector2(1, 0)
+    ghost.color = tuple(tint)
+    ghost.spine.resolve(ghost.pos)             # keep silhouette under the boss
+    ghost.wobble += 0.5                       # oscillators advance -> horns quiver
+
+    scratch = _scratch(surf.get_size())
+    scratch.fill((0, 0, 0, 0))
+    ghost.draw(scratch, cam)
+    # one pass: tint (per channel) * alpha (uniform). Black pixels stay black
+    # (multiplicative tint can only dim, not recolour); the silhouette's
+    # anti-aliased outline tints correctly because draw writes non-black
+    # pixels at the body, not the background.
+    factor = (int(tint[0]), int(tint[1]), int(tint[2]), int(255 * alpha))
+    scratch.fill(factor, special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(scratch, (0, 0))

@@ -565,6 +565,52 @@ def ankh_phases():
     ]
 
 
+def ankh_setup(boss):
+    """Issue #165: build the 4 phase-ghost bodies that ANKH carries.
+
+    Each ghost is a translucent copy of one of the bosses ANKH's phases
+    "remember" -- phase 1 remembers the Rei Lagarto (golden horned), phase
+    2 the Mae-Escaravelho (spider), phase 3 the Kraken-Mor (octopus), and
+    phase 4 the Primordial itself (a violet re-skin of the horned body).
+    The ghosts are paint only (no AI, no hit-test, no collision), drawn
+    under the boss body via ``parts.draw_phantom_body``.
+
+    Phase-1 alpha starts at 1.0 so the gold ghost is visible from spawn;
+    the other three start at 0 and rise on transition.
+    """
+    from ...creatures.parts import Phantombody
+    boss.phantom_bodies = [
+        Phantombody(species_key='horned',  alpha=1.0, target_alpha=1.0,
+                    tint=(255, 215, 100)),     # phase 1 -- Rei Lagarto (gold)
+        Phantombody(species_key='spider',  alpha=0.0, target_alpha=0.0,
+                    tint=(255, 180,  80)),     # phase 2 -- Mae-Escaravelho
+        Phantombody(species_key='octopus', alpha=0.0, target_alpha=0.0,
+                    tint=( 80, 130, 255)),     # phase 3 -- Kraken-Mor (blue)
+        Phantombody(species_key='horned',  alpha=0.0, target_alpha=0.0,
+                    tint=(220, 100, 200)),     # phase 4 -- Primordial (violet)
+    ]
+
+
+def ankh_on_phase(boss, phase_i, game=None):
+    """Issue #165: cross-fade the phantombodies on phase transition.
+
+    Phase 4 (the 'fusao') keeps all four ghosts visible at 0.5 instead of
+    fading old/new -- the design asks for ANKH to literally carry four
+    overlapping bodies. ``BossAI.tick`` advances each ``alpha`` toward
+    its ``target_alpha`` every frame, so the swap reads as a 1.5-second
+    cross-fade rather than a blink.
+    """
+    fb = getattr(boss, 'phantom_bodies', None)
+    if not fb:
+        return
+    if phase_i == 3:                              # the fusion: all four
+        for p in fb:
+            p.target_alpha = 0.5
+    else:
+        for i, p in enumerate(fb):
+            p.target_alpha = 1.0 if i == phase_i else 0.0
+
+
 def wall_personality():
     """Implacavel: voce nao passa. A arena foi feita pra voce morrer aqui.
     Sem estado de frustracao: so calmo e enraivecido, sem meio-termo.

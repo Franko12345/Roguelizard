@@ -186,6 +186,18 @@ chk(101, "shared emitter", bool(_fns)
     and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
+_an = subprocess.run([sys.executable, 'tools/check_ankh_signature.py'], capture_output=True,
+                        env={**os.environ, 'PYTHONPATH': '.'})
+chk(165, "ANKH multi-corpo fantasma",
+    'Phantombody' in src(parts) and 'draw_phantom_body' in src(parts)
+    and 'ankh_setup' in src(pat) and 'ankh_on_phase' in src(pat)
+    and callable(getattr(parts, 'Phantombody', None))
+    and callable(getattr(parts, 'draw_phantom_body', None))
+    and 'phantom_bodies' in src(cbase.Lizard)
+    and rounds.BOSS_POOL['ankh'].get('setup') is pat.ankh_setup
+    and rounds.BOSS_POOL['ankh'].get('on_phase') is pat.ankh_on_phase
+    and _an.returncode == 0,
+    "" if _an.returncode == 0 else _an.stderr.decode()[-90:])
 chk(166, "Serpente de Cristal", rounds.BOSS_POOL['serpente_cristal']['species'] == 'serpente_cristal'
     and species.SPECIES['serpente_cristal']['role'] == 'boss'
     and species.SPECIES['serpente_cristal']['genome'].leg_count == 0

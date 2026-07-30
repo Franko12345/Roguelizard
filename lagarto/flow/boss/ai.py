@@ -13,7 +13,7 @@ from ...core import config as C
 from ...core import palette
 from ...creatures.ai import burrow as burrow_ai
 from ...creatures.ai import grapple as grapple_ai
-from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir
+from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir, approach
 from ...creatures.base import TAIL_SPRING_STIFFNESS
 from ...combat.emitter import _tick_barrage, _tick_spiral, _tick_fire_breath
 from .patterns import PATTERNS, default_phases
@@ -335,6 +335,14 @@ class BossAI:
         _tick_fire_breath(b, game)
         self.summon_cd = decay(self.summon_cd, dt)
         self._maybe_advance_phase()
+        # Issue #165: ANKH phase ghosts cross-fade. The on_phase callback
+        # (ankh_on_phase) sets each phantom's target_alpha on transition;
+        # this advances the visible alpha toward it every frame so the
+        # swap reads as a 1.5-second cross-fade, not a blink. rate=2.0
+        # is 90% in ~1.15s and 95% in ~1.5s at 60Hz. Empty list = no-op.
+        if b.phantom_bodies:
+            for p in b.phantom_bodies:
+                p.alpha = approach(p.alpha, p.target_alpha, 2.0, dt)
         # Issue #123: ring buffer of recent boss positions for the
         # CicatriZ puddle. Sampling the buffer at ``spawn_scar`` time
         # means the puddle lands where the boss WAS walking (the trail
