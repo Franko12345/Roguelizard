@@ -37,6 +37,15 @@ spread, `deathroll` is `spiral_pattern` with a denser one.
 ([Telegraph](../../CONTEXT.md)): draw the footprint, not just a
 warning icon.
 
+### Kraken-Mor grapple
+
+Kraken-Mor starts its grapple within `OCTO_GRAB_RANGE` (280 px) and keeps the
+0.75 s wind-up. During that wind-up it closes with a 0.5 directional multiplier.
+A snap that misses fires one `grapple_followup` cone: five hostile projectiles,
+30° total spread, 180 px/s, and 8 damage. A successful snap keeps the existing
+pull and slow. The follow-up belongs to the BossAI grapple cycle, not the
+random `PATTERNS` registry.
+
 Two patterns need state beyond a windup timer:
 
 - **`charge`** — introduced the `'charging'` FSM state. Windup → dash

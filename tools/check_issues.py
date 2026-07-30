@@ -155,6 +155,16 @@ chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_price
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
 from lagarto.combat import emitter as emi
+_grapple_src = open('lagarto/creatures/ai/grapple.py').read()
+chk(160, "Kraken-Mor grapple follow-up",
+    C.OCTO_GRAB_RANGE == 280
+    and 'to * 0.5, 0.0' in _grapple_src
+    and hasattr(emi, 'grapple_followup')
+    and 'grapple_followup' in src(bossai)
+    and '_grapple_followup_fired' in src(bossai)
+    and 'grapple_followup' not in pat.PATTERNS
+    and _br.returncode == 0,
+    "" if _br.returncode == 0 else _br.stderr.decode()[-90:])
 _fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
        [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
 chk(101, "shared emitter", bool(_fns)

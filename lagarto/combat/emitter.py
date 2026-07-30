@@ -120,6 +120,16 @@ def fan_shot(shooter, game, target, dials):
     audio.play('w_spit', 0.45)
 
 
+def grapple_followup(shooter, game, target, dials):
+    """Punish a missed grapple with a slow cone."""
+    fan_shot(shooter, game, target, {
+        'count': dials.get('count', 5),
+        'spread': dials.get('spread', 30),
+        'shot_speed': dials.get('shot_speed', 180),
+        'dmg': dials.get('dmg', 8),
+    })
+
+
 def lob_shot(shooter, game, target, dials):
     """A shot that LANDS on the aim point and leaves its payload there.
 
