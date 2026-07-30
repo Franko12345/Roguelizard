@@ -88,6 +88,17 @@ chk(124, "centopeiadeira signature -- burrow-as-locomotion",
     and "'burrow IS the locomotion'" in src(bossai)
     and _ce.returncode == 0,
     "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
+from lagarto.creatures.ai import burrow as _burrow_ai
+from lagarto.core import mathutil as _mathutil
+chk(161, "centopeiadeira burrow anticipates (lead_quality=0.85)",
+    'predict_target' in src(_mathutil)
+    and 'predict_target(' in open('lagarto/combat/emitter.py').read()
+    and 'predict_target(' in src(_burrow_ai)
+    and getattr(_burrow_ai, 'LEAD_QUALITY', None) == 0.85
+    and getattr(_burrow_ai, 'ERUPT_JITTER', None) == 30.0
+    and 'target.vel' in src(_burrow_ai)
+    and _ce.returncode == 0,
+    "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_spider_signature.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
 chk(125, "aranha-rei signature -- erratic + siege",
