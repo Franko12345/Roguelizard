@@ -1,11 +1,24 @@
-"""CENTOPEIA: the dive-and-ambush finite state machine."""
+"""CENTOPEIA: the dive-and-ambush finite state machine.
+
+The eruption point anticipates the player (issue #161): it's where the
+target WILL be when the boss surfaces, modulated by ``lead_quality``
+(sub-perfect so a player who brakes the dig telegraph still escapes).
+Underground speed is ``centipede.max_speed * UNDER_MULT``; flight time
+is ``distance / (max_speed * UNDER_MULT)``. A target with no velocity
+falls back to where they stand + a small jitter (no direction to lead).
+"""
 
 import random
 from pygame import Vector2
 
 from ...core import config as C
 from ...audio import engine as audio
-from ...core.mathutil import safe_norm, vfrom_angle, random_dir
+from ...core.mathutil import safe_norm, vfrom_angle, random_dir, predict_target
+
+
+UNDER_MULT = 2.4                             # buried travel speed / max_speed
+LEAD_QUALITY = 0.85                          # sub-perfect: 15% margin brakes hard
+ERUPT_JITTER = 30.0                          # eruption spot jitter (was 70: too loose)
 
 
 def burrow_tick(creature, game, dt, target):
@@ -37,8 +50,16 @@ def burrow_tick(creature, game, dt, target):
             creature.burrow_state = 'under'
             creature.burrowed = True
             creature.burrow_t = C.CENT_UNDER_TIME
-            creature.dive_to = Vector2(target.pos) + vfrom_angle(
-                random.uniform(0, 360), random.uniform(0, 70))
+            underground_speed = max(1, creature.max_speed * UNDER_MULT)
+            flight_time = max(0.0, (target.pos - creature.pos).length()
+                              / underground_speed)
+            if target.vel.length() > 1e-3:
+                dive_point = predict_target(target.pos, target.vel,
+                                            flight_time, LEAD_QUALITY)
+            else:
+                dive_point = Vector2(target.pos)
+            creature.dive_to = dive_point + vfrom_angle(
+                random.uniform(0, 360), random.uniform(0, ERUPT_JITTER))
             game.fx.burst(creature.pos, dirt, 24, 280)
             game.fx.ring(creature.pos, (170, 128, 86))
         return Vector2(), 0.0
@@ -52,7 +73,7 @@ def burrow_tick(creature, game, dt, target):
         creature.burrow_t = C.CENT_SURFACE_TIME
         _erupt(creature, game)
         return to, 0.0
-    return safe_norm(du), 2.4
+    return safe_norm(du), UNDER_MULT
 
 
 def _erupt(creature, game):

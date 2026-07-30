@@ -25,7 +25,7 @@ from pygame import Vector2
 from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
-from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
+from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of, predict_target
 from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook
 from . import projectile as proj
 
@@ -81,7 +81,7 @@ def lead_point(shooter, target, dials):
     origin = shooter.spine.joints[0]
     t = target.pos.distance_to(origin) / speed
     t = (target.pos + target.vel * t).distance_to(origin) / speed
-    return target.pos + target.vel * (t * quality)
+    return predict_target(target.pos, target.vel, t, quality)
 
 
 def radial_burst(shooter, game, target, dials):
@@ -124,6 +124,16 @@ def fan_shot(shooter, game, target, dials):
         _launch(pr, game, dials)
     game.fx.spark_burst(mouth, shooter.color, 10, 240)
     audio.play('w_spit', 0.45)
+
+
+def grapple_followup(shooter, game, target, dials):
+    """Punish a missed grapple with a slow cone."""
+    fan_shot(shooter, game, target, {
+        'count': dials.get('count', 5),
+        'spread': dials.get('spread', 30),
+        'shot_speed': dials.get('shot_speed', 180),
+        'dmg': dials.get('dmg', 8),
+    })
 
 
 def lob_shot(shooter, game, target, dials):

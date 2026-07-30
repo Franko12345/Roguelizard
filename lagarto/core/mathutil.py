@@ -65,6 +65,24 @@ def safe_norm(v):
     return Vector2(v) / l if l > 1e-6 else Vector2(1, 0)
 
 
+def predict_target(target_pos, target_vel, flight_time, quality=1.0):
+    """Where the target WILL be after ``flight_time``, with imperfect aim.
+
+    ``quality`` is how much of the predicted lead to apply, in [0, 1]:
+    ``1.0`` leads perfectly (the target has to brake or juke to escape);
+    ``0.85`` (the Centopeiadeira burrow, issue #161) leaves a 15% margin so
+    a player who brakes the telegraph still wins; ``0.6`` (the boss's
+    ``lead_fan``) leaves a third. The lead *time* is the caller's
+    responsibility -- ``emitter.lead_point`` refines it iteratively with
+    the shot's flight, the burrow uses a one-shot distance/speed.
+
+    Pure math; no shooter, no dials. Reused by ``emitter.lead_point`` and
+    by the centipede burrow so the SAME formula reads the player's future
+    movement wherever aim decides it.
+    """
+    return target_pos + target_vel * (flight_time * quality)
+
+
 def catmull_rom(p0, p1, p2, p3, t):
     """Point at ``t`` in [0,1] on the segment between ``p1`` and ``p2``,
     curved by the two neighbours ``p0``/``p3`` -- passes exactly through every

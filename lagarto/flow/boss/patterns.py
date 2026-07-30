@@ -198,8 +198,16 @@ def king_phases():
     five" -- the simplest movement (``proud_walk``, a committed walk that
     never retreats), the longest windups (see ``BOSS_FAN_WINDUP`` /
     ``BOSS_SHOCKWAVE_WINDUP`` / ``BOSS_RADIAL_WINDUP`` / ``BOSS_CHARGE_WINDUP``
-    bumped in config), and the loosest rhythm of the pool (1.0/0.95/0.85 --
-    the player's first encounter with cadence still has breath).
+    bumped in config), and the loosest rhythm of the pool -- the player's
+    first encounter with cadence still has breath.
+
+    Issue #162: fase 1 stays canonical (1.0 / untouched pattern dials);
+    fases 2 + 3 graduate density + cadence UP without touching windups.
+    The 27-frame rule still owns every telegraph -- the boss gets denser
+    (count / shots) and faster (cd_mul), not faster tells. The ``cd_mul``
+    ladder moves from 1.0 / 0.95 / 0.85 to 1.0 / 0.80 / 0.65; the
+    per-pattern dials are bumped on phase 2 (fan=3 / radial=10) and
+    phase 3 (spiral denser); the windups stay where #123 put them.
 
     The ``moves=['proud_walk']`` slot is the BACKGROUND between attacks;
     the per-attack ``move='proud_walk'`` (fan / shockwave / radial) keeps
@@ -212,14 +220,34 @@ def king_phases():
     the Centopeiadeira's (#124) is emergent from ``burrow``. The first
     boss of the game doesn't teach "sometimes shooting doesn't work" --
     that's the second lesson, not the first.
+
+    The ``pattern_dials`` slot is the phase-local override on top of the
+    shared ``PATTERNS`` rows. ``BossAI`` merges the row + the override
+    once, at pattern pick time, and every FSM read goes through the
+    merged dict (the windup, the select, the fire call, the move
+    binding) so count / spread / shots / turn / gap never drift between
+    what the telegraph draws and what fires at fire time.
     """
     return [
+        # Phase 1 -- legibility canonical. No overrides; the row IS the dial.
         dict(hp_frac=1.0,  patterns=['fan', 'shockwave', 'charge'],
              cd_mul=1.0,  moves=['proud_walk']),
+        # Phase 2 -- count UP, cadence UP, windups untouched (#162).
         dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.95, moves=['proud_walk']),
+             cd_mul=0.80,
+             pattern_dials={
+                 'fan': dict(count=3, spread=24, dmg=8),
+                 'radial': dict(count=10),
+             },
+             moves=['proud_walk']),
+        # Phase 3 -- swap fan for spiral, dial the spiral denser, cadence UP.
         dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.85, moves=['proud_walk']),
+             cd_mul=0.65,
+             pattern_dials={
+                 'radial': dict(count=10),
+                 'spiral': dict(shots=20, turn=18, gap=0.04),
+             },
+             moves=['proud_walk']),
     ]
 
 
@@ -560,6 +588,52 @@ def ankh_phases():
                        'chain_arc'],
              cd_mul=0.6, moves=['orbit']),
     ]
+
+
+def ankh_setup(boss):
+    """Issue #165: build the 4 phase-ghost bodies that ANKH carries.
+
+    Each ghost is a translucent copy of one of the bosses ANKH's phases
+    "remember" -- phase 1 remembers the Rei Lagarto (golden horned), phase
+    2 the Mae-Escaravelho (spider), phase 3 the Kraken-Mor (octopus), and
+    phase 4 the Primordial itself (a violet re-skin of the horned body).
+    The ghosts are paint only (no AI, no hit-test, no collision), drawn
+    under the boss body via ``parts.draw_phantom_body``.
+
+    Phase-1 alpha starts at 1.0 so the gold ghost is visible from spawn;
+    the other three start at 0 and rise on transition.
+    """
+    from ...creatures.parts import Phantombody
+    boss.phantom_bodies = [
+        Phantombody(species_key='horned',  alpha=1.0, target_alpha=1.0,
+                    tint=(255, 215, 100)),     # phase 1 -- Rei Lagarto (gold)
+        Phantombody(species_key='spider',  alpha=0.0, target_alpha=0.0,
+                    tint=(255, 180,  80)),     # phase 2 -- Mae-Escaravelho
+        Phantombody(species_key='octopus', alpha=0.0, target_alpha=0.0,
+                    tint=( 80, 130, 255)),     # phase 3 -- Kraken-Mor (blue)
+        Phantombody(species_key='horned',  alpha=0.0, target_alpha=0.0,
+                    tint=(220, 100, 200)),     # phase 4 -- Primordial (violet)
+    ]
+
+
+def ankh_on_phase(boss, phase_i, game=None):
+    """Issue #165: cross-fade the phantombodies on phase transition.
+
+    Phase 4 (the 'fusao') keeps all four ghosts visible at 0.5 instead of
+    fading old/new -- the design asks for ANKH to literally carry four
+    overlapping bodies. ``BossAI.tick`` advances each ``alpha`` toward
+    its ``target_alpha`` every frame, so the swap reads as a 1.5-second
+    cross-fade rather than a blink.
+    """
+    fb = getattr(boss, 'phantom_bodies', None)
+    if not fb:
+        return
+    if phase_i == 3:                              # the fusion: all four
+        for p in fb:
+            p.target_alpha = 0.5
+    else:
+        for i, p in enumerate(fb):
+            p.target_alpha = 1.0 if i == phase_i else 0.0
 
 
 def wall_personality():

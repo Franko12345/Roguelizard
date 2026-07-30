@@ -20,7 +20,7 @@ from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
-from lagarto.render import assets, icons, display
+from lagarto.render import assets, boss_assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
 from lagarto.input.controllers import _ACTIONS
@@ -38,6 +38,17 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_al = subprocess.run([sys.executable, 'tools/check_arena_lifecycle.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(157, "arena limpa apos chefe",
+    "for_boss(self.boss_id)" in src(rounds)
+    and "arena.clear(g)" in src(rounds)
+    and 'self.boss_id = None' in src(rounds.RoundManager.__init__)
+    and subprocess.run([sys.executable, '-c',
+        'from lagarto.flow.boss import arena as ar; assert ar.for_boss("muralha") is not None'
+        ], capture_output=True, env={**os.environ, 'PYTHONPATH': '.'}).returncode == 0
+    and _al.returncode == 0,
+    "" if _al.returncode == 0 else _al.stderr.decode()[-90:])
 _bm = subprocess.run([sys.executable, 'tools/check_boss_movement.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.flow.boss import moves as bossmoves, ai as bossai
@@ -77,7 +88,7 @@ chk(122, "wasp signature",
                                             fromlist=['x']))
     and 'dive_arc' in src(__import__('lagarto.flow.boss.telegraph',
                                     fromlist=['x']))
-    and 'terror_alado' in ar.ARENAS
+    and 'terror_alado' in ar.BOSS_TINTS
     and _ws.returncode == 0,
     "" if _ws.returncode == 0 else _ws.stderr.decode()[-90:])
 _ce = subprocess.run([sys.executable, 'tools/check_centipede_signature.py'], capture_output=True,
@@ -86,6 +97,17 @@ chk(124, "centopeiadeira signature -- burrow-as-locomotion",
     'move_spin_glide' in src(bossmoves) and 'move_lunge' in src(bossmoves)
     and "move='spin_glide'" in src(pat) and "move='lunge'" in src(pat)
     and "'burrow IS the locomotion'" in src(bossai)
+    and _ce.returncode == 0,
+    "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
+from lagarto.creatures.ai import burrow as _burrow_ai
+from lagarto.core import mathutil as _mathutil
+chk(161, "centopeiadeira burrow anticipates (lead_quality=0.85)",
+    'predict_target' in src(_mathutil)
+    and 'predict_target(' in open('lagarto/combat/emitter.py').read()
+    and 'predict_target(' in src(_burrow_ai)
+    and getattr(_burrow_ai, 'LEAD_QUALITY', None) == 0.85
+    and getattr(_burrow_ai, 'ERUPT_JITTER', None) == 30.0
+    and 'target.vel' in src(_burrow_ai)
     and _ce.returncode == 0,
     "" if _ce.returncode == 0 else _ce.stderr.decode()[-90:])
 _sp = subprocess.run([sys.executable, 'tools/check_spider_signature.py'], capture_output=True,
@@ -155,6 +177,16 @@ chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_price
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
 from lagarto.combat import emitter as emi
+_grapple_src = open('lagarto/creatures/ai/grapple.py').read()
+chk(160, "Kraken-Mor grapple follow-up",
+    C.OCTO_GRAB_RANGE == 280
+    and 'to * 0.5, 0.0' in _grapple_src
+    and hasattr(emi, 'grapple_followup')
+    and 'grapple_followup' in src(bossai)
+    and '_grapple_followup_fired' in src(bossai)
+    and 'grapple_followup' not in pat.PATTERNS
+    and _br.returncode == 0,
+    "" if _br.returncode == 0 else _br.stderr.decode()[-90:])
 _fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
        [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
 chk(101, "shared emitter", bool(_fns)
@@ -180,6 +212,24 @@ chk(167, "5 bullet hooks + slow_homing dial",
     "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
+_an = subprocess.run([sys.executable, 'tools/check_ankh_signature.py'], capture_output=True,
+                        env={**os.environ, 'PYTHONPATH': '.'})
+chk(165, "ANKH multi-corpo fantasma",
+    'Phantombody' in src(parts) and 'draw_phantom_body' in src(parts)
+    and 'ankh_setup' in src(pat) and 'ankh_on_phase' in src(pat)
+    and callable(getattr(parts, 'Phantombody', None))
+    and callable(getattr(parts, 'draw_phantom_body', None))
+    and 'phantom_bodies' in src(cbase.Lizard)
+    and rounds.BOSS_POOL['ankh'].get('setup') is pat.ankh_setup
+    and rounds.BOSS_POOL['ankh'].get('on_phase') is pat.ankh_on_phase
+    and _an.returncode == 0,
+    "" if _an.returncode == 0 else _an.stderr.decode()[-90:])
+chk(166, "Serpente de Cristal", rounds.BOSS_POOL['serpente_cristal']['species'] == 'serpente_cristal'
+    and species.SPECIES['serpente_cristal']['role'] == 'boss'
+    and species.SPECIES['serpente_cristal']['genome'].leg_count == 0
+    and species.SPECIES['serpente_cristal']['genome'].extra_eyes == 2
+    and boss_assets.serpente_head() is None
+    and boss_assets.serpente_segment() is None)
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
     and any('ankh' in ids for _, ids in rounds.BOSS_TIER_POOLS))
 chk(74, "A Muralha", rounds.BOSS_POOL.get('muralha', {}).get('species') == 'muralha'
@@ -206,7 +256,8 @@ chk(28, "balance tracking", 'issue' in bal.lower() and ('|' in bal))
 from lagarto.flow.boss import telegraph
 chk(27, "telegraph module", len(telegraph.TELEGRAPHS) >= 7
     and 'TELEGRAPHS.get' in src(__import__('lagarto.flow.boss.ai', fromlist=['x'])))
-chk(26, "boss arena", len(ar.ARENAS) >= 10 and 'for_boss' in src(rounds)
+chk(26, "boss arena", len(ar.ARENAS) == 1 and 'muralha' in ar.ARENAS
+    and len(ar.BOSS_TINTS) >= 9 and 'for_boss' in src(rounds)
     and 'arena.apply' in src(rounds) and 'bounds' in src(cbase.Lizard.integrate))
 root_ok = os.path.isdir(os.path.join(assets._ROOT, 'assets'))
 chk(25, "assets", root_ok and 'ferrao_charm' in icons.ICONS
@@ -241,6 +292,29 @@ chk(12, "cosmetic skeleton", os.path.exists('lagarto/anim/cosmetics.py'),
 chk(10, "ground adaptation", 'height_at' in open('lagarto/world/terrain.py').read(),
     "rejected: height_at/slope_at returned 0.0 unconditionally")
 chk(9, "windup visual", C.DASH_ANTIC_T > 0, f"wind-ups zeroed by request; dash dust kept at launch")
+adr3 = open('docs/adr/0003-zero-assets-with-png-fallback.md').read()
+parts_md = open('docs/concepts/parts.md').read()
+species_md = open('docs/concepts/species.md').read()
+chk(159, "ADR-0003 boss personality layer (partial; full override path pending)",
+    # Decision documented in ADR-0003 -- the canonical boss-portrait escape hatch
+    'boss personality' in adr3.lower()
+    and 'assets/boss/' in adr3
+    and 'procedural fallback' in adr3.lower()
+    and 'boss_part' in adr3
+    # Contract: the FULL override path is still pending. Sentinel markers
+    # that disappear when the full path ships:
+    # - the generic `boss_part()` helper is not callable from parts.draw_all
+    # - parts.draw_all does not accept `boss_id` as a parameter
+    # - the docs claim "partial implementation" rather than "shipped"
+    and 'boss_part' not in src(parts)
+    and 'boss_id' not in inspect.signature(parts.draw_all).parameters
+    and ('partially implemented' in parts_md.lower()
+         or 'not yet implemented' in parts_md.lower())
+    and ('partially implemented' in species_md.lower()
+         or 'not yet implemented' in species_md.lower()),
+    "" if ('partially implemented' in parts_md.lower()
+           or 'not yet implemented' in parts_md.lower())
+    else "parts.md or species.md missing the partial-implementation marker on #159 section")
 chk(8, "tail chain", cbase.TAIL_CHAIN_LEN == 5 and
     subprocess.run([sys.executable, 'tools/check_tail_chain.py'], capture_output=True).returncode == 0)
 p_src = src(Player)

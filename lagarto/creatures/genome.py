@@ -13,7 +13,7 @@ from ..core import palette
 
 class Genome:
     __slots__ = ('size', 'length', 'girth', 'leg_count', 'leg_len', 'radial',
-                 'plan', 'knockback',
+                  'plan', 'knockback', 'boss_id',
                  'eye_count', 'spikes', 'horns', 'plates', 'tail', 'fins',
                  'hue', 'sat', 'val', 'speed', 'hp', 'behavior', 'diet', 'name',
                  # how this creature SHOOTS: an emitter pattern + its dials
@@ -35,6 +35,7 @@ class Genome:
         # body plan: 'normal' (chain lizard) | 'segmented' (centipede blob-chain)
         # | 'tentacle' (octopus: mantle + reaching arms). 'radial' stays its own flag.
         self.plan = kw.get('plan', 'normal')
+        self.boss_id = kw.get('boss_id', None)
         self.eye_count = kw.get('eye_count', 2)
         self.spikes = kw.get('spikes', 0)       # dorsal spike level (0..)
         self.horns = kw.get('horns', 0)         # head horn count
