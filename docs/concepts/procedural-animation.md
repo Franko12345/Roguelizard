@@ -70,6 +70,30 @@ shape at all and you get a stiff straight thing instead. The tongue's retract
 is ~10 frames long and needed its stiffness **raised** to look loose. Measure
 the shape, not the constant.
 
+## Multi-body phantoms
+
+A silhouette of a different species, painted under the live boss with
+per-pixel alpha and a per-phase tint. Cheap because the ghost is paint
+only — no AI, no hit-test, no collision, no integrate — and because the
+creature code already draws the entire body from the genome
+([Spine](./spine.md), [Leg](./leg.md), [Parts](./parts.md)), so a
+phantom is "build that creature, draw it once, throw it away."
+
+The trick is the layering: render each ghost on a per-game reusable
+SRCALPHA scratch surface, then a single `fill(tint_color,
+BLEND_RGBA_MULT)` tints per-pixel and multiplies the configured alpha
+into every painted pixel, then `surf.blit(...)` over the live surface.
+The destination needs no per-pixel-alpha flag — `blit` honours the
+source's per-pixel alpha automatically. Cross-fading is just a
+`approach()` lerp on each phantom's alpha every frame, with the phase
+transition swapping `target_alpha` so the swap reads as cinema.
+
+ANKH uses four phantombodies, one per phase memory (Rei Lagarto gold,
+Mae-Escaravelho orange, Kraken-Mor blue, Primordial violet); phase 4
+sets all four alphas to 0.5 simultaneously so four bodies overlap at
+the same pixel. See `boss.md` ANKH multi-corpo and
+`tools/check_ankh_signature.py` for the canonical example.
+
 ## Related
 
 - [Spine](./spine.md) — the follow-the-leader chain.

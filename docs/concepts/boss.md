@@ -164,6 +164,40 @@ Two ways to give a boss its look, and the choice is not cosmetic:
   an overridden `horned` instead, and the result was a wall that walked at the
   player.
 
+## ANKH multi-corpo (#165)
+
+ANKH's attacks are the four memory phases of `ankh_phases()` (#75) and the
+body is still a golden horned — but "A Eterna" literally carries the four
+predecessors on her silhouette.
+
+`boss.phantom_bodies` is a 4-slot list of `Phantombody` (species, alpha,
+target_alpha, tint); only ANKH populates it (`ankh_setup`, fired from the
+`BOSS_POOL['ankh']['setup']` hook). Each phantom is a translucent copy of
+one species — horned for the Rei Lagarto and the Primordial (the issue's
+two "horned" memories share the same underlying species under different
+tints), `spider` for the Mae-Escaravelho, `octopus` for the Kraken-Mor —
+drawn under the live boss via `parts.draw_phantom_body` (paint only: no AI,
+no hit-test, no collision; ADR-0001 still holds: ANKH is one Lizard).
+
+The cross-fade is two dials:
+
+- `ankh_on_phase` sets `target_alpha` on transition. Phase 1 starts at
+  1.0 (the gold Rei ghost is visible from spawn); transitions 1→2→3
+  bounce old/new to 0/1. Phase 4 (the "fusão") sets ALL FOUR to 0.5
+  simultaneously — the boss literally is four overlapping bodies.
+- `BossAI.tick` walks each phantom's `alpha` toward `target_alpha` via
+  `approach()`, rate 2.0 (90% in ~1.15s, settled in ~1.5s). The swap
+  reads as a cinematic cross-fade, not a blink.
+
+Composition is one SRCALPHA scratch + `BLEND_RGBA_MULT`: each phantom is
+painted on a per-game reusable surface, fill-multiplied by (tint, alpha),
+then blitted over the live `surf`. The destination needs no per-pixel
+alpha. The four phantoms + the live ANKH body in the same spot produce
+the "four bodies in one pixel" stacking the issue asks for.
+
+See [Procedural animation](./procedural-animation.md) — Multi-body
+phantoms, for the technique abstracted.
+
 A boss-only species must use `role='boss'`, not `role='enemy'`: the `invasao`
 theme pool is `list(ENEMY_SPECIES)` and the `summon` pattern falls back to it,
 so `role='enemy'` lets a normal wave roll a boss body as a mook.

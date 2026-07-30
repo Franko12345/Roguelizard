@@ -164,6 +164,18 @@ chk(101, "shared emitter", bool(_fns)
     and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
+_an = subprocess.run([sys.executable, 'tools/check_ankh_signature.py'], capture_output=True,
+                        env={**os.environ, 'PYTHONPATH': '.'})
+chk(165, "ANKH multi-corpo fantasma",
+    'Phantombody' in src(parts) and 'draw_phantom_body' in src(parts)
+    and 'ankh_setup' in src(pat) and 'ankh_on_phase' in src(pat)
+    and callable(getattr(parts, 'Phantombody', None))
+    and callable(getattr(parts, 'draw_phantom_body', None))
+    and 'phantom_bodies' in src(cbase.Lizard)
+    and rounds.BOSS_POOL['ankh'].get('setup') is pat.ankh_setup
+    and rounds.BOSS_POOL['ankh'].get('on_phase') is pat.ankh_on_phase
+    and _an.returncode == 0,
+    "" if _an.returncode == 0 else _an.stderr.decode()[-90:])
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
     and any('ankh' in ids for _, ids in rounds.BOSS_TIER_POOLS))
 chk(74, "A Muralha", rounds.BOSS_POOL.get('muralha', {}).get('species') == 'muralha'

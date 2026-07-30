@@ -91,6 +91,10 @@ class Lizard:
         parts.init_oscillators(self)      # issue #4: one PhaseOscillator per part
         self.accel = 900.0
         self.target_dir = Vector2()
+        # Issue #165: ANKH's phase-ghost bodies. Empty by default; only ANKH
+        # populates (via ankh_setup). The for-loop in draw() is the only
+        # cost when empty -- no surface allocated, no cache touched.
+        self.phantom_bodies = []            # list[Phantombody]
         # A3 (#6): plates tilt on accel, horns sway on turns, pupils lag the target.
         self.plate_spring = SpringDamper(0.0, PLATE_SPRING_STIFF, PLATE_SPRING_DAMP)
         self.horn_spring = SpringDamper(0.0, HORN_SPRING_STIFF, HORN_SPRING_DAMP)
@@ -539,6 +543,13 @@ class Lizard:
 
     # ---- drawing -------------------------------------------------------- #
     def draw(self, surf, cam):
+        # Issue #165: ghost bodies paint FIRST so the actual body and its
+        # glow sit on top of the layered silhouettes. Empty list for every
+        # non-ANKH creature = zero work, just the for-loop header.
+        for pb in self.phantom_bodies:
+            if pb.alpha > 0.005:
+                parts.draw_phantom_body(surf, cam, pb.species_key,
+                                        self.pos, self.facing, pb.alpha, pb.tint)
         squish = 1.0 / math.sqrt(self.squash)
         # soft glow behind the body so it pops off the ground (Animal Well vibe).
         # Bounded to the player (+ bosses via glow_body) so a horde stays cheap;

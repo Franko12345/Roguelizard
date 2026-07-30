@@ -147,6 +147,11 @@ BOSS_POOL = {
                  emblem='boss_ankh',
                  phases=lambda: bossai.ankh_phases(),
                  personality=lambda: bossai.ankh_personality(),
+                 # Issue #165: ANKH carries 4 phantombodies (one per phase,
+                 # cross-faded by on_phase). Other bosses don't, so leaving
+                 # these unset keeps the FSM zero-cost.
+                 setup=bossai.ankh_setup,
+                 on_phase=bossai.ankh_on_phase,
                  scar=None,
                  overrides=dict(hue=45, sat=0.35, val=1.0, spikes=0, plates=2)),
 }
