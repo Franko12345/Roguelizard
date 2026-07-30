@@ -29,6 +29,13 @@ Defined in `lagarto/creatures/species.py`.
 - **centipede** — `plan='segmented'`, `behavior='burrow'`.
 - **octopus** — `plan='tentacle'`, `behavior='grapple'`, `weight=3.0`.
 
+**Bosses** (`role='boss'`, excluded from normal enemy pools):
+
+- **serpente_cristal** — long, legless `plan='segmented'` body with cyan
+  faceted procedural rendering and four eyes. Optional authored head and segment
+  images may replace individual parts when available.
+- **muralha** — immobile `plan='fixed'` body.
+
 Each entry declares `hp`, `speed`, part counts, and — when a part should
 be transferrable to the player — a `grants` field. A species that shoots also
 declares `shot`: the [emitter](../../CONTEXT.md) pattern it fires plus that
@@ -64,3 +71,29 @@ ranges the behaviour tolerates; visual fields jitter more freely.
 - [Champion](./champion.md) — how a species can promote at spawn.
 - [Boss](./boss.md) — how a species can become a boss.
 - [Round](./round.md) — the wave theme that pulls species names.
+
+## Boss identity: `Genome.boss_id` (partially implemented per ADR-0003)
+
+**Status:** the field is shipped (#166 Serpente de Cristal), the
+gate is partially wired (Serpente-specific branch in `Lizard.draw`),
+the **generic** `boss_part(boss_id, part_name)` call site is the
+remaining step.
+
+When the override path is fully wired:
+- A `Genome` may carry an optional `boss_id` — the boss slot id from
+  `BOSS_POOL`, set by `_spawn_boss` after `make_boss`. The field is
+  `None` for prey, common enemies, and champions; it is only populated
+  for authored bosses. It exists for **one** reason: to gate the
+  `boss_part(boss_id, part_name)` override path. The Serpente
+  populates it; future bosses with assets will too.
+- The override path is per-issue scoped: the PNG, when present, paints
+  *on top* of the procedural body. The boss's silhouette, motion,
+  hit-test, and physics stay procedural. See
+  [ADR-0003](../adr/0003-zero-assets-with-png-fallback.md) and
+  [Parts](./parts.md#optional-asset-overrides-for-bosses-partially-implemented-per-adr-0003)
+  for the rule.
+
+Today, `Genome.boss_id` exists as a field but `parts.draw_all(..., boss_id)`
+is not a signature; the Serpente uses a one-off branch in `Lizard.draw`
+that calls `draw_serpente_cristal` directly. The refactor — make the
+branch generic via `boss_part()` — is the next step.

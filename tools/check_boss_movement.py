@@ -487,9 +487,10 @@ def test_teeth():
         bossai.BossAI.tick = saved
 
     # 6. Arena: turn the clamp into a no-op and confirm the box is exited.
+    # Issue #158 left only A Muralha with a box; pin it to probe the soft guard.
     g = _fresh()
-    b = _spawn_boss(g, 'olho_sismico', pos=MID + Vector2(50, 0))
-    arena = ARENAS['olho_sismico']
+    b = _spawn_boss(g, 'muralha', pos=MID + Vector2(50, 0))
+    arena = ARENAS['muralha']
     arena.apply(g, b.pos)
     bounds = g.arena_bounds
     # Patch integrate to ignore bounds (the soft guard is the test's

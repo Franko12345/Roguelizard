@@ -24,7 +24,7 @@ Five things must be true or the boss's whole pitch ("it flies") is decoration:
 
 Run:  python tools/check_wasp_signature.py [--shot out.png]
 """
-import os, sys, math, statistics
+import os, sys, math, statistics, inspect
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -265,10 +265,9 @@ def test_effective_windup_floor():
 def test_spiral_arc_in_phase3():
     """Phase 3 of the Wasp carries the spiral_arc pattern (issue #164).
 
-    The Wasp earns the orbit only at 30% HP. The assertion fails the check
-    if someone removes the row from ``wasp_phases`` -- the rule of two
-    (issue #123) accepts this addition because it replaces nothing, it
-    adds one pattern to an already-large phase-3 kit.
+    The Wasp earns the orbit only at 30% HP, swapped in for ``lead_fan``
+    (issue #167). The assertion fails the check if someone removes the
+    row from ``wasp_phases``.
     """
     phases = pat.wasp_phases()
     assert len(phases) >= 3, f"wasp_phases has {len(phases)} phases; expected >= 3"
@@ -277,10 +276,12 @@ def test_spiral_arc_in_phase3():
         f"wasp phase 3 patterns = {phase3['patterns']}; " \
         f"spiral_arc missing (issue #164)"
     # spiral_arc must also exist in PATTERNS with the spiral hook attached.
+    # The emitter fn attaches proj.spiral_arc to each shot itself (no
+    # dials['mod'] indirection -- same idiom as boomerang_burst).
     row = pat.PATTERNS['spiral_arc']
     assert row.get('fn') is not None, "PATTERNS['spiral_arc'] has no fn"
-    assert row.get('mod') is not None, \
-        "PATTERNS['spiral_arc'] has no mod hook (the spiral_arc movement is missing)"
+    assert 'proj.spiral_arc' in inspect.getsource(row['fn']), \
+        "PATTERNS['spiral_arc']'s fn never attaches the spiral_arc movement hook"
     print(f"  spiral_arc in wasp phase 3: patterns={phase3['patterns']}, "
           f"windup={row['windup']}s, telegraph={row['telegraph']}")
 

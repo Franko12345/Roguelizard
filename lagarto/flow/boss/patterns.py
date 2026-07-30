@@ -173,17 +173,19 @@ PATTERNS = {
     # the 27-frame floor (0.7s -- same as charge, the windup IS the action).
     'dive_arc': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='dive_line',
                      move='dive_arc', reach=1.6, dmg=18),
-    # Issue #164: spiral-arcing burst. Wasp phase-3 "the bullet takes a turn
-    # around you" -- the shot's path is the spiral (see projectile.spiral_arc),
-    # the emitter only seeds the mouth direction. Telegraph reuses 'spiral'
-    # (the bullet-hell style: a growing arc visualised during the windup).
-    # Dials: 4 shots in a 15-deg fan at 220 px/s; dmg 6 because the orbit
-    # hits WHERE THE PLAYER IS GOING, not where they stand -- lower than the
-    # lead_fan linear version, the lead is on the orbit, not on impact.
-    'spiral_arc': dict(fn=emitter.spiral_arcing_burst,
-                       windup=C.BOSS_BARRAGE_WINDUP, telegraph='spiral',
-                       count=4, spread=15, shot_speed=220, dmg=6,
-                       mod=proj.spiral_arc),
+    # ---- issue #167: 5 bullet hooks ship here as dial-only rows -- one row #
+    # per hook so a phase kit can pull them by id without learning a new code  #
+    # path. The hooks themselves live in ``lagarto.combat.projectile``.        #
+    'chain_arc': dict(fn=emitter.chain_arc, windup=0.8, telegraph='fan',
+                      count=3, spread=60, shot_speed=230, dmg=14),
+    'wave_fan': dict(fn=emitter.wave_fan, windup=0.7, telegraph='fan',
+                     count=6, spread=50, shot_speed=210, dmg=9),
+    'boomerang_burst': dict(fn=emitter.boomerang_burst, windup=0.7, telegraph='fan',
+                            count=3, spread=30, shot_speed=240, dmg=13),
+    'burst_stop_burst': dict(fn=emitter.burst_stop_burst, windup=0.7, telegraph='fan',
+                             count=4, spread=60, shot_speed=220, dmg=9),
+    'spiral_arc': dict(fn=emitter.spiral_arc, windup=0.7, telegraph='fan',
+                       count=2, shot_speed=60, dmg=12),
 }
 
 
@@ -196,8 +198,16 @@ def king_phases():
     five" -- the simplest movement (``proud_walk``, a committed walk that
     never retreats), the longest windups (see ``BOSS_FAN_WINDUP`` /
     ``BOSS_SHOCKWAVE_WINDUP`` / ``BOSS_RADIAL_WINDUP`` / ``BOSS_CHARGE_WINDUP``
-    bumped in config), and the loosest rhythm of the pool (1.0/0.95/0.85 --
-    the player's first encounter with cadence still has breath).
+    bumped in config), and the loosest rhythm of the pool -- the player's
+    first encounter with cadence still has breath.
+
+    Issue #162: fase 1 stays canonical (1.0 / untouched pattern dials);
+    fases 2 + 3 graduate density + cadence UP without touching windups.
+    The 27-frame rule still owns every telegraph -- the boss gets denser
+    (count / shots) and faster (cd_mul), not faster tells. The ``cd_mul``
+    ladder moves from 1.0 / 0.95 / 0.85 to 1.0 / 0.80 / 0.65; the
+    per-pattern dials are bumped on phase 2 (fan=3 / radial=10) and
+    phase 3 (spiral denser); the windups stay where #123 put them.
 
     The ``moves=['proud_walk']`` slot is the BACKGROUND between attacks;
     the per-attack ``move='proud_walk'`` (fan / shockwave / radial) keeps
@@ -210,14 +220,34 @@ def king_phases():
     the Centopeiadeira's (#124) is emergent from ``burrow``. The first
     boss of the game doesn't teach "sometimes shooting doesn't work" --
     that's the second lesson, not the first.
+
+    The ``pattern_dials`` slot is the phase-local override on top of the
+    shared ``PATTERNS`` rows. ``BossAI`` merges the row + the override
+    once, at pattern pick time, and every FSM read goes through the
+    merged dict (the windup, the select, the fire call, the move
+    binding) so count / spread / shots / turn / gap never drift between
+    what the telegraph draws and what fires at fire time.
     """
     return [
+        # Phase 1 -- legibility canonical. No overrides; the row IS the dial.
         dict(hp_frac=1.0,  patterns=['fan', 'shockwave', 'charge'],
              cd_mul=1.0,  moves=['proud_walk']),
+        # Phase 2 -- count UP, cadence UP, windups untouched (#162).
         dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.95, moves=['proud_walk']),
+             cd_mul=0.80,
+             pattern_dials={
+                 'fan': dict(count=3, spread=24, dmg=8),
+                 'radial': dict(count=10),
+             },
+             moves=['proud_walk']),
+        # Phase 3 -- swap fan for spiral, dial the spiral denser, cadence UP.
         dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.85, moves=['proud_walk']),
+             cd_mul=0.65,
+             pattern_dials={
+                 'radial': dict(count=10),
+                 'spiral': dict(shots=20, turn=18, gap=0.04),
+             },
+             moves=['proud_walk']),
     ]
 
 
@@ -271,10 +301,14 @@ def kraken_phases():
 def primordial_phases():
     return [
         dict(hp_frac=1.0, patterns=['massive_fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
-        dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon'],
+        # issue #167: phase 2 adds ``wave_fan`` -- a fan whose every shot
+        # snakes. Sums onto the existing set; the wave is a single new id.
+        dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'wave_fan', 'sky_slam',
+                                     'summon'],
              cd_mul=0.85, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon',
-                                     'deathroll', 'homing_fan'], cd_mul=0.5, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'wave_fan', 'sky_slam',
+                                     'summon', 'deathroll', 'homing_fan'],
+             cd_mul=0.5, moves=['orbit']),
     ]
 
 
@@ -287,7 +321,12 @@ def beetle_phases():
     return [
         dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial'], cd_mul=0.65, moves=['orbit']),
+        # issue #167: phase 3 swaps ``fan`` for ``boomerang_burst`` +
+        # ``burst_stop_burst`` -- two of the new hooks dial into the same
+        # Mao a support caster goes late, turning her from a buffer into a
+        # mine layer.
+        dict(hp_frac=0.33, patterns=['summon', 'boomerang_burst', 'burst_stop_burst'],
+             cd_mul=0.65, moves=['orbit']),
     ]
 
 
@@ -392,17 +431,11 @@ def wasp_phases():
              moves=['curve_approach', 'climb_out']),
         dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85,
              moves=['dive_arc']),
-        # 'mergulha e mira onde voce VAI estar': lead_fan e o mesmo lead do
-        # barrage aberto em leque -- so dials (issue #104). Phase 3 adds
-        # dive_arc as a pattern (the Wasp's signature -- the dive is the
-        # movement, and the dive is the attack). The move kit couples
-        # dive_arc (during its windup) with flyby (between dives).
-        # Issue #164: spiral_arc joins phase 3 -- the "bullet takes a turn
-        # around you" pattern. Three anticipation reads to learn now
-        # (linear lead_fan, swoop dive_arc, orbit spiral_arc); the Wasp
-        # earns the orbit only at 30% HP, when she is the saddest hunter.
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan', 'dive_arc',
-                                     'spiral_arc'],
+        # Issue #167: phase 3 swaps ``lead_fan`` for ``spiral_arc`` -- a slow
+        # homing orbit whose radius decays into a snap-hit. The dive stays;
+        # the lead fan gives way to the spiral since the spiral IS the
+        # "where you WILL be" promise taken to its limit.
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'spiral_arc', 'dive_arc'],
              cd_mul=0.6, moves=['dive_arc', 'flyby']),
     ]
 
@@ -542,15 +575,65 @@ def ankh_phases():
 
     Todos os patterns ja existem -- e o ponto do chefe. ANKH nao traz ataque
     novo nenhum: ela devolve os que voce ja aprendeu a ler, sobrepostos.
+    Issue #167: phase 4 gains ``chain_arc`` -- three chain projectiles that
+    link up. ANKH's "tudo junto" gains one more bullet shape that does not
+    match any single predecessor.
     """
     return [
         dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95, moves=['orbit']),
         dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85, moves=['orbit']),
         dict(hp_frac=0.25,
-             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral'],
+             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral',
+                       'chain_arc'],
              cd_mul=0.6, moves=['orbit']),
     ]
+
+
+def ankh_setup(boss):
+    """Issue #165: build the 4 phase-ghost bodies that ANKH carries.
+
+    Each ghost is a translucent copy of one of the bosses ANKH's phases
+    "remember" -- phase 1 remembers the Rei Lagarto (golden horned), phase
+    2 the Mae-Escaravelho (spider), phase 3 the Kraken-Mor (octopus), and
+    phase 4 the Primordial itself (a violet re-skin of the horned body).
+    The ghosts are paint only (no AI, no hit-test, no collision), drawn
+    under the boss body via ``parts.draw_phantom_body``.
+
+    Phase-1 alpha starts at 1.0 so the gold ghost is visible from spawn;
+    the other three start at 0 and rise on transition.
+    """
+    from ...creatures.parts import Phantombody
+    boss.phantom_bodies = [
+        Phantombody(species_key='horned',  alpha=1.0, target_alpha=1.0,
+                    tint=(255, 215, 100)),     # phase 1 -- Rei Lagarto (gold)
+        Phantombody(species_key='spider',  alpha=0.0, target_alpha=0.0,
+                    tint=(255, 180,  80)),     # phase 2 -- Mae-Escaravelho
+        Phantombody(species_key='octopus', alpha=0.0, target_alpha=0.0,
+                    tint=( 80, 130, 255)),     # phase 3 -- Kraken-Mor (blue)
+        Phantombody(species_key='horned',  alpha=0.0, target_alpha=0.0,
+                    tint=(220, 100, 200)),     # phase 4 -- Primordial (violet)
+    ]
+
+
+def ankh_on_phase(boss, phase_i, game=None):
+    """Issue #165: cross-fade the phantombodies on phase transition.
+
+    Phase 4 (the 'fusao') keeps all four ghosts visible at 0.5 instead of
+    fading old/new -- the design asks for ANKH to literally carry four
+    overlapping bodies. ``BossAI.tick`` advances each ``alpha`` toward
+    its ``target_alpha`` every frame, so the swap reads as a 1.5-second
+    cross-fade rather than a blink.
+    """
+    fb = getattr(boss, 'phantom_bodies', None)
+    if not fb:
+        return
+    if phase_i == 3:                              # the fusion: all four
+        for p in fb:
+            p.target_alpha = 0.5
+    else:
+        for i, p in enumerate(fb):
+            p.target_alpha = 1.0 if i == phase_i else 0.0
 
 
 def wall_personality():
