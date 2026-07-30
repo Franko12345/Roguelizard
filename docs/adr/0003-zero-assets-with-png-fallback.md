@@ -28,6 +28,32 @@ where a PNG exists, it wins. This makes the "add a memorable icon" workflow
 
 ## Extension (issue #159): boss personality elements
 
+**Status: partially implemented as of the Serpente de Cristal (#166, #190).**
+
+What's shipped:
+- `Genome.boss_id` field — optional, populated only by boss species
+  (#166). Gates the override path per spec.
+- `lagarto/render/boss_assets.py` — module exists, holds
+  `serpente_head()` / `serpente_segment()` helpers that return `None`
+  until `assets/boss/serpente_cristal/head.png` lands.
+- A one-off branch in `lagarto/creatures/base.py` (`if genome.boss_id
+  == 'serpente_cristal': ...`) that calls the Serpente-specific
+  `draw_serpente_cristal` in `lagarto/creatures/parts.py`.
+
+What's still pending (the rest of the spec):
+- The generic `boss_part(boss_id, part_name)` helper that other bosses
+  would use. The Serpente ships a one-off branch because it's the only
+  boss with an asset; refactor to the generic helper when N=2.
+- `parts.draw_all` accepting an optional `boss_id` parameter. Today the
+  override path is hard-coded into `Lizard.draw` for the Serpente
+  case; the generic call site ships with the refactor.
+
+This ADR documents the **decision** (per-issue scoped PNG override
+layer). The implementation state is tracked in `tools/check_issues.py`
+row #159 ("ADR-0003 boss personality layer (decision only, not implemented)")
+plus the `boss_id` field marker — when the generic refactor lands, the
+check flips and the docs ("decided, not yet implemented") get rewritten.
+
 **Context.** Two bosses in the pipeline — Serpente de Cristal (faceted
 crystal head + segments) and ANKH (multi-body ghost with per-phase alpha
 blending) — need visual elements the procedural drawing cannot deliver
@@ -46,9 +72,10 @@ part_name), optional, with procedural fallback when the PNG is missing.
 - **How to load**: `boss_part(boss_id, part_name) -> Surface | None` in
   `lagarto/render/boss_assets.py` — same `_MEIPASS` + cache pattern as
   `lagarto/render/assets.py`. Missing file = `None` = procedural drawer.
-- **Where to plug**: `parts.draw_all` accepts an optional `boss_id`. When
-  present and the part has a registered override, blit the PNG; otherwise
-  the existing procedural code runs unchanged.
+- **Where to plug (planned)**: `parts.draw_all` will accept an optional
+  `boss_id`. When present and the part has a registered override, blit the
+  PNG; otherwise the existing procedural code runs unchanged. Today the
+  Serpente uses a one-off branch in `Lizard.draw` for the same end.
 - **Scope limit**: "personality elements" only. The body's silhouette,
   motion, and hit-test stay procedural — the only thing the PNG can
   change is the *look* of a single part, never the physics.

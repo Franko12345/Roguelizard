@@ -65,25 +65,28 @@ ranges the behaviour tolerates; visual fields jitter more freely.
 - [Boss](./boss.md) — how a species can become a boss.
 - [Round](./round.md) — the wave theme that pulls species names.
 
-## Boss identity: `Genome.boss_id` (decided in ADR-0003, not yet implemented)
+## Boss identity: `Genome.boss_id` (partially implemented per ADR-0003)
 
-**Status: decided in ADR-0003 (#159), but the field does not yet
-exist on `Genome`.** This section describes what the field will be when
-the override path ships.
+**Status:** the field is shipped (#166 Serpente de Cristal), the
+gate is partially wired (Serpente-specific branch in `Lizard.draw`),
+the **generic** `boss_part(boss_id, part_name)` call site is the
+remaining step.
 
-When implemented:
+When the override path is fully wired:
 - A `Genome` may carry an optional `boss_id` — the boss slot id from
   `BOSS_POOL`, set by `_spawn_boss` after `make_boss`. The field is
   `None` for prey, common enemies, and champions; it is only populated
   for authored bosses. It exists for **one** reason: to gate the
-  `boss_part(boss_id, part_name)` override path in `parts.draw_all`. No
-  other code reads it.
+  `boss_part(boss_id, part_name)` override path. The Serpente
+  populates it; future bosses with assets will too.
 - The override path is per-issue scoped: the PNG, when present, paints
   *on top* of the procedural body. The boss's silhouette, motion,
   hit-test, and physics stay procedural. See
   [ADR-0003](../adr/0003-zero-assets-with-png-fallback.md) and
-  [Parts](./parts.md#optional-asset-overrides-for-bosses-decided-in-adr-0003-not-yet-implemented)
+  [Parts](./parts.md#optional-asset-overrides-for-bosses-partially-implemented-per-adr-0003)
   for the rule.
 
-Today, no `boss_id` field exists and `parts.draw_all(..., boss_id)` is
-not a signature. The procedural body is the only path.
+Today, `Genome.boss_id` exists as a field but `parts.draw_all(..., boss_id)`
+is not a signature; the Serpente uses a one-off branch in `Lizard.draw`
+that calls `draw_serpente_cristal` directly. The refactor — make the
+branch generic via `boss_part()` — is the next step.

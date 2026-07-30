@@ -79,23 +79,35 @@ A negative `phase_gap` runs the wave tip-to-base instead of base-to-tip.
 - [Charm](./charm.md) — the tail-club charm sets `tail='club'` for a run.
 - [Procedural animation](./procedural-animation.md) — the oscillator rule.
 
-## Optional asset overrides for bosses (decided in ADR-0003, not yet implemented)
+## Optional asset overrides for bosses (partially implemented per ADR-0003)
 
-**Status: decided in ADR-0003 (#159), but the code path is not yet
-implemented.** This section describes what the implementation will look
-like when it lands. Today, every part on every creature — boss included
-— is drawn procedurally. That procedural body is the canonical path,
-not a stub.
+**Status:** the decision is documented in ADR-0003 (#159). The data
+backbone is shipped (`Genome.boss_id` field, `boss_assets.py` module,
+two-slot Serpente-specific branch in `Lizard.draw`). The **generic**
+`boss_part(boss_id, part_name)` helper that other bosses would use
+still does not exist; the Serpente ships a one-off branch in
+`lagarto/creatures/parts.py` (`draw_serpente_cristal`) because it's the
+only boss with an asset. The refactor to the generic call site
+(`parts.draw_all(boss_id=...)` → `boss_part(...)`) is the next step —
+tracked as a follow-up to #190.
 
-When the override path ships, the rule is:
+**Current path (Serpente-specific)**:
 
-- `parts.draw_all` will accept an optional `boss_id`. When present and a
+`Lagarto/creatures/base.py` `Lizard.draw` branches on
+`genome.boss_id == 'serpente_cristal'`, calling
+`parts.draw_serpente_cristal(surf, cam, self)` which delegates to the
+helpers in `lagarto/render/boss_assets.py` (`serpente_head`,
+`serpente_segment`). Both helpers return `None` until the PNGs land; the
+procedural body remains the canonical path.
+
+**Planned path (general)**:
+
+When the refactor ships:
+- `parts.draw_all` accepts an optional `boss_id`. When present and a
   PNG exists at `assets/boss/<boss_id>/<part_name>.png`, the helper
-  `boss_part(boss_id, part_name)` (planned to live in
-  `lagarto/render/boss_assets.py`) will return it and the drawer will blit
-  the asset on top of the procedural layer. When the PNG is missing, the
-  drawer silently falls back to the procedural version — same rule as
-  `icons.draw` and the rest of the zero-assets escape hatch.
+  `boss_part(boss_id, part_name)` (still in `lagarto/render/boss_assets.py`)
+  returns it and the drawer blits the asset on top of the procedural
+  layer. PNG missing = `None` = procedural drawer.
 - The override changes **only the look** of a single part. The spine,
   legs, body polygon, motion, hit-test, and physics stay procedural. The
   boss's body remains a `Genome`; the PNG is paint, not a substitute for
@@ -108,6 +120,6 @@ When the override path ships, the rule is:
     ornamental layers. Never the silhouette or the procedural motion
     itself.
 
-When the code lands, "why is my boss's PNG not showing?" will be the
-same as `icons.draw`: path mismatch first, anything else second. See
+**Debug rule**: "why is my boss's PNG not showing?" is the same as
+`icons.draw`: path mismatch first, anything else second. See
 [ADR-0003](../adr/0003-zero-assets-with-png-fallback.md).
