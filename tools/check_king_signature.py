@@ -1,6 +1,6 @@
 """Issue #123: Rei Lagarto -- the legibility canonical.
 
-Six assertions, each with a provable failure mode (the "teeth" section
+Seven assertions, each with a provable failure mode (the "teeth" section
 breaks each on purpose and confirms the check catches it):
 
 1. **Rhythm** -- Rei Lagarto's average theoretical cycle is the LARGEST
@@ -13,28 +13,44 @@ breaks each on purpose and confirms the check catches it):
                    plus the per-pattern ``move='proud_walk'`` are the
                    piece that earns the "legibility" signature.
 3. **No retreat** -- ``move_proud_walk`` never produces a sign flip
-                     over a simulated fight. The committed direction
-                     is picked in the forward half-cone around the
-                     previous one, so a negation is structurally
-                     impossible.
+                      over a simulated fight. The committed direction
+                      is picked in the forward half-cone around the
+                      previous one, so a negation is structurally
+                      impossible.
 4. **CicatriZ trail** -- ``spawn_scar`` drops the puddle within a
-                         fixed radius of a recent boss position, not
-                         at a random world position. The ring buffer
-                         on ``BossAI`` (``_path_samples``) is the
-                         trail the puddle samples.
+                          fixed radius of a recent boss position, not
+                          at a random world position. The ring buffer
+                          on ``BossAI`` (``_path_samples``) is the
+                          trail the puddle samples.
 5. **No invulnerability** -- the Rei Lagarto's FSM never sets
-                            ``boss_invuln = True`` outside intro /
-                            transition. Charge, burrow, grapple own
-                            their own windows in other bosses; Rei
-                            keeps the i-frame discipline tight (the
-                            "first lesson" is "shooting always
-                            works").
-6. **Screenshot** -- headless render of a Rei Lagarto in motion with
-                     at least one CicatriZ puddle on the floor. The
-                     arena anchor check in ``check_boss_movement.py``
-                     covers the body-stays-in-the-box invariant; this
-                     shot is the visual evidence the new mechanic and
-                     the new movement land together.
+                             ``boss_invuln = True`` outside intro /
+                             transition. Charge, burrow, grapple own
+                             their own windows in other bosses; Rei
+                             keeps the i-frame discipline tight (the
+                             "first lesson" is "shooting always
+                             works").
+6. **Phase cadence + density** (issue #162) -- phase 1 is the
+                                            legibility canonical
+                                            (untouched pattern dials,
+                                            cd_mul 1.0); phase 2
+                                            graduates fan to 3 shots
+                                            and radial to 10 shots at
+                                            cd_mul 0.80; phase 3
+                                            swaps fan for a denser
+                                            spiral (shots 20 / turn
+                                            18 / gap 0.04) at
+                                            cd_mul 0.65. Validated
+                                            through the merged
+                                            ``pattern_dials`` so the
+                                            what-telegraph-draws =
+                                            what-emitter-fires
+                                            invariant holds.
+7. **Screenshot** -- headless render of a Rei Lagarto in motion with
+                      at least one CicatriZ puddle on the floor. The
+                      arena anchor check in ``check_boss_movement.py``
+                      covers the body-stays-in-the-box invariant; this
+                      shot is the visual evidence the new mechanic and
+                      the new movement land together.
 
 Run:  python tools/check_king_signature.py
 """
@@ -331,7 +347,96 @@ def test_no_invuln_window():
 
 
 # --------------------------------------------------------------------------- #
-# 6. Screenshot                                                                #
+# 6. Phase cadence + density (issue #162)                                     #
+# --------------------------------------------------------------------------- #
+def _eff_king_dials(phase, pid):
+    """Mirror of ``BossAI._effective_dials`` for the Rei phase kit -- the FSM
+    reads the merged dict at windup start, the emitter fires through the same
+    dict at fire time. The test queries the same merged shape so it cannot
+    drift from what the boss actually does."""
+    base = pat.PATTERNS[pid]
+    override = phase.get('pattern_dials', {}).get(pid, {})
+    return {**base, **override}
+
+
+def test_phase_cadence():
+    """Phase 1 stays the legibility canonical (issue #123). Phases 2 / 3
+    graduate **density + cadence** (issue #162):
+
+    - Phase 1: ``cd_mul 1.0``, fan row untouched (count = ``BOSS_FAN_COUNT``,
+      i.e. the shared PATTERNS default), no ``pattern_dials`` override.
+    - Phase 2: ``cd_mul 0.80`` (was 0.95), fan count 3 (was PATTERNS default),
+      fan spread 24 dmg 8 (concentrated cone), radial count 10.
+    - Phase 3: ``cd_mul 0.65`` (was 0.85), spiral dials bumped to
+      ``shots 20 / turn 18 / gap 0.04`` (denser bullet hell).
+
+    Windups stay where #123 put them -- the floor is the 27-frame rule and
+    every telegraph still reads at 1.1s. What's UP is count + cadence; what
+    stays the same is the legibility.
+
+    The test queries the merged ``pattern_dials`` because that is the shape
+    the FSM actually uses (see ``BossAI._effective_dials``).
+    """
+    phases = pat.king_phases()
+    p1, p2, p3 = phases[0], phases[1], phases[2]
+
+    # Phase 1: legibility canonical, untouched.
+    assert p1['cd_mul'] == 1.0, \
+        f"phase 1 cd_mul {p1['cd_mul']} != 1.0 -- the legibility canonical lost its breath"
+    assert 'pattern_dials' not in p1 or not p1['pattern_dials'], \
+        f"phase 1 carries pattern_dials override -- the canonical must stay untouched"
+    p1_fan = _eff_king_dials(p1, 'fan')
+    # Phase 1 fan must NOT carry a count override -- it stays at the shared
+    # PATTERNS row (which the emitter fills from C.BOSS_FAN_COUNT).
+    assert 'count' not in p1['pattern_dials'].get('fan', {}) if 'pattern_dials' in p1 else True, \
+        f"phase 1 fan carries a count override -- the canonical must stay untouched"
+
+    # Phase 2: cadence UP + density UP.
+    assert p2['cd_mul'] == 0.80, \
+        f"phase 2 cd_mul {p2['cd_mul']} != 0.80 -- cadence didn't graduate"
+    assert p2['cd_mul'] < 0.85, \
+        f"phase 2 cd_mul {p2['cd_mul']} >= 0.85 -- the phase 2 cadence cap is 0.80"
+    p2_fan = _eff_king_dials(p2, 'fan')
+    assert p2_fan['count'] == 3, \
+        f"phase 2 fan count {p2_fan['count']} != 3 -- the cone didn't densify"
+    assert p2_fan['count'] >= 2, \
+        f"phase 2 fan count {p2_fan['count']} < 2 -- the cone didn't densify (teeth)"
+    p2_radial = _eff_king_dials(p2, 'radial')
+    assert p2_radial['count'] == 10, \
+        f"phase 2 radial count {p2_radial['count']} != 10 -- the ring didn't densify"
+
+    # Phase 3: bulldozer cadence + denser spiral.
+    assert p3['cd_mul'] == 0.65, \
+        f"phase 3 cd_mul {p3['cd_mul']} != 0.65 -- the bulldozer lost its bite"
+    assert p3['cd_mul'] < p2['cd_mul'], \
+        f"phase 3 cd_mul {p3['cd_mul']} >= phase 2 {p2['cd_mul']} -- the cadence regressed"
+    p3_spiral = _eff_king_dials(p3, 'spiral')
+    assert p3_spiral.get('shots') == 20, \
+        f"phase 3 spiral shots {p3_spiral.get('shots')} != 20 -- the spiral didn't densify"
+    assert p3_spiral.get('turn') == 18, \
+        f"phase 3 spiral turn {p3_spiral.get('turn')} != 18 -- the spiral didn't tighten"
+    assert abs(p3_spiral.get('gap', 0) - 0.04) < 1e-6, \
+        f"phase 3 spiral gap {p3_spiral.get('gap')} != 0.04 -- the spiral didn't speed up"
+
+    # Windups untouched across all phases -- the 27-frame rule is the
+    # issue's "tell never shortens" promise.
+    for ph_i, ph in enumerate(phases):
+        for pid in ph['patterns']:
+            row = _eff_king_dials(ph, pid)
+            w = row.get('windup', C.BOSS_WINDUP_FLOOR)
+            assert w >= C.BOSS_WINDUP_FLOOR, \
+                f"phase {ph_i+1} {pid} windup {w} < floor {C.BOSS_WINDUP_FLOOR} -- " \
+                f"a per-pattern override would have shortened the tell (#162 forbids)"
+
+    print(f"  phase cadence: p1 cd_mul {p1['cd_mul']} (canonical), "
+          f"p2 {p2['cd_mul']} (fan={p2_fan['count']}, radial={p2_radial['count']}), "
+          f"p3 {p3['cd_mul']} (spiral shots={p3_spiral['shots']} / turn={p3_spiral['turn']} / "
+          f"gap={p3_spiral['gap']}); windups >= {C.BOSS_WINDUP_FLOOR:.2f}s floor")
+    return phases
+
+
+# --------------------------------------------------------------------------- #
+# 7. Screenshot                                                                #
 # --------------------------------------------------------------------------- #
 def _screenshot(out):
     """Save a headless screenshot of a moving Rei Lagarto with a CicatriZ
@@ -551,7 +656,44 @@ def test_teeth():
     finally:
         bossai.BossAI.tick = saved_tick
 
-    # 6. Screenshot: not a checkable invariant; the bytes-on-disk is
+    # 6. Phase cadence + density (issue #162): revert the per-phase
+    #    cd_mul and the pattern_dials to pre-#162 values and confirm
+    #    the new assertion fails. Two cases:
+    #    (a) cd_mul > 0.85 on phase 2 (teeth says the cap is 0.80)
+    #    (b) fan count < 2 on phase 2 (teeth says floor is 2)
+    saved = pat.king_phases
+    def bad_phases():
+        return [
+            dict(hp_frac=1.0,  patterns=['fan', 'shockwave', 'charge'],
+                 cd_mul=1.0,  moves=['proud_walk']),
+            # pre-#162 cadence (0.95) AND a fan that stays at 1: both teeth.
+            dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'],
+                 cd_mul=0.95, moves=['proud_walk']),
+            dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'],
+                 cd_mul=0.85, moves=['proud_walk']),
+        ]
+    pat.king_phases = bad_phases
+    try:
+        phases = pat.king_phases()
+        p2 = phases[1]
+        # mirror the assertion's gates from a low-pile fixture.
+        assert p2['cd_mul'] > 0.85 or _eff_king_dials(p2, 'fan')['count'] < 2, \
+            "bad_phases didn't break either teeth (cd_mul > 0.85 or fan count < 2)"
+        assert True, "above only proves the teeth holds; the real check is below"
+        # try the real assertion against the broken fixture -- should fail.
+        try:
+            test_phase_cadence()
+        except AssertionError as ae:
+            print(f"    phase cadence: fails when king_phases reverts to "
+                  f"pre-#162 values ({str(ae).splitlines()[0][:90]}...)")
+        else:
+            raise AssertionError(
+                "test_phase_cadence() accepted the pre-#162 fixture; "
+                "the assertion has no teeth")
+    finally:
+        pat.king_phases = saved
+
+    # 7. Screenshot: not a checkable invariant; the bytes-on-disk is
     #    the contract. Skip the teeth for this one -- visual diff
     #    would require an image-hash library that's not in scope.
     print("    screenshot: visual; teeth skipped (bytes-on-disk is the contract)")
@@ -572,6 +714,7 @@ def main():
     test_no_retreat()
     test_cicatriz_trail()
     test_no_invuln_window()
+    test_phase_cadence()
     test_teeth()
     print("ALL OK")
 
