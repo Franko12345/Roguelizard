@@ -236,6 +236,29 @@ chk(12, "cosmetic skeleton", os.path.exists('lagarto/anim/cosmetics.py'),
 chk(10, "ground adaptation", 'height_at' in open('lagarto/world/terrain.py').read(),
     "rejected: height_at/slope_at returned 0.0 unconditionally")
 chk(9, "windup visual", C.DASH_ANTIC_T > 0, f"wind-ups zeroed by request; dash dust kept at launch")
+adr3 = open('docs/adr/0003-zero-assets-with-png-fallback.md').read()
+parts_md = open('docs/concepts/parts.md').read()
+species_md = open('docs/concepts/species.md').read()
+chk(159, "ADR-0003 boss personality layer (partial; full override path pending)",
+    # Decision documented in ADR-0003 -- the canonical boss-portrait escape hatch
+    'boss personality' in adr3.lower()
+    and 'assets/boss/' in adr3
+    and 'procedural fallback' in adr3.lower()
+    and 'boss_part' in adr3
+    # Contract: the FULL override path is still pending. Sentinel markers
+    # that disappear when the full path ships:
+    # - the generic `boss_part()` helper is not callable from parts.draw_all
+    # - parts.draw_all does not accept `boss_id` as a parameter
+    # - the docs claim "partial implementation" rather than "shipped"
+    and 'boss_part' not in src(parts)
+    and 'boss_id' not in inspect.signature(parts.draw_all).parameters
+    and ('partially implemented' in parts_md.lower()
+         or 'not yet implemented' in parts_md.lower())
+    and ('partially implemented' in species_md.lower()
+         or 'not yet implemented' in species_md.lower()),
+    "" if ('partially implemented' in parts_md.lower()
+           or 'not yet implemented' in parts_md.lower())
+    else "parts.md or species.md missing the partial-implementation marker on #159 section")
 chk(8, "tail chain", cbase.TAIL_CHAIN_LEN == 5 and
     subprocess.run([sys.executable, 'tools/check_tail_chain.py'], capture_output=True).returncode == 0)
 p_src = src(Player)

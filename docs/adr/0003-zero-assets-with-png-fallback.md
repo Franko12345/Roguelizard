@@ -25,3 +25,85 @@ where a PNG exists, it wins. This makes the "add a memorable icon" workflow
   wrong?" is always "PNG name mismatch" before it is anything else.
 - Do not extend the exception. Audio, world, creatures stay code-only.
   New PNG surfaces should go through `icons.draw`.
+
+## Extension (issue #159): boss personality elements
+
+**Status: partially implemented as of the Serpente de Cristal (#166, #190).**
+
+What's shipped:
+- `Genome.boss_id` field — optional, populated only by boss species
+  (#166). Gates the override path per spec.
+- `lagarto/render/boss_assets.py` — module exists, holds
+  `serpente_head()` / `serpente_segment()` helpers that return `None`
+  until `assets/boss/serpente_cristal/head.png` lands.
+- A one-off branch in `lagarto/creatures/base.py` (`if genome.boss_id
+  == 'serpente_cristal': ...`) that calls the Serpente-specific
+  `draw_serpente_cristal` in `lagarto/creatures/parts.py`.
+
+What's still pending (the rest of the spec):
+- The generic `boss_part(boss_id, part_name)` helper that other bosses
+  would use. The Serpente ships a one-off branch because it's the only
+  boss with an asset; refactor to the generic helper when N=2.
+- `parts.draw_all` accepting an optional `boss_id` parameter. Today the
+  override path is hard-coded into `Lizard.draw` for the Serpente
+  case; the generic call site ships with the refactor.
+
+This ADR documents the **decision** (per-issue scoped PNG override
+layer). The implementation state is tracked in `tools/check_issues.py`
+row #159 ("ADR-0003 boss personality layer (decision only, not implemented)")
+plus the `boss_id` field marker — when the generic refactor lands, the
+check flips and the docs ("decided, not yet implemented") get rewritten.
+
+**Context.** Two bosses in the pipeline — Serpente de Cristal (faceted
+crystal head + segments) and ANKH (multi-body ghost with per-phase alpha
+blending) — need visual elements the procedural drawing cannot deliver
+honestly (faceted geometry, multi-skeleton overlay). The existing exception
+covers icons and emblems; the rest of the body stays procedural by the same
+"spine + legs + body polygon" rule.
+
+**Decision.** Add a second layer to the exception: **boss personality
+elements** — segments of crystal, fangs, eye variants, ornamental layers
+that sit ON TOP of the procedural body and serve only to mark the boss's
+identity. The procedural body (spine, legs, body polygon, the part types
+already in `parts.draw_all`) is unchanged. The override is per-(boss_id,
+part_name), optional, with procedural fallback when the PNG is missing.
+
+- **Where to look**: `assets/boss/<boss_id>/<part_name>.png`.
+- **How to load**: `boss_part(boss_id, part_name) -> Surface | None` in
+  `lagarto/render/boss_assets.py` — same `_MEIPASS` + cache pattern as
+  `lagarto/render/assets.py`. Missing file = `None` = procedural drawer.
+- **Where to plug (planned)**: `parts.draw_all` will accept an optional
+  `boss_id`. When present and the part has a registered override, blit the
+  PNG; otherwise the existing procedural code runs unchanged. Today the
+  Serpente uses a one-off branch in `Lizard.draw` for the same end.
+- **Scope limit**: "personality elements" only. The body's silhouette,
+  motion, and hit-test stay procedural — the only thing the PNG can
+  change is the *look* of a single part, never the physics.
+
+**Why a layer, not a full exception.** A full exception would let any
+creature load any PNG and break the "everything is a Genome" invariant
+behind [ADR-0001](./0001-genome-is-the-creature.md). A scoped layer keeps
+that boundary intact: the boss's body is still drawn by code; the PNG is
+only paint.
+
+**Consequences.**
+
+- A build without `assets/boss/` ships identically to before — the
+  procedural fallback is the canonical path, not a stub.
+- The cached surface reuses the `assets._ROOT` / `_MEIPASS` plumbing. Cache
+  key `(boss_id, part_name, diameter)`, same `clear()`-on-overflow policy
+  as `icons.draw`.
+- The `Genome` gains an optional `boss_id` field; `AILizard.is_boss` is
+  the runtime gate. Common enemies and prey never load boss assets.
+- The `boss_part` helper is the only path. No direct `pygame.image.load`
+  in any boss drawing code.
+- "Why is my boss's PNG not showing?" is always "path mismatch" — same
+  debug rule as icons. See [`parts.md`](../concepts/parts.md).
+
+## Anti-patterns (do not extend further)
+
+- Player body, world, particles: still 100% code. PNGs here would
+  undermine the whole "no keyframes" pitch.
+- Audio: still 100% synthesised. No PNG and no audio file in `assets/`.
+- Genome-defined creatures (`role='prey'` or `role='enemy'`, non-boss):
+  no PNG. The `boss_id` field is `None`; the override path short-circuits.
