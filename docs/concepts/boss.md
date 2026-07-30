@@ -33,7 +33,7 @@ spread, `deathroll` is `spiral_pattern` with a denser one.
 
 `radial`, `fan`, `barrage`, `shockwave`, `spiral`, `charge`, `pincha`,
 `swipe`, `arms_rain`, `sky_slam`, `deathroll`, `summon`, `web_trap`,
-`massive_fan`. Each has a telegraph rule
+`boomerang_burst`, `burst_stop_burst`, `massive_fan`. Each has a telegraph rule
 ([Telegraph](../../CONTEXT.md)): draw the footprint, not just a
 warning icon.
 

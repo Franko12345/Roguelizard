@@ -20,6 +20,8 @@ from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
+from lagarto.combat import emitter as emi
+from lagarto.combat import projectile as projlib
 from lagarto.render import assets, boss_assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
@@ -154,7 +156,6 @@ chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
     "" if _roll.returncode == 0 else _roll.stderr.decode()[-90:])
 _pj = subprocess.run([sys.executable, 'tools/check_projectile.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
-from lagarto.combat import projectile as projlib
 chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
     and _pj.returncode == 0,
     "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])

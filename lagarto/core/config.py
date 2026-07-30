@@ -652,7 +652,6 @@ BOSS_WEB_TRAP_R = 85
 BOSS_WEB_TRAP_DMG = 2
 BOSS_WEB_TRAP_LIFE = 6.0
 BOSS_WEB_TRAP_SLOW = 0.4
-
 # Olho-Sismico (B9, tier 5) -- "O Observador": globo ocular flutuante (plan='orbital').
 # Mecanica do Olho: acertar o olho ABERTO da o critico de cabeca de graca (ja e o
 # ponto fraco); durante a piscada (0.1s aleatoria) o olho fica blindado -- nao pode
