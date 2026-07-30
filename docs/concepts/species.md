@@ -65,18 +65,25 @@ ranges the behaviour tolerates; visual fields jitter more freely.
 - [Boss](./boss.md) — how a species can become a boss.
 - [Round](./round.md) — the wave theme that pulls species names.
 
-## Boss identity: `Genome.boss_id` (issue #159, ADR-0003)
+## Boss identity: `Genome.boss_id` (decided in ADR-0003, not yet implemented)
 
-A `Genome` may carry an optional `boss_id` — the boss slot id from
-`BOSS_POOL`, set by `_spawn_boss` after `make_boss`. The field is `None`
-for prey, common enemies, and champions; it is only populated for
-authored bosses. It exists for **one** reason: to gate the
-`boss_part(boss_id, part_name)` override path in `parts.draw_all`. No
-other code reads it.
+**Status: decided in ADR-0003 (#159), but the field does not yet
+exist on `Genome`.** This section describes what the field will be when
+the override path ships.
 
-The override path is per-issue scoped: the PNG, when present, paints
-*on top* of the procedural body. The boss's silhouette, motion,
-hit-test, and physics stay procedural. See
-[ADR-0003](../adr/0003-zero-assets-with-png-fallback.md) and
-[Parts](./parts.md#optional-asset-overrides-for-bosses-159-adr-0003) for
-the rule.
+When implemented:
+- A `Genome` may carry an optional `boss_id` — the boss slot id from
+  `BOSS_POOL`, set by `_spawn_boss` after `make_boss`. The field is
+  `None` for prey, common enemies, and champions; it is only populated
+  for authored bosses. It exists for **one** reason: to gate the
+  `boss_part(boss_id, part_name)` override path in `parts.draw_all`. No
+  other code reads it.
+- The override path is per-issue scoped: the PNG, when present, paints
+  *on top* of the procedural body. The boss's silhouette, motion,
+  hit-test, and physics stay procedural. See
+  [ADR-0003](../adr/0003-zero-assets-with-png-fallback.md) and
+  [Parts](./parts.md#optional-asset-overrides-for-bosses-decided-in-adr-0003-not-yet-implemented)
+  for the rule.
+
+Today, no `boss_id` field exists and `parts.draw_all(..., boss_id)` is
+not a signature. The procedural body is the only path.

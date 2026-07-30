@@ -79,30 +79,35 @@ A negative `phase_gap` runs the wave tip-to-base instead of base-to-tip.
 - [Charm](./charm.md) — the tail-club charm sets `tail='club'` for a run.
 - [Procedural animation](./procedural-animation.md) — the oscillator rule.
 
-## Optional asset overrides for bosses (#159, ADR-0003)
+## Optional asset overrides for bosses (decided in ADR-0003, not yet implemented)
 
-The default path is procedural — every part is drawn from code, even for
-bosses. For a small, scoped set of *personality* elements on bosses,
-`parts.draw_all` accepts an optional `boss_id`. When present and a PNG
-exists at `assets/boss/<boss_id>/<part_name>.png`, the helper
-`boss_part(boss_id, part_name)` returns it and the drawer blits the asset
-on top of the procedural layer. When the PNG is missing, the drawer
-silently falls back to the procedural version — same rule as
-[`icons.draw`](../../CONTEXT.md) and the rest of the zero-assets escape
-hatch.
+**Status: decided in ADR-0003 (#159), but the code path is not yet
+implemented.** This section describes what the implementation will look
+like when it lands. Today, every part on every creature — boss included
+— is drawn procedurally. That procedural body is the canonical path,
+not a stub.
 
-The override changes **only the look** of a single part. The spine, legs,
-body polygon, motion, hit-test, and physics stay procedural. The boss's
-body remains a `Genome`; the PNG is paint, not a substitute for the body.
+When the override path ships, the rule is:
 
-Scope limit:
-- Player, common enemies, prey: never load boss assets. `boss_id` is
-  `None` for those; the override path short-circuits.
-- Audio, world, particles: still 100% code. No PNGs here.
-- "Personality elements" only — faceted segments, fangs, eye variants,
-  ornamental layers. Never the silhouette or the procedural motion
-  itself.
+- `parts.draw_all` will accept an optional `boss_id`. When present and a
+  PNG exists at `assets/boss/<boss_id>/<part_name>.png`, the helper
+  `boss_part(boss_id, part_name)` (planned to live in
+  `lagarto/render/boss_assets.py`) will return it and the drawer will blit
+  the asset on top of the procedural layer. When the PNG is missing, the
+  drawer silently falls back to the procedural version — same rule as
+  `icons.draw` and the rest of the zero-assets escape hatch.
+- The override changes **only the look** of a single part. The spine,
+  legs, body polygon, motion, hit-test, and physics stay procedural. The
+  boss's body remains a `Genome`; the PNG is paint, not a substitute for
+  the body.
+- Scope limit:
+  - Player, common enemies, prey: never load boss assets. `boss_id` is
+    `None` for those; the override path short-circuits.
+  - Audio, world, particles: still 100% code. No PNGs here.
+  - "Personality elements" only — faceted segments, fangs, eye variants,
+    ornamental layers. Never the silhouette or the procedural motion
+    itself.
 
-If a boss's PNG does not show up, the rule is the same as `icons.draw`:
-path mismatch first, anything else second. See
+When the code lands, "why is my boss's PNG not showing?" will be the
+same as `icons.draw`: path mismatch first, anything else second. See
 [ADR-0003](../adr/0003-zero-assets-with-png-fallback.md).
