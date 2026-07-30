@@ -26,7 +26,7 @@ from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
-from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook
+from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook, boomerang, burst_stop
 
 
 def _launch(pr, game, dials):
@@ -343,6 +343,59 @@ def web_trap(shooter, game, target, dials):
                                          tick=0.4, slow=(slow, 1.2)))
     shooter._rain_points = []
     game.fx.burst(shooter.pos, (240, 240, 250), 8, 140)
+
+
+def boomerang_burst(shooter, game, target, dials):
+    """Mãe-Escaravelho's Boomerang (issue #163): a fan that comes back.
+
+    Reuses ``fan_shot``'s spread geometry (cone aimed at the target with a
+    leading formula), and tags each shot with the shooter's spawn position
+    so the ``boomerang`` hook can flip its velocity home. ``mod=boomerang``
+    on the PATTERNS row is what the emitter attaches (single-movement hook
+    -- ADR-0012). Dials come from the caller; the second-floor #164 work
+    will reuse this function with a tighter spread on other bosses."""
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 4)
+    spread = dials.get('spread', 20)
+    speed = dials.get('shot_speed', 200)
+    aim_at = lead_point(shooter, target, dials) if 'lead' in dials else target.pos
+    base = safe_norm(aim_at - mouth)
+    shooter_pos = Vector2(shooter.pos)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', C.BOOMERANG_DMG),
+                       effect=None, speed=speed, radius=dials.get('radius', 8))
+        pr.shooter_pos = shooter_pos
+        pr.boomerang_age = 0.0
+        _launch(pr, game, dials)
+    game.fx.spark_burst(mouth, shooter.color, 10, 240)
+    audio.play('w_spit', 0.45)
+
+
+def burst_stop_burst(shooter, game, target, dials):
+    """Mãe-Escaravelho's Burst-on-stop (issue #163): a fan of timed-fuse
+    projectiles that freeze mid-air and drop a hostile Puddle.
+
+    Same fan geometry as ``boomerang_burst``; the ``burst_stop`` hook fires
+    after ``BURST_STOP_TRAVEL`` seconds and handles the freeze/puddle/kill
+    itself. ``mod=burst_stop`` on the PATTERNS row is what the emitter
+    attaches (single-movement hook -- ADR-0012). Dials come from the caller."""
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 4)
+    spread = dials.get('spread', 15)
+    speed = dials.get('shot_speed', 180)
+    aim_at = lead_point(shooter, target, dials) if 'lead' in dials else target.pos
+    base = safe_norm(aim_at - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', C.BURST_STOP_DMG),
+                       effect='poison', speed=speed, radius=dials.get('radius', 8))
+        pr.burst_stop_age = 0.0
+        _launch(pr, game, dials)
+    game.fx.spark_burst(mouth, palette.lighten(shooter.color, 0.3), 10, 220)
+    audio.play('w_spit', 0.4)
 
 
 # --------------------------------------------------------------------------- #

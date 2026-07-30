@@ -256,6 +256,44 @@ def leave_puddle(**kw):
     return drop
 
 
+def boomerang(pr, dt, game):
+    """on_update: flip velocity toward the shooter once ``BOOMERANG_RETURN_TIME``
+    elapses OR the shot has travelled past ``BOOMERANG_RANGE``. The shot keeps
+    ``pr.hostile=True`` on the way back so it still threatens the player; the
+    collision loop already skips enemies when hostile=True, so the boss never
+    takes damage from its own boomerang. ``pr.shooter_pos`` is set by the
+    emitter at fire time (see ``boomerang_burst``)."""
+    pr.boomerang_age += dt
+    if getattr(pr, 'boomerang_returned', False):
+        return
+    shooter_pos = pr.shooter_pos
+    age_ok = pr.boomerang_age > C.BOOMERANG_RETURN_TIME
+    range_ok = pr.pos.distance_to(shooter_pos) > C.BOOMERANG_RANGE
+    if age_ok or range_ok:
+        speed = pr.vel.length() or C.BOOMERANG_RANGE
+        pr.vel = safe_norm(shooter_pos - pr.pos) * speed
+        pr.boomerang_returned = True
+
+
+def burst_stop(pr, dt, game):
+    """on_update: after ``BURST_STOP_TRAVEL`` seconds the shot freezes in
+    place, drops a hostile Puddle at its current position, and kills itself.
+    The puddle's own cadence (Puddle.tick) paces the per-second damage; the
+    projectile is the fuse, not the puddle."""
+    pr.burst_stop_age += dt
+    if getattr(pr, 'burst_stop_detonated', False):
+        return
+    if pr.burst_stop_age >= C.BURST_STOP_TRAVEL:
+        from . import weapons
+        game.spawn_puddle(weapons.Puddle(
+            pr.pos, C.BURST_STOP_RADIUS, C.BURST_STOP_PUDDLE_DMG,
+            C.BURST_STOP_LIFE, C.BURST_STOP_PUDDLE_HUE,
+            hostile=True, tick=0.5))
+        pr.vel = Vector2()
+        pr.dead = True
+        pr.burst_stop_detonated = True
+
+
 def spit(pos, target_pos, color, dmg=8, effect='poison', speed=230, radius=8,
          hostile=True):
     """Aimed venom/spit bullet -- slow enough to read and dodge.

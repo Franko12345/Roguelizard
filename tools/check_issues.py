@@ -20,6 +20,8 @@ from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
+from lagarto.combat import emitter as emi
+from lagarto.combat import projectile as projlib
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
@@ -80,6 +82,22 @@ chk(122, "wasp signature",
     and 'terror_alado' in ar.ARENAS
     and _ws.returncode == 0,
     "" if _ws.returncode == 0 else _ws.stderr.decode()[-90:])
+_bo = subprocess.run([sys.executable, 'tools/check_bosses.py'], capture_output=True,
+                      env={**os.environ, 'PYTHONPATH': '.'})
+beetle_ph3 = next((p for p in pat.beetle_phases() if p['hp_frac'] <= 0.4), {})
+chk(163, "mae-escaravelho boomerang + burst-on-stop",
+    'boomerang_burst' in src(emi)
+    and 'burst_stop_burst' in src(emi)
+    and 'boomerang' in src(projlib)
+    and 'burst_stop' in src(projlib)
+    and 'BOOMERANG_RETURN_TIME' in src(C) and C.BOOMERANG_RETURN_TIME >= 0.6
+    and 'BURST_STOP_TRAVEL' in src(C) and C.BURST_STOP_TRAVEL >= 0.4
+    and "'boomerang'" in src(pat) and "'burst_stop'" in src(pat)
+    and 'boomerang' in beetle_ph3.get('patterns', [])
+    and 'burst_stop' in beetle_ph3.get('patterns', [])
+    and beetle_ph3.get('cd_mul', 1.0) <= 0.6
+    and _bo.returncode == 0,
+    "" if _bo.returncode == 0 else _bo.stderr.decode()[-90:])
 _ce = subprocess.run([sys.executable, 'tools/check_centipede_signature.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
 chk(124, "centopeiadeira signature -- burrow-as-locomotion",
@@ -132,7 +150,6 @@ chk(103, "rolamento", hasattr(Player, 'rolling') and 'roll' in _ACTIONS
     "" if _roll.returncode == 0 else _roll.stderr.decode()[-90:])
 _pj = subprocess.run([sys.executable, 'tools/check_projectile.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
-from lagarto.combat import projectile as projlib
 chk(102, "projectile hooks", hasattr(projlib.Projectile(( 0, 0), (0, 0), (1, 1, 1)), 'on_update')
     and _pj.returncode == 0,
     "" if _pj.returncode == 0 else _pj.stderr.decode()[-90:])
@@ -154,7 +171,6 @@ _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_out
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
-from lagarto.combat import emitter as emi
 _fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
        [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
 chk(101, "shared emitter", bool(_fns)

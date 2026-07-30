@@ -652,6 +652,24 @@ BOSS_WEB_TRAP_R = 85
 BOSS_WEB_TRAP_DMG = 2
 BOSS_WEB_TRAP_LIFE = 6.0
 BOSS_WEB_TRAP_SLOW = 0.4
+# Issue #163: two new patterns for the Mae's phase-3 enrage kit. Both keep
+# the 27-frame floor under the worst tell_mult (0.65), so windups >= 0.7 land
+# at the 0.45 s floor even when enraged. Boomerang fires a fan that comes
+# back; burst_stop fires a fan whose shots freeze mid-air and drop a hostile
+# Puddle. Pool cap: 5 projeteis por rajada * BURST_STOP_LIFE/BURST_STOP_CD ~= 5
+# pocas vivas -- well below Game.spawn_puddle's cap of 40.
+BOOMERANG_WINDUP = 0.7
+BOOMERANG_RETURN_TIME = 0.8     # seconds before the shot flips back
+BOOMERANG_RANGE = 280           # px from the shooter -- the out-phase ceiling
+BOOMERANG_DMG = 8
+BOOMERANG_PUDDLE_DMG = 2        # soft pool when the boomerang is left behind
+BURST_STOP_WINDUP = 0.7
+BURST_STOP_TRAVEL = 0.5         # seconds the shot flies before freezing
+BURST_STOP_DMG = 8              # projectile hit (player must dodge)
+BURST_STOP_PUDDLE_DMG = 4       # pool damage PER TICK (Puddle owns its cadence)
+BURST_STOP_RADIUS = 32
+BURST_STOP_LIFE = 1.5
+BURST_STOP_PUDDLE_HUE = 30      # poison-yellow tint (Mae-Escaravelho)
 
 # Olho-Sismico (B9, tier 5) -- "O Observador": globo ocular flutuante (plan='orbital').
 # Mecanica do Olho: acertar o olho ABERTO da o critico de cabeca de graca (ja e o

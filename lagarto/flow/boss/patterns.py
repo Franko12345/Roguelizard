@@ -65,6 +65,22 @@ PATTERNS = {
                      # where the boss stands; the move leaves that spot for the
                      # side with more free space.
                      move='trap_and_shift'),
+    # Issue #163: Mãe-Escaravelho's Boomerang -- fan of shots that return to
+    # the shooter after BOOMERANG_RETURN_TIME. The mod= carries the on_update
+    # hook that flips velocity (single-movement hook, ADR-0012); the shot keeps
+    # hostile=True on the return so it still threatens the player, but the
+    # collision loop skips enemies when hostile=True, sparing the boss.
+    'boomerang': dict(fn=emitter.boomerang_burst, windup=C.BOOMERANG_WINDUP,
+                      telegraph='fan',
+                      count=4, spread=20, shot_speed=200, dmg=C.BOOMERANG_DMG,
+                      mod=proj.boomerang),
+    # Issue #163: Mãe-Escaravelho's Burst-on-stop -- timed-fuse fan that
+    # drops a hostile Puddle mid-air. The mod= carries the on_update hook
+    # that freezes the shot and spawns the pool (single-movement hook).
+    'burst_stop': dict(fn=emitter.burst_stop_burst, windup=C.BURST_STOP_WINDUP,
+                       telegraph='fan',
+                       count=4, spread=15, shot_speed=180, dmg=C.BURST_STOP_DMG,
+                       mod=proj.burst_stop),
     # Aranha-Rei's Web Dome: same web_trap fn/select, just more/bigger patches.
     # ``move='trap_and_shift'`` again -- the centroid of the 5 rain points is
     # the "trap" the boss leaves (it sits near the player), so the move drives
@@ -273,10 +289,16 @@ def primordial_phases():
 # --------------------------------------------------------------------------- #
 
 def beetle_phases():
+    """3 fases. Issue #163: phase 3 enrage adds boomerang + burst_stop (the
+    support's "I stay near you and my shots come back / freeze into traps"
+    identity) and tightens cd_mul 0.65 -> 0.55 to keep total bullets on
+    screen similar despite the two extra patterns. The base kit's identity
+    -- area denial (web_trap, radial) + summon (adds) -- is unchanged."""
     return [
         dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial'], cd_mul=0.65, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial',
+                                     'boomerang', 'burst_stop'], cd_mul=0.55, moves=['orbit']),
     ]
 
 

@@ -50,6 +50,15 @@ later would otherwise silently skip the payload.
 - `projectile.leave_puddle(**payload)` — `on_death`; drops a
   [Puddle](./weapon.md) where the shot ended, whether it connected or simply
   landed. The venomer's area denial.
+- `projectile.boomerang` — `on_update`; flips velocity toward the shooter after
+  `BOOMERANG_RETURN_TIME` or once the shot has travelled past
+  `BOOMERANG_RANGE`. Keeps `pr.hostile=True` on the return so it still
+  threatens the player; the collision loop skips enemies when hostile=True, so
+  the shooter is never hit by its own boomerang. Mãe-Escaravelho's `boomerang`.
+- `projectile.burst_stop` — `on_update`; freezes the shot after
+  `BURST_STOP_TRAVEL` seconds, drops a hostile [Puddle](./weapon.md) at its
+  current position, and kills the projectile. The puddle's own cadence (the
+  `tick` arg) paces the per-second damage. Mãe-Escaravelho's `burst_stop`.
 
 `pierce` is not a hook: it changes how the collision loop itself iterates
 (pass through, remember the enemy), not what happens on a hit.
