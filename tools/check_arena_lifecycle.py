@@ -115,9 +115,13 @@ start = Vector2(pl.pos)
 for _ in range(int(2.0 / DT)):            # 2 seconds flat out
     pl.integrate(DT, bounds=g.arena_bounds)
 traveled = pl.pos.distance_to(start)
-assert traveled > 400, \
-    f"player covered only {traveled:.0f}px in 2s of free running -- " \
-    f"arena_bounds still clamping during play (bounds={g.arena_bounds!r})"
+# Free-running ceiling is pl.max_speed * 2s (193.05 * 2 = 386.1px); a wall
+# clamp would cut this well below that, not just graze it.
+free_running = pl.max_speed * 2.0
+assert traveled > free_running * 0.9, \
+    f"player covered only {traveled:.0f}px in 2s of free running (ceiling " \
+    f"{free_running:.0f}px) -- arena_bounds still clamping during play " \
+    f"(bounds={g.arena_bounds!r})"
 print(f"  muralha: arena cleared on round clear; player covered {traveled:.0f}px "
       f"in 2s of free run (no clamp from the dead boss's box)")
 
