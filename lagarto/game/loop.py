@@ -101,6 +101,7 @@ class Game:
         self.pause_ai = False        # freeze enemy/boss/prey/friend update; player still walks
         self.step_once = False       # one-shot: advance the frozen AI exactly one tick
         self.combo_flash = 0.0
+        self.score_pulse = 0.0       # line-of-score alpha pulse on each combo tick (#153)
         self.pollen = 0
         # per-RUN shop prices, keyed by item name: a purchase raises the price
         # and it stays raised in every later camp (see state_camp._roll_shop)
@@ -171,6 +172,7 @@ class Game:
         self.combo += 1
         self.combo_timer = 3.2
         self.combo_flash = 1.0
+        self.score_pulse = 1.0       # line-of-score alpha pulse on each kill (#153)
 
     def add_pollen(self, n):
         mult = max((getattr(p, 'pollen_mult', 1.0) for p in self.players), default=1.0)
