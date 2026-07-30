@@ -626,6 +626,13 @@ BOSS_DEATHROLL_SHOTS = 40    # spiral bem mais denso/rapido -- reusa spiral_patt
 BOSS_DEATHROLL_TURN = 95     # graus/tiro (spiral normal: 46)
 BOSS_DEATHROLL_GAP = 0.03    # spiral normal: 0.05
 
+# Issue #164: Wasp's spiral-arcing pattern. Shot orbits the target with a
+# decaying radius (collapses onto the player in ~70 frames). Angles in rad;
+# SPIRAL_RADIUS_DECAY is per-frame at SIM_HZ=60.
+SPIRAL_RADIUS_INIT = 80
+SPIRAL_RADIUS_DECAY = 0.96
+SPIRAL_OMEGA = 2.0           # rad/s -- angular speed of the orbit
+
 # Centopeiadeira (onda 10 / tier 2) -- "Degradacao": encolhe e acelera por fase
 CENT_BOSS_SHRINK = 0.18      # genome.length perdido por transicao
 CENT_BOSS_SPEED_BUMP = 1.25  # genome.speed x por transicao

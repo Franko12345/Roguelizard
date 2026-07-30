@@ -47,6 +47,11 @@ later would otherwise silently skip the payload.
 - `projectile.bounce` — `on_update`; ricochets off the arena walls, losing
   speed each time. Reads `pr.bounces_left` / `pr.bounce_damp` off the shot, so
   a mirrored copy keeps its own count. A Muralha's bouncing bullets.
+- `projectile.spiral_arc` — `on_update`; orbits the nearest player with a
+  decaying radius (issue #164). State lives on the projectile (`pr.spiral_radius`
+  / `pr.spiral_angle`); the shot converges in ~70 frames and the standard
+  body-overlap collision applies the hit. The Wasp's `spiral_arc` pattern at
+  phase 3.
 - `projectile.leave_puddle(**payload)` — `on_death`; drops a
   [Puddle](./weapon.md) where the shot ended, whether it connected or simply
   landed. The venomer's area denial.

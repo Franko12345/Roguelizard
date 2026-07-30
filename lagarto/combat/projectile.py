@@ -15,6 +15,7 @@ resolves hits against players (hostile) or creatures (friendly).
 """
 
 import math
+import random
 from pygame import Vector2
 import pygame
 
@@ -244,6 +245,36 @@ def arc(height):
         f = min(1.0, max(0.0, 1.0 - pr.life / life0))
         pr.lift = height * math.sin(f * math.pi)
     return fly
+
+
+def spiral_arc(pr, dt, game):
+    """on_update: orbit the nearest player with a decaying radius (issue #164).
+
+    The Wasp's signature at phase 3: the shot does NOT go in a straight line,
+    it CURVES around the player. Each frame the radius shrinks by
+    ``SPIRAL_RADIUS_DECAY`` and the angle advances by ``SPIRAL_OMEGA * dt``, so
+    the projectile spirals inward and ends up on top of the target. From the
+    player's read this is "the bullet takes a turn around me" -- three kinds
+    of anticipation to learn now (linear in ``lead_fan``, swoop in
+    ``dive_arc``, orbit in ``spiral_arc``).
+
+    The spiral state lives on the projectile (``pr.spiral_radius`` /
+    ``pr.spiral_angle``) so a mirrored copy of the shot gets its own orbit.
+    Collision is body-overlap (see ``Game._update_projectiles``), so once the
+    radius decays below the body radius the standard hit check fires -- no
+    explicit damage call here.
+    """
+    if not getattr(pr, '_spiral_init', False):
+        pr._spiral_init = True
+        pr.spiral_angle = random.uniform(0, math.tau)
+        pr.spiral_radius = C.SPIRAL_RADIUS_INIT
+    pr.spiral_radius *= C.SPIRAL_RADIUS_DECAY
+    pr.spiral_angle += C.SPIRAL_OMEGA * dt
+    tgt = game.nearest_player(pr.pos) if pr.hostile else None
+    if tgt is not None:
+        pr.pos = tgt.pos + Vector2(
+            pr.spiral_radius * math.cos(pr.spiral_angle),
+            pr.spiral_radius * math.sin(pr.spiral_angle))
 
 
 def leave_puddle(**kw):

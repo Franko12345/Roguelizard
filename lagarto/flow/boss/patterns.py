@@ -173,6 +173,17 @@ PATTERNS = {
     # the 27-frame floor (0.7s -- same as charge, the windup IS the action).
     'dive_arc': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='dive_line',
                      move='dive_arc', reach=1.6, dmg=18),
+    # Issue #164: spiral-arcing burst. Wasp phase-3 "the bullet takes a turn
+    # around you" -- the shot's path is the spiral (see projectile.spiral_arc),
+    # the emitter only seeds the mouth direction. Telegraph reuses 'spiral'
+    # (the bullet-hell style: a growing arc visualised during the windup).
+    # Dials: 4 shots in a 15-deg fan at 220 px/s; dmg 6 because the orbit
+    # hits WHERE THE PLAYER IS GOING, not where they stand -- lower than the
+    # lead_fan linear version, the lead is on the orbit, not on impact.
+    'spiral_arc': dict(fn=emitter.spiral_arcing_burst,
+                       windup=C.BOSS_BARRAGE_WINDUP, telegraph='spiral',
+                       count=4, spread=15, shot_speed=220, dmg=6,
+                       mod=proj.spiral_arc),
 }
 
 
@@ -386,7 +397,12 @@ def wasp_phases():
         # dive_arc as a pattern (the Wasp's signature -- the dive is the
         # movement, and the dive is the attack). The move kit couples
         # dive_arc (during its windup) with flyby (between dives).
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan', 'dive_arc'],
+        # Issue #164: spiral_arc joins phase 3 -- the "bullet takes a turn
+        # around you" pattern. Three anticipation reads to learn now
+        # (linear lead_fan, swoop dive_arc, orbit spiral_arc); the Wasp
+        # earns the orbit only at 30% HP, when she is the saddest hunter.
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan', 'dive_arc',
+                                     'spiral_arc'],
              cd_mul=0.6, moves=['dive_arc', 'flyby']),
     ]
 

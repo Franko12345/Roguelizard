@@ -120,6 +120,34 @@ def fan_shot(shooter, game, target, dials):
     audio.play('w_spit', 0.45)
 
 
+def spiral_arcing_burst(shooter, game, target, dials):
+    """Wasp's phase-3 spiral-arcing pattern (issue #164). A small fan of shots
+    whose trajectory is OVERRIDDEN by the ``spiral_arc`` movement hook -- the
+    projectile does not travel in a straight line, it orbits the target with
+    a decaying radius and collapses onto it. The shot's starting direction
+    only seeds the emitter's mouth spark; the actual path is the spiral.
+
+    Reuses the fan layout (count + spread dials) so multiple spirals spawn at
+    slightly different starting angles, then all converge onto the player
+    at the same time. Dials: count, spread, shot_speed, dmg, radius -- same
+    vocabulary as ``fan_shot``. The ``mod=proj.spiral_arc`` on the PATTERNS
+    row attaches the hook via ``_launch``.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 4)
+    spread = dials.get('spread', 15)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 6),
+                       effect=None, speed=dials.get('shot_speed', 220),
+                       radius=dials.get('radius', 8))
+        _launch(pr, game, dials)
+    game.fx.spark_burst(mouth, shooter.color, 10, 240)
+    audio.play('w_spit', 0.45)
+
+
 def lob_shot(shooter, game, target, dials):
     """A shot that LANDS on the aim point and leaves its payload there.
 
