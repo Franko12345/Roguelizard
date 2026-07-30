@@ -135,6 +135,18 @@ screen `tint`. The box is what makes an arena felt — one anchored to the world
 origin would only shave the far corners off a 3200x3200 map, which the player
 never reaches. A boss with no entry in `ARENAS` fights in the open world.
 
+The arena lives for the fight only: `BossArena.apply()` installs the bounds
+when the boss spawns (`_spawn_boss`) and at every HP threshold (the per-boss
+`on_phase` callback for #121's shrinking corridors), and `BossArena.clear()`
+drops them the moment the round transitions to `cleared` — issue #157. Without
+that clear, `game.arena_bounds` would still hold the dead boss's box across
+the whole `cleared` and `camp` window, and the player's `integrate()` would
+clamp them inside the box they just killed their way out of. The shop door is
+unreachable through a 900x640 corridor that's still painted on the world. The
+adds that some bosses spawn on death (Mãe-Escaravelho's larvas) don't use
+`arena_bounds` — the arena is per-boss, not per-spawn — so clearing it the
+moment the round clears does not punish the surviving adds.
+
 A Muralha has the tightest box in the game (900x640, a corridor); the
 Primordial and the Terror Alado have none, because both fights are about space.
 
