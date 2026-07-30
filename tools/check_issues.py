@@ -88,7 +88,7 @@ chk(122, "wasp signature",
                                             fromlist=['x']))
     and 'dive_arc' in src(__import__('lagarto.flow.boss.telegraph',
                                     fromlist=['x']))
-    and 'terror_alado' in ar.ARENAS
+    and 'terror_alado' in ar.BOSS_TINTS
     and _ws.returncode == 0,
     "" if _ws.returncode == 0 else _ws.stderr.decode()[-90:])
 _ce = subprocess.run([sys.executable, 'tools/check_centipede_signature.py'], capture_output=True,
@@ -230,7 +230,8 @@ chk(28, "balance tracking", 'issue' in bal.lower() and ('|' in bal))
 from lagarto.flow.boss import telegraph
 chk(27, "telegraph module", len(telegraph.TELEGRAPHS) >= 7
     and 'TELEGRAPHS.get' in src(__import__('lagarto.flow.boss.ai', fromlist=['x'])))
-chk(26, "boss arena", len(ar.ARENAS) >= 10 and 'for_boss' in src(rounds)
+chk(26, "boss arena", len(ar.ARENAS) == 1 and 'muralha' in ar.ARENAS
+    and len(ar.BOSS_TINTS) >= 9 and 'for_boss' in src(rounds)
     and 'arena.apply' in src(rounds) and 'bounds' in src(cbase.Lizard.integrate))
 root_ok = os.path.isdir(os.path.join(assets._ROOT, 'assets'))
 chk(25, "assets", root_ok and 'ferrao_charm' in icons.ICONS

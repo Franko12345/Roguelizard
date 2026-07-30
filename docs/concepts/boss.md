@@ -160,11 +160,20 @@ mood multiplier cannot drag a real telegraph below the floor.
 
 ## Arena
 
-A boss may carry a `BossArena` (`lagarto/flow/boss/arena.py`): a `size`
-`(w, h)` play box **centred on the boss** for the length of the fight, plus a
-screen `tint`. The box is what makes an arena felt — one anchored to the world
-origin would only shave the far corners off a 3200x3200 map, which the player
-never reaches. A boss with no entry in `ARENAS` fights in the open world.
+Only A Muralha carries an arena. The other bosses fight in the open world
+against the full 3200x3200 map — the box that followed them around the
+arena made the fight a moving maze the player could not read, and the
+play-style it forbade (long kites for the flyers, ambushes from across
+the map for the kraken) was the play-style the bosses' moves were
+designed to reward.
+
+A Muralha is `plan='fixed'` and stays planted; the box around it is the
+fight, not a constraint on movement. The arena's `size` is a `(w, h)`
+play box **centred on the boss** for the length of the fight, and the
+screen `tint` is the visual signature (orange-red for the hot gate). A
+shrink mid-fight via `phase_sizes` (issue #121) tightens the corridor
+each phase (900x640 → 800x540 → 700x440) so the player feels the wall
+closing in.
 
 The arena lives for the fight only: `BossArena.apply()` installs the bounds
 when the boss spawns (`_spawn_boss`) and at every HP threshold (the per-boss
@@ -178,23 +187,30 @@ adds that some bosses spawn on death (Mãe-Escaravelho's larvas) don't use
 `arena_bounds` — the arena is per-boss, not per-spawn — so clearing it the
 moment the round clears does not punish the surviving adds.
 
-A Muralha has the tightest box in the game (900x640, a corridor); the
-Primordial and the Terror Alado have none, because both fights are about space.
+The per-boss `tint` is the visual identity that survived: Rei Lagarto
+warm gold, Kraken-Mor deep blue, Olho-Sísmico cyan, etc. The tint
+survives independent of the box — `BossArena.apply()` sets `game.arena`
+even when `size is None`, so the 10 non-Muralha bosses in `BOSS_TINTS`
+still carry their atmosphere while fighting in the open world. Terror
+Alado has no tint: the flyer hunts across the whole world with no
+colour signature.
 
-A pattern that paints the **ground** reads `game.arena_bounds` and anchors its
-cells to that box — never to the world origin. `grid_of_fire` measured its grid
-from (0, 0) and therefore lit the map's top-left corner while the fight happened
-2 000 px away: the attack existed, telegraphed, and hit nobody. The emitter is
-shared, so the same function falls back to a box of the arena's size around the
-shooter when there is no arena at all.
+A pattern that paints the **ground** reads `game.arena_bounds` and
+anchors its cells to that box — never to the world origin. `grid_of_fire`
+measured its grid from (0, 0) and therefore lit the map's top-left
+corner while the fight happened 2 000 px away: the attack existed,
+telegraphed, and hit nobody. The emitter is shared, so the same
+function falls back to a box of the arena's size around the shooter
+when there is no arena at all.
 
-How much of the box a grid may light is capped twice: `Game.spawn_puddle` keeps
-at most 40 puddles alive in the whole world (a cell size that asks for more
-loses the far side of the arena, silently), and the fire's life must stay under
-the shortest interval that can reapply it — recover + the attack cooldown +
-the wind-up, ~1.4 s for A Muralha — or two grids overlap and the damage stacks.
-Same rule as the enemy puddles ([Enemy behaviors](./enemy-behaviors.md)), on
-the boss side. `tools/check_muralha.py` asserts all three.
+How much of the box a grid may light is capped twice:
+`Game.spawn_puddle` keeps at most 40 puddles alive in the whole world
+(a cell size that asks for more loses the far side of the arena,
+silently), and the fire's life must stay under the shortest interval
+that can reapply it — recover + the attack cooldown + the wind-up,
+~1.4 s for A Muralha — or two grids overlap and the damage stacks.
+Same rule as the enemy puddles ([Enemy behaviors](./enemy-behaviors.md)),
+on the boss side. `tools/check_muralha.py` asserts all three.
 
 ## Body plan vs re-skin
 
