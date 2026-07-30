@@ -1,21 +1,27 @@
-"""Per-boss arena modifiers (issue #26).
+"""Per-boss arena modifiers (issue #26, narrowed by #158).
 
-Each boss in ``rounds.BOSS_POOL`` can carry an ``arena`` field: a
-``BossArena`` instance describing how the play area changes for that
-fight. The infrastructure is shared -- the same descriptor powers
-bounds-shrink, screen-tint, and (future) obstacle spawning -- so each
-authored boss only fills in the modifiers it needs.
+Issue #158 removed the play-box from every boss except A Muralha. The
+original 10 entries (Rei Lagarto through ANKH) all had a ``size``
+shrunk below the 3200x3200 world, which capped the player's run -- the
+box followed the boss, so the fight became a moving maze the player
+could not read. Only A Muralha still holds a box: ``plan='fixed'``
+keeps the boss planted, the corridor is the fight, and ``grid_of_fire``
+anchors the cells to the arena (emitter.py:500).
+
+The screen ``tint`` is per-boss identity (Rei Lagarto warm gold,
+Kraken-Mor deep blue, etc.) and survived -- a tint applies via
+``BossArena.apply`` even when ``size`` is None, so the 10 bosses that
+used to have a box still carry their atmosphere and just fight in the
+open world. The tint lives in ``BOSS_TINTS``; ``for_boss`` wraps it
+in a ``BossArena`` so the rest of the system stays untouched.
 
 Two modifiers, both optional:
 
 - ``size``: a (width, height) play box CENTERED ON THE BOSS for the
-  duration of the fight, so the player can no longer kite forever
-  across the 3200x3200 world. Applied via ``Game.arena_bounds``, which
-  ``Lizard.integrate`` clamps against.
+  duration of the fight. Applied via ``Game.arena_bounds``, which
+  ``Lizard.integrate`` clamps against. Only A Muralha sets it.
 - ``tint``: a (color, alpha) screen tint applied each frame during the
-  boss fight, so each boss has its own atmosphere (Rei Lagarto =
-  warm gold, Kraken-Mor = deep blue, etc.). Applied via
-  ``Game.draw``.
+  boss fight. Applied via ``Game.draw``.
 
 Related: [Boss](../../docs/concepts/boss.md), [Round](../../docs/concepts/round.md).
 """
@@ -68,11 +74,13 @@ def clamp_to_anchor(pos, direction, speed, max_r, bounds):
 class BossArena:
     """Per-boss play-area modifiers. All fields optional; unset = no change.
 
-    A boss with no arena modifiers (the default for the 8 existing bosses
-    as of issue #26) fights in the standard world. A boss WITH modifiers
-    gets a tighter, more authored fight -- the shared infrastructure
-    applies whatever the descriptor specifies, so each boss only fills in
-    the modifiers it needs.
+    A boss with no arena modifiers (the default for any boss with no
+    entry in ``ARENAS`` or ``BOSS_TINTS``) fights in the standard world.
+    A boss WITH modifiers gets a tighter, more authored fight -- the
+    shared infrastructure applies whatever the descriptor specifies,
+    so each boss only fills in the modifiers it needs. As of #158 only
+    A Muralha sets a ``size``; the 9 other bosses with a tint set only
+    that, and Terror Alado sets nothing.
 
     Issue #121: a fight can also change its modifiers MID-fight via
     ``phase_sizes`` -- a sequence of (w, h) entries parallel to the boss's
@@ -150,67 +158,6 @@ class BossArena:
 # --------------------------------------------------------------------------- #
 #  Per-boss arena descriptors                                                 #
 # --------------------------------------------------------------------------- #
-# Each boss in BOSS_POOL can carry an `arena` field pointing at one of these.
-# Bosses without an entry (None) fight in the standard world -- preserves
-# existing behavior for the 8 current bosses while the infrastructure
-# lands. Future authored bosses (#73 / #74 / #75) will set their own.
-
-# Rei Lagarto: warm gold tint, mild bounds shrink (the king's arena is the
-# desert clearing where he hunts -- tighter than the open world but not a
-# cage).
-REI_LAGARTO_ARENA = BossArena(
-    size=(1500, 1500),
-    tint=((220, 170, 90), 24),
-)
-
-# Centopeiadeira: rust-red tint, no bounds shrink (the centipede's length
-# is the constraint, not the arena).
-CENTOPEIADEIRA_ARENA = BossArena(
-    tint=((140, 70, 50), 20),
-)
-
-# Kraken-Mor: deep blue tint, larger bounds shrink (the abyss is tight).
-KRAKEN_MOR_ARENA = BossArena(
-    size=(1200, 1200),
-    tint=((40, 70, 130), 32),
-)
-
-# Primordial: purple tint, no bounds shrink (the final fight is in the
-# open -- the player has earned the space).
-PRIMORDIAL_ARENA = BossArena(
-    tint=((180, 80, 200), 28),
-)
-
-# Mae-Escaravelho: amber tint (the hive glows).
-MAE_ESCARAVELHO_ARENA = BossArena(
-    size=(1800, 1800),
-    tint=((220, 160, 40), 24),
-)
-
-# Aranha-Rei: pale web-white tint (the spider's parlor).
-ARANHA_REI_ARENA = BossArena(
-    size=(1500, 1500),
-    tint=((220, 220, 230), 20),
-)
-
-# Serpente de Cristal: prismatic cyan tint.
-SERPENTE_CRISTAL_ARENA = BossArena(
-    tint=((140, 220, 230), 24),
-)
-
-# Terror Alado: no tint, no bounds shrink (the flyer hunts you across the
-# whole world -- caging it would defeat the design).
-TERROR_ALADO_ARENA = BossArena(
-    tint=None,
-)
-
-# Olho-Sismico (issue #73): cyan tint, mild bounds shrink (the observer
-# watches from a tight arena -- you can't escape its gaze by running).
-OLHO_SISMICO_ARENA = BossArena(
-    size=(1300, 1300),
-    tint=((90, 200, 230), 28),
-)
-
 # A Muralha (issues #74 / #121): orange-red tint (the gate is hot) and the
 # tightest box in the game -- a wide, short corridor. The wall occupies
 # one side and there is nowhere to run to, which is the whole fight.
@@ -226,34 +173,49 @@ A_MURALHA_ARENA = BossArena(
     phase_sizes=((900, 640), (800, 540), (700, 440)),
 )
 
-# ANKH (issue #75): golden tint (the eternal is golden), no bounds shrink
-# (ANKH is the run's penultimate fight -- the player has earned the open
-# space, and ANKH's 4 phases need room to swap bodies). The tint is the
-# only arena modifier; the fight feels different because of the 4-phase
-# memory structure, not the geometry.
-ANKH_ARENA = BossArena(
-    tint=((230, 200, 80), 32),
-)
+
+# Per-boss screen tints (issue #158). The arena box was a per-boss-labour
+# that made the fight a moving maze; what's left is the visual identity
+# the player reads as "a Kraken fight" vs "a Rei Lagarto fight". The
+# tint applies via ``BossArena.apply`` even when ``size`` is None, so
+# the 10 bosses below keep their atmosphere while fighting in the open
+# world. Terror Alado has no tint -- the flyer hunts across the whole
+# world with no colour signature.
+BOSS_TINTS = {
+    'rei_lagarto':      ((220, 170, 90), 24),
+    'centopeiadeira':   ((140, 70, 50), 20),
+    'kraken_mor':       ((40, 70, 130), 32),
+    'primordial':       ((180, 80, 200), 28),
+    'mae_escaravelho':  ((220, 160, 40), 24),
+    'aranha_rei':       ((220, 220, 230), 20),
+    'serpente_cristal': ((140, 220, 230), 24),
+    'terror_alado':     None,
+    'olho_sismico':     ((90, 200, 230), 28),
+    'ankh':             ((230, 200, 80), 32),
+}
+
+# Pre-wrap the tints in BossArena instances so ``for_boss`` returns the
+# same shape it always did (a BossArena, never a raw tuple). Constructed
+# once at import; ``apply`` is idempotent and the descriptors are tiny.
+_TINT_ARENAS = {bid: BossArena(tint=t) for bid, t in BOSS_TINTS.items() if t is not None}
 
 
-# Registry: boss id -> BossArena. Bosses not in this dict get no arena
-# modifiers (preserves existing behavior). Adding a boss to this dict is
-# the ONLY change needed to give it an arena.
+# Registry: boss id -> BossArena. As of issue #158, only A Muralha
+# carries a play box. The 10 tint-only bosses resolve via
+# ``for_boss`` falling through to ``_TINT_ARENAS``; bosses without a
+# tint entry (Terror Alado) fight with no arena descriptor at all.
 ARENAS = {
-    'rei_lagarto':      REI_LAGARTO_ARENA,
-    'centopeiadeira':   CENTOPEIADEIRA_ARENA,
-    'kraken_mor':       KRAKEN_MOR_ARENA,
-    'primordial':       PRIMORDIAL_ARENA,
-    'mae_escaravelho':  MAE_ESCARAVELHO_ARENA,
-    'aranha_rei':       ARANHA_REI_ARENA,
-    'serpente_cristal': SERPENTE_CRISTAL_ARENA,
-    'terror_alado':     TERROR_ALADO_ARENA,
-    'olho_sismico':     OLHO_SISMICO_ARENA,
-    'muralha':          A_MURALHA_ARENA,
-    'ankh':             ANKH_ARENA,
+    'muralha': A_MURALHA_ARENA,
 }
 
 
 def for_boss(boss_id):
-    """Return the BossArena for ``boss_id``, or None if it has none."""
-    return ARENAS.get(boss_id)
+    """Return the BossArena for ``boss_id``, or None if it has none.
+
+    A Muralha returns its box-sized arena. The 10 bosses with an
+    identity tint get a size-less BossArena that still applies the
+    tint via ``apply()`` (the tint is the visual signature that
+    survived #158). Terror Alado and any future untinted boss
+    resolve to None.
+    """
+    return ARENAS.get(boss_id) or _TINT_ARENAS.get(boss_id)
