@@ -20,7 +20,7 @@ from lagarto.creatures import base as cbase, parts, species
 from lagarto.creatures.player import Player
 from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
-from lagarto.render import assets, icons, display
+from lagarto.render import assets, boss_assets, icons, display
 from lagarto.audio import engine as audio
 from lagarto.game import menu, state_camp, loop as gameloop
 from lagarto.input.controllers import _ACTIONS
@@ -175,6 +175,12 @@ chk(101, "shared emitter", bool(_fns)
     and 'def radial_burst' not in src(pat) and 'boss_ai.pattern_id' not in src(emi))
 chk(98, "mouse offset", "RESIZABLE" in src(display) and "_screen.get_size()" in src(display)
     and "to_logical(pygame.mouse.get_pos())" in src(menu))
+chk(166, "Serpente de Cristal", rounds.BOSS_POOL['serpente_cristal']['species'] == 'serpente_cristal'
+    and species.SPECIES['serpente_cristal']['role'] == 'boss'
+    and species.SPECIES['serpente_cristal']['genome'].leg_count == 0
+    and species.SPECIES['serpente_cristal']['genome'].extra_eyes == 2
+    and boss_assets.serpente_head() is None
+    and boss_assets.serpente_segment() is None)
 chk(75, "ANKH", 'ankh' in rounds.BOSS_POOL and len(pat.ankh_phases()) == 4
     and any('ankh' in ids for _, ids in rounds.BOSS_TIER_POOLS))
 chk(74, "A Muralha", rounds.BOSS_POOL.get('muralha', {}).get('species') == 'muralha'

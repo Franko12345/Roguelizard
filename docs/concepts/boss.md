@@ -180,6 +180,10 @@ A boss-only species must use `role='boss'`, not `role='enemy'`: the `invasao`
 theme pool is `list(ENEMY_SPECIES)` and the `summon` pattern falls back to it,
 so `role='enemy'` lets a normal wave roll a boss body as a mook.
 
+Serpente de Cristal uses its own boss-only `serpente_cristal` species: a long,
+legless segmented body with cyan faceted segments and four eyes. Its procedural
+head and segments are canonical when optional PNG parts are absent.
+
 ## Related
 
 - [ADR-0004](../adr/0004-boss-pool-per-tier.md) — how a tier picks a boss.

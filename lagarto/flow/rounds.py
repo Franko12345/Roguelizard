@@ -100,7 +100,7 @@ BOSS_POOL = {
                        personality=lambda: bossai.spider_king_personality(),
                        scar=None,
                        overrides=dict(hue=260, sat=0.12, val=0.92, leg_len=1.6)),
-    'serpente_cristal': dict(species='centipede', name='SERPENTE DE CRISTAL',
+    'serpente_cristal': dict(species='serpente_cristal', name='SERPENTE DE CRISTAL',
                              emblem='boss_serpente_cristal',
                              phases=lambda: bossai.crystal_phases(),
                              personality=lambda: bossai.crystal_personality(),

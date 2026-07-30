@@ -141,6 +141,15 @@ SPECIES = {
                                   angular_damping=0.7, linear_damping=0.6, weight=3.0,
                                   diet=('prey',))),
 
+    'serpente_cristal': dict(role='boss', xp=15, score=120, grants=None,
+                              genome=Genome(name='serpente_cristal', plan='segmented',
+                                            boss_id='serpente_cristal', size=1.0,
+                                            length=1.6, girth=0.8, leg_count=0,
+                                            hue=190, sat=0.8, val=0.95, speed=1.0,
+                                            behavior='chase', hp=12, extra_eyes=2,
+                                            antennae=True, diet=(), angular_damping=0.4,
+                                            linear_damping=0.3, weight=1.8)),
+
     # OLHO-SISMICO: a floating eyeball (plan='orbital'). Only ever spawned as a
     # boss (B9); the entry exists so species.make(key) works. Floating = heavy
     # weight + high damping (no run inertia, holds its spot).
@@ -219,7 +228,11 @@ LORE = {
                             'que ele armou.'),
     'centipede': ('CENTOPEIA', 'Corpo em aneis com dezenas de patas. Caça na '
                                'superficie, entao mergulha e reaparece embaixo de '
-                               'quem fica parado. O anel no chao mostra onde vai aflorar.'),
+                                'quem fica parado. O anel no chao mostra onde vai aflorar.'),
+    'serpente_cristal': ('SERPENTE DE CRISTAL', 'Corpo facetado sem pernas que desliza '
+                                               'em linha reta e dispara rajadas densas. '
+                                               'Sua cabeca hexagonal gira 360 graus sem '
+                                               'parar -- voce nunca sabe pra onde ela olha.'),
     'octopus': ('POLVO', 'Bicho lento de bracos longos. Estica os tentaculos e, no '
                          'estalo, te fisga para perto e retarda. Fugir antes do bote '
                          'e a saida — de perto, ele te segura.'),
