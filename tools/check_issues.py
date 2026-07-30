@@ -41,7 +41,8 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
 _al = subprocess.run([sys.executable, 'tools/check_arena_lifecycle.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(157, "arena limpa apos chefe",
-    "for_boss(self.boss_id).clear(g)" in src(rounds)
+    "for_boss(self.boss_id)" in src(rounds)
+    and "arena.clear(g)" in src(rounds)
     and 'self.boss_id = None' in src(rounds.RoundManager.__init__)
     and subprocess.run([sys.executable, '-c',
         'from lagarto.flow.boss import arena as ar; assert ar.for_boss("muralha") is not None'
