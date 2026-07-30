@@ -173,6 +173,19 @@ PATTERNS = {
     # the 27-frame floor (0.7s -- same as charge, the windup IS the action).
     'dive_arc': dict(fn=emitter.pincha_bite, windup=0.7, telegraph='dive_line',
                      move='dive_arc', reach=1.6, dmg=18),
+    # ---- issue #167: 5 bullet hooks ship here as dial-only rows -- one row #
+    # per hook so a phase kit can pull them by id without learning a new code  #
+    # path. The hooks themselves live in ``lagarto.combat.projectile``.        #
+    'chain_arc': dict(fn=emitter.chain_arc, windup=0.8, telegraph='fan',
+                      count=3, spread=60, shot_speed=230, dmg=14),
+    'wave_fan': dict(fn=emitter.wave_fan, windup=0.7, telegraph='fan',
+                     count=6, spread=50, shot_speed=210, dmg=9),
+    'boomerang_burst': dict(fn=emitter.boomerang_burst, windup=0.7, telegraph='fan',
+                            count=3, spread=30, shot_speed=240, dmg=13),
+    'burst_stop_burst': dict(fn=emitter.burst_stop_burst, windup=0.7, telegraph='fan',
+                             count=4, spread=60, shot_speed=220, dmg=9),
+    'spiral_arc': dict(fn=emitter.spiral_arc, windup=0.7, telegraph='fan',
+                       count=2, shot_speed=60, dmg=12),
 }
 
 
@@ -288,10 +301,14 @@ def kraken_phases():
 def primordial_phases():
     return [
         dict(hp_frac=1.0, patterns=['massive_fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
-        dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon'],
+        # issue #167: phase 2 adds ``wave_fan`` -- a fan whose every shot
+        # snakes. Sums onto the existing set; the wave is a single new id.
+        dict(hp_frac=0.66, patterns=['massive_fan', 'shockwave', 'wave_fan', 'sky_slam',
+                                     'summon'],
              cd_mul=0.85, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'sky_slam', 'summon',
-                                     'deathroll', 'homing_fan'], cd_mul=0.5, moves=['orbit']),
+        dict(hp_frac=0.33, patterns=['massive_fan', 'shockwave', 'wave_fan', 'sky_slam',
+                                     'summon', 'deathroll', 'homing_fan'],
+             cd_mul=0.5, moves=['orbit']),
     ]
 
 
@@ -304,7 +321,12 @@ def beetle_phases():
     return [
         dict(hp_frac=1.0, patterns=['summon', 'fan', 'shockwave'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.66, patterns=['summon', 'fan', 'shockwave', 'web_trap'], cd_mul=0.9, moves=['orbit']),
-        dict(hp_frac=0.33, patterns=['summon', 'shockwave', 'web_trap', 'radial'], cd_mul=0.65, moves=['orbit']),
+        # issue #167: phase 3 swaps ``fan`` for ``boomerang_burst`` +
+        # ``burst_stop_burst`` -- two of the new hooks dial into the same
+        # Mao a support caster goes late, turning her from a buffer into a
+        # mine layer.
+        dict(hp_frac=0.33, patterns=['summon', 'boomerang_burst', 'burst_stop_burst'],
+             cd_mul=0.65, moves=['orbit']),
     ]
 
 
@@ -409,12 +431,11 @@ def wasp_phases():
              moves=['curve_approach', 'climb_out']),
         dict(hp_frac=0.6, patterns=['charge', 'fan', 'barrage'], cd_mul=0.85,
              moves=['dive_arc']),
-        # 'mergulha e mira onde voce VAI estar': lead_fan e o mesmo lead do
-        # barrage aberto em leque -- so dials (issue #104). Phase 3 adds
-        # dive_arc as a pattern (the Wasp's signature -- the dive is the
-        # movement, and the dive is the attack). The move kit couples
-        # dive_arc (during its windup) with flyby (between dives).
-        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'lead_fan', 'dive_arc'],
+        # Issue #167: phase 3 swaps ``lead_fan`` for ``spiral_arc`` -- a slow
+        # homing orbit whose radius decays into a snap-hit. The dive stays;
+        # the lead fan gives way to the spiral since the spiral IS the
+        # "where you WILL be" promise taken to its limit.
+        dict(hp_frac=0.3, patterns=['charge', 'barrage', 'spiral_arc', 'dive_arc'],
              cd_mul=0.6, moves=['dive_arc', 'flyby']),
     ]
 
@@ -554,13 +575,17 @@ def ankh_phases():
 
     Todos os patterns ja existem -- e o ponto do chefe. ANKH nao traz ataque
     novo nenhum: ela devolve os que voce ja aprendeu a ler, sobrepostos.
+    Issue #167: phase 4 gains ``chain_arc`` -- three chain projectiles that
+    link up. ANKH's "tudo junto" gains one more bullet shape that does not
+    match any single predecessor.
     """
     return [
         dict(hp_frac=1.00, patterns=['charge', 'pincha', 'swipe'], cd_mul=1.0, moves=['orbit']),
         dict(hp_frac=0.75, patterns=['radial', 'shockwave', 'summon'], cd_mul=0.95, moves=['orbit']),
         dict(hp_frac=0.50, patterns=['grapple', 'arms_rain', 'spiral'], cd_mul=0.85, moves=['orbit']),
         dict(hp_frac=0.25,
-             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral'],
+             patterns=['charge', 'radial', 'grapple', 'bullet_hell', 'spiral',
+                       'chain_arc'],
              cd_mul=0.6, moves=['orbit']),
     ]
 

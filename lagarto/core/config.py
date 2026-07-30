@@ -745,3 +745,24 @@ MURALHA_GRID_LIFE = 1.0
 # Arena fire pushes player
 MURALHA_FIRE_PUSH = 350        # px/s push toward wall
 MURALHA_FIRE_DMG = 6           # dps from ground fire
+
+# --------------------------------------------------------------------------- #
+# Issue #167: 5 new projectile hooks + slow_homing dial.
+# All read by ``lagarto.combat.projectile``; tuning happens here so the
+# pattern rows in ``lagarto.flow.boss.patterns`` can stay dial-only.
+# --------------------------------------------------------------------------- #
+CHAIN_LINK_DIST = 120          # px: a chain link draws between two projectiles within
+CHAIN_BREAK_DIST = 200         # px: link breaks if either end drifts past this
+CHAIN_DMG_BONUS = 3            # bonus damage per chain link on player contact
+CHAIN_MAX_PER_PROJECTILE = 3   # cap partners per projectile (avoids N*(N-1)/2 lines)
+CHAIN_BEZIER_SAMPLES = 6       # segments per chain Bezier render
+CHAIN_SPARK_GAP = 0.07         # seconds between mid-link spark bursts
+WAVE_FREQ = 8.0                # rad/s: base wave phase rate
+WAVE_AMP = 12.0                # px: peak perpendicular displacement
+BOOMERANG_RETURN_TIME = 0.8    # s: time before boomerang flips
+BOOMERANG_RANGE = 280          # px: distance from shooter -> return point
+BURST_STOP_TRAVEL = 0.5        # s: time before burst_stop detonates
+BURST_STOP_PUDDLE = dict(r=42, dmg=4, life=2.5, hue=18, tick=0.5)
+SPIRAL_RADIUS_INIT = 80        # px: starting orbit radius
+SPIRAL_RADIUS_DECAY = 0.96     # factor per FRAME at 60 Hz; == ~0.28s half-life
+SPIRAL_OMEGA = 2.0             # rad/s: angular speed

@@ -27,6 +27,7 @@ from ..core import config as C
 from ..core import palette
 from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of, predict_target
 from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook
+from . import projectile as proj
 
 
 def _launch(pr, game, dials):
@@ -46,6 +47,11 @@ def _launch(pr, game, dials):
     if mod is not None:
         pr.bounces_left = dials.get('bounces', 0)
         pr.bounce_damp = dials.get('bounce_damp', 0.8)
+        # Issue #167: the same `mod`-slot carries the slow_homing dial. Default
+        # 1.0 (today's snapping curve); values <1 smooth the curve, >1 tighten
+        # it. Read inside `projectile.homing` via getattr so callers without the
+        # dial see today's behaviour.
+        pr.home_mult = dials.get('home_mult', 1.0)
         pr.on_update.append(mod)
     game.spawn_projectile(pr)
 
@@ -525,3 +531,124 @@ def grid_of_fire(shooter, game, target, dials):
             game.spawn_puddle(weapons.Puddle(pos, cell * 0.45, dmg, life, 18,
                                              hostile=True, tick=tick))
     game.fx.burst(shooter.pos, (255, 80, 40), 30, 200)
+
+
+# --------------------------------------------------------------------------- #
+#  Issue #167: 5 new patterns, one per on_update hook. Each is a row of dials  #
+#  on a function that did not exist before -- the shared `bouncing_bullets`   #
+#  table is the canonical example of "new attack = old fn + new mod".         #
+# --------------------------------------------------------------------------- #
+
+
+def chain_arc(shooter, game, target, dials):
+    """ANKH phase-4: a triangular fan of chain projectiles that link up.
+
+    Three shots fanned out, each tagged ``chain = True`` so
+    ``projectile.chain_link`` pairs them on the same frame and draws an
+    electric triangle between them. The pattern is a row of dials on
+    ``fan_shot`` -- no new selection logic.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 3)
+    spread = dials.get('spread', 60)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        ang = base.rotate(t * spread)
+        aim = mouth + ang * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 14),
+                       effect=None, speed=dials.get('shot_speed', 230), radius=7)
+        pr.chain = True
+        pr.on_update.append(proj.chain_link)
+        pr.on_hit.append(proj.chain_damage)
+        game.spawn_projectile(pr)
+    game.fx.spark_burst(mouth, (130, 230, 255), 10, 260)
+    audio.play('w_spit', 0.4)
+
+
+def wave_fan(shooter, game, target, dials):
+    """Primordial phase-3: a fan whose every shot snakes along its trajectory.
+
+    Same fan as ``fan_shot``, ``mod=wave`` instead of a new fn. ``wave``
+    advances each projectile's own phase from its spawn frame -- a fan of 20
+    reads as a school of snakes, not one coherent wave.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 6)
+    spread = dials.get('spread', 50)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 9),
+                       effect=None, speed=dials.get('shot_speed', 210), radius=7)
+        pr.on_update.append(proj.wave)
+        game.spawn_projectile(pr)
+    game.fx.spark_burst(mouth, shooter.color, 8, 200)
+    audio.play('w_spit', 0.4)
+
+
+def boomerang_burst(shooter, game, target, dials):
+    """Mae-Escaravelho phase-3: a fan that comes back.
+
+    Each shot carries ``boomerang`` AND ``shooter_pos``. After the time/range
+    window the hook flips vel toward the shooter and clears ``hostile`` so the
+    boomerang does not bite its own shooter on the return trip.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 3)
+    spread = dials.get('spread', 30)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 13),
+                       effect=None, speed=dials.get('shot_speed', 240), radius=7)
+        pr.shooter_pos = Vector2(shooter.pos)
+        pr.on_update.append(proj.boomerang)
+        game.spawn_projectile(pr)
+    game.fx.spark_burst(mouth, (255, 220, 120), 10, 220)
+    audio.play('w_spit', 0.4)
+
+
+def burst_stop_burst(shooter, game, target, dials):
+    """Mae-Escaravelho phase-3: a volley that lands as mines.
+
+    Each shot flies for ``BURST_STOP_TRAVEL`` s and the ``burst_stop`` hook
+    parks it (zero vel) and spawns a Puddle on the spot. The puddle payload
+    is a single constant in config; dials only nudge count/speed.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 4)
+    spread = dials.get('spread', 60)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        t = 0.0 if n == 1 else (i / (n - 1)) - 0.5
+        aim = mouth + base.rotate(t * spread) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 9),
+                       effect=None, speed=dials.get('shot_speed', 220), radius=7)
+        pr.on_update.append(proj.burst_stop)
+        game.spawn_projectile(pr)
+    game.fx.spark_burst(mouth, (255, 120, 60), 14, 240)
+    audio.play('w_spit', 0.4)
+
+
+def spiral_arc(shooter, game, target, dials):
+    """Wasp phase-3: a slow homing orbit that lands on the player.
+
+    Each shot carries ``spiral_arc``; the hook overwrites ``pr.pos`` every
+    frame so the bullet IS the spiral. Collision handles the hit when the
+    radius collapses.
+    """
+    mouth = shooter.spine.joints[0]
+    n = dials.get('count', 2)
+    base = safe_norm(target.pos - mouth)
+    for i in range(n):
+        ang = (360.0 / n) * i + random.uniform(-12, 12)
+        aim = mouth + base.rotate(ang) * 100
+        pr = game_spit(mouth, aim, shooter.color, dmg=dials.get('dmg', 12),
+                       effect=None, speed=dials.get('shot_speed', 60), radius=8)
+        pr.on_update.append(proj.spiral_arc)
+        game.spawn_projectile(pr)
+    game.fx.spark_burst(mouth, (200, 200, 255), 12, 240)
+    audio.play('w_spit', 0.4)

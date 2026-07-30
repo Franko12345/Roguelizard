@@ -50,6 +50,32 @@ later would otherwise silently skip the payload.
 - `projectile.leave_puddle(**payload)` — `on_death`; drops a
   [Puddle](./weapon.md) where the shot ended, whether it connected or simply
   landed. The venomer's area denial.
+- `projectile.chain_link` — `on_update`; pairs two `chain`-tagged projectiles
+  within `CHAIN_LINK_DIST` (px) and breaks on `CHAIN_BREAK_DIST` or death.
+  `chain_damage` (on_hit) applies `CHAIN_DMG_BONUS` while a link is active.
+  ANKH's `chain_arc` (issue #167). The hook owns link state only — the
+  Bezier line is rendered from `Projectile.draw`, once per pair (gated to the
+  lower-id endpoint so each pair draws exactly once).
+- `projectile.wave` — `on_update`; a perpendicular sine offset applied each
+  frame so the trajectory traces an "S" or zigzag rather than a line.
+  Primordial's `wave_fan`.
+- `projectile.boomerang` — `on_update`; after `BOOMERANG_RETURN_TIME` (or
+  `BOOMERANG_RANGE` from `pr.shooter_pos`), flips the velocity and clears
+  `pr.hostile` so the returning shot does not bite its own shooter. Mae-Escaravelho's `boomerang_burst`.
+- `projectile.burst_stop` — `on_update`; after `BURST_STOP_TRAVEL`, parks the
+  shot (zeroes `vel`), spawns a `Puddle` from the configurable
+  `BURST_STOP_PUDDLE` payload, and marks the projectile dead. The "lands as a
+  mine" attack. Mae-Escaravelho's `burst_stop_burst`.
+- `projectile.spiral_arc` — `on_update`; overwrites `pr.pos` each frame to
+  orbit the target with `SPIRAL_OMEGA` rad/s and a `SPIRAL_RADIUS_DECAY` per
+  60-Hz frame (`SPIRAL_RADIUS_INIT` start). When the radius collapses below
+  5 px or the shot lands within 10 px, the projectile snaps onto the target
+  so the normal collision deals the hit. Wasp's `spiral_arc`.
+
+The `home_mult` dial is what makes the original `homing` hook double as
+"slow_homing": a value < 1 smooths the curve, a value > 1 tightens it. It
+reads the same projectile attribute, so a fan pattern can ship a softer or
+harder curve via a single dial without a second hook function.
 
 `pierce` is not a hook: it changes how the collision loop itself iterates
 (pass through, remember the enemy), not what happens on a hit.

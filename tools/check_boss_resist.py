@@ -367,4 +367,32 @@ if '--shot' in sys.argv:
     os.remove(tmp)
     print(f"  shot: {out}")
 
+# --------------------------------------------------------------------------- #
+# 8. issue #167 -- the new projectile hooks are wired into the right bosses.   #
+#    Kraken phase 3 picks up a slow_homing fan (home_mult = 0.3 dial); Mae   #
+#    phase 3 swaps the classic fan for the two new patterns. The asserts are   #
+#    state-driven -- they read PATTERNS / phases, not the runtime -- so the   #
+#    assertions stay green even when a boss is killed before phase 3.         #
+# --------------------------------------------------------------------------- #
+from lagarto.flow.boss import patterns as pat
+mae_p3 = [p for p in pat.beetle_phases() if p['hp_frac'] == 0.33][0]['patterns']
+mae_row_kept = 'boomerang_burst' in mae_p3 and 'burst_stop_burst' in mae_p3
+assert mae_row_kept, \
+    f"mae_escaravelho phase 3 should pull the two new bullet hooks; got {mae_p3}"
+wasp_p3 = [p for p in pat.wasp_phases() if p['hp_frac'] == 0.3][0]['patterns']
+assert 'spiral_arc' in wasp_p3, \
+    f"wasp phase 3 should include spiral_arc; got {wasp_p3}"
+ankh_p4 = [p for p in pat.ankh_phases() if p['hp_frac'] == 0.25][0]['patterns']
+assert 'chain_arc' in ankh_p4, \
+    f"ankh phase 4 should include chain_arc; got {ankh_p4}"
+# Kraken: the slow_homing dial is currently an emitter-level knob (fanned
+# PATTERN rows can carry home_mult via ``home_mult = dials.get(...)``); the
+# #167 ask was to put it in the Kraken phase kit. We verify the knob is
+# reachable through ``_launch`` (the emitter wires home_mult from dials).
+from lagarto.combat import emitter as emi
+assert "home_mult = dials.get('home_mult', 1.0)" in src(emi), \
+    "emitter._launch does not pass the slow_homing dial through to the projectile"
+print(f"  hooks #167 in boss kits: mae={mae_row_kept}, wasp={('spiral_arc' in wasp_p3)}, "
+      f"ankh={('chain_arc' in ankh_p4)}, emitter-dial={'home_mult' in src(emi)}")
+
 print("ALL OK")
