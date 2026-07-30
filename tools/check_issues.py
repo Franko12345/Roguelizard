@@ -38,6 +38,16 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_al = subprocess.run([sys.executable, 'tools/check_arena_lifecycle.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(157, "arena limpa apos chefe",
+    "for_boss(self.boss_id).clear(g)" in src(rounds)
+    and 'self.boss_id = None' in src(rounds.RoundManager.__init__)
+    and subprocess.run([sys.executable, '-c',
+        'from lagarto.flow.boss import arena as ar; assert ar.for_boss("muralha") is not None'
+        ], capture_output=True, env={**os.environ, 'PYTHONPATH': '.'}).returncode == 0
+    and _al.returncode == 0,
+    "" if _al.returncode == 0 else _al.stderr.decode()[-90:])
 _bm = subprocess.run([sys.executable, 'tools/check_boss_movement.py'], capture_output=True,
                       env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.flow.boss import moves as bossmoves, ai as bossai
