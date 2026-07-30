@@ -1,4 +1,4 @@
-"""Assert a boss resists interruption (issue #119): slow floor + damped body.
+"""Assert boss resistance (issue #119) and Kraken-Mor follow-up (issue #160).
 
 Player bullets were reading as if they interrupted a boss. Two things did:
 
@@ -37,6 +37,7 @@ import inspect
 import pygame
 pygame.init()
 from pygame import Vector2
+from lagarto.core.mathutil import safe_norm
 from lagarto.render import display
 from lagarto.core import fonts, config as C
 from lagarto.game.loop import Game
@@ -281,6 +282,41 @@ for path in callers:
     assert 'BOSS_SLOW_FLOOR' not in text and 'BOSS_SLOW_TIME_MULT' not in text, \
         f"{path} grew its own boss guard; the cap belongs to apply_slow alone"
 print(f"  one guard: apply_slow caps it, {len(callers)} call sites stay dumb")
+
+
+def check_kraken_grapple_followup():
+    g = fresh()
+    b = boss_at(g, MID + Vector2(100, 0), bid='kraken_mor')
+    p = g.players[0]
+    b.boss_ai.state = 'windup'
+    b.boss_ai.pattern_id = 'grapple'
+    b.boss_ai.t = 0.0
+    b.grapple_cd = 0.0
+    b.boss_ai.tick(DT, g)
+    assert b.boss_ai.state == 'grappling', "grapple pattern did not enter grappling state"
+    b.boss_ai.tick(DT, g)
+    assert b.grapple_t > 0, "grapple windup did not start"
+    p.pos = MID + Vector2(500, 0)
+    for _ in range(int(C.OCTO_WINDUP / DT) + 2):
+        b.boss_ai.tick(DT, g)
+        if b.boss_ai.state == 'recover':
+            break
+    assert b.boss_ai.state == 'recover', "missed grapple did not leave grappling state"
+    shots = list(g.projectiles)
+    assert 3 <= len(shots) <= 5, f"missed grapple fired {len(shots)} shots"
+    aim = safe_norm(p.pos - b.spine.joints[0])
+    errors = [abs(aim.angle_to(shot.vel)) for shot in shots]
+    assert max(errors) <= 15.01, f"follow-up escaped 30-degree cone: {errors}"
+    assert all(abs(shot.vel.length() - 180) < 1e-4 for shot in shots), \
+        "follow-up speed changed"
+    assert all(shot.dmg == 8 and shot.hostile and shot.effect is None for shot in shots), \
+        "follow-up projectile dials changed"
+    assert b.boss_ai._grapple_followup_fired, "follow-up was not marked fired"
+    print(f"  grapple followup: {len(shots)} hostile shots at 180px/s, "
+          f"max cone error {max(errors):.1f} degrees")
+
+
+check_kraken_grapple_followup()
 
 # --------------------------------------------------------------------------- #
 # 7. optional: the before/after screenshot of a boss under continuous fire     #

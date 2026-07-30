@@ -146,7 +146,7 @@ CENT_ERUPT_DMG = 15         # dano do estouro ao aflorar (anel curto)
 # POLVO (corpo 'tentacle'): agarrador. Ataca o habito de FICAR NO MEIO-ALCANCE /
 # kitar de perto -- estica os bracos (telegrafo visivel), e no estalo te puxa para
 # dentro e retarda. So funciona se voce estiver por perto: fugir cedo o nega.
-OCTO_GRAB_RANGE = 190      # dentro disso ele arma o agarrao
+OCTO_GRAB_RANGE = 280      # dentro disso ele arma o agarrao
 OCTO_WINDUP = 0.75         # telegrafo: bracos convergem/esticam (>27 frames)
 OCTO_CD = 2.4              # respiro entre agarroes
 OCTO_PULL_DIST = 120       # o quanto voce e puxado

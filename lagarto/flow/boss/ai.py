@@ -15,7 +15,8 @@ from ...creatures.ai import burrow as burrow_ai
 from ...creatures.ai import grapple as grapple_ai
 from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir, approach
 from ...creatures.base import TAIL_SPRING_STIFFNESS
-from ...combat.emitter import _tick_barrage, _tick_spiral, _tick_fire_breath
+from ...combat.emitter import (_tick_barrage, _tick_spiral, _tick_fire_breath,
+                               grapple_followup)
 from .patterns import PATTERNS, default_phases
 from .telegraph import TELEGRAPHS
 from .personality import default_personality
@@ -136,6 +137,8 @@ class BossAI:
         self.pattern_dials = None
         boss.boss_invuln = True
         self._last_game = None      # back-ref the per-frame hook keeps for on_phase
+        self._grapple_seen_windup = False
+        self._grapple_followup_fired = False
 
     def _apply_invuln(self):
         """Single source of truth for ``boss_invuln``. Called at every state
@@ -459,6 +462,8 @@ class BossAI:
                 if pat.get('grapple'):
                     self.state = 'grappling'
                     self._grapple_seen_windup = False
+                    self._grapple_followup_fired = False
+                    b.grabbed = None
                     return Vector2(), 0.0
                 pat['fn'](b, game, target, pat)   # the row IS the emitter's dials
                 b.squat_bias = 1.4   # release the coil
@@ -505,6 +510,10 @@ class BossAI:
             if b.grapple_t > 0:
                 self._grapple_seen_windup = True
             elif self._grapple_seen_windup:
+                if getattr(b, 'grabbed', None) is None and not self._grapple_followup_fired:
+                    grapple_followup(b, game, target, {})
+                    self._grapple_followup_fired = True
+                self._grapple_seen_windup = False
                 self.state = 'recover'
                 self.t = self._eff_recover('grapple')
                 self._apply_invuln()
