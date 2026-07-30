@@ -127,6 +127,37 @@ NORMAL is always that fight. Tiers 6 and 7 are INFINITO-only in practice —
 which is why `tools/check_bosses.py` exists, because reaching them by playing
 takes half an hour and `--smoke` never reaches a boss round at all.
 
+## Rei Lagarto (tier 1 — legibility canonical, graduated for #162)
+
+Three phases at the 66 / 33 HP thresholds, each declaration in
+`king_phases()` (`lagarto/flow/boss/patterns.py`). Phase 1 is the
+"aula" (lesson) from issue #123; phases 2 / 3 graduate **density +
+cadence** without shortening any tell — issue #162. The 27-frame
+rule owns every windup across all three phases.
+
+| phase | patterns | cd_mul | overrides |
+|---|---|---|---|
+| 1.0 | `fan`, `shockwave`, `charge` | 1.00 | — (canonical) |
+| 0.66 | `fan`, `shockwave`, `charge`, `radial` | 0.80 | `fan(count=3, spread=24, dmg=8)`, `radial(count=10)` |
+| 0.33 | `spiral`, `shockwave`, `charge`, `radial` | 0.65 | `spiral(shots=20, turn=18, gap=0.04)`, `radial(count=10)` |
+
+Phase 1's `pattern_dials` slot is empty on purpose; the row IS the
+dial, and a future editor who adds an override gets caught by
+`tools/check_king_signature.py` (the "canonical must stay untouched"
+gate). Phases 2 / 3 carry `pattern_dials`; `BossAI` shallow-merges
+them onto `PATTERNS[pid]` once at pattern pick time, so the
+telegraph draw, the windup, the move binding and the fire call all
+see the same effective dict — the override never drifts between the
+footprint the player reads and the bullets that fire.
+
+Windups (`BOSS_FAN_WINDUP`, `BOSS_SHOCKWAVE_WINDUP`,
+`BOSS_RADIAL_WINDUP`, `BOSS_CHARGE_WINDUP` — all 1.1s) are untouched.
+What changes is the **count** (fan 3 / radial 10 / spiral 20 shots)
+and the **cadence** (`cd_mul` going from 1.00 / 0.95 / 0.85 down to
+1.00 / 0.80 / 0.65). The boss gets denser and faster; the tells
+never shrink. `tell_mult = {}` on `king_personality` enforces it: a
+mood multiplier cannot drag a real telegraph below the floor.
+
 ## Arena
 
 A boss may carry a `BossArena` (`lagarto/flow/boss/arena.py`): a `size`
