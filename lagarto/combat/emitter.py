@@ -25,7 +25,7 @@ from pygame import Vector2
 from ..audio import engine as audio
 from ..core import config as C
 from ..core import palette
-from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of
+from ..core.mathutil import safe_norm, vfrom_angle, random_dir, angle_of, predict_target
 from .projectile import spit as game_spit, bounce, leave_puddle, arc as arc_hook
 
 
@@ -75,7 +75,7 @@ def lead_point(shooter, target, dials):
     origin = shooter.spine.joints[0]
     t = target.pos.distance_to(origin) / speed
     t = (target.pos + target.vel * t).distance_to(origin) / speed
-    return target.pos + target.vel * (t * quality)
+    return predict_target(target.pos, target.vel, t, quality)
 
 
 def radial_burst(shooter, game, target, dials):

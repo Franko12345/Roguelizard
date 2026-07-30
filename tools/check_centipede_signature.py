@@ -38,7 +38,7 @@ A headless screenshot of the complete dig/erupt cycle is saved via
 Run:  python tools/check_centipede_signature.py
       python tools/check_centipede_signature.py --shot centipede_dig_erupt.png
 """
-import os, sys, math
+import os, sys, math, random
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,7 +47,7 @@ pygame.init()
 from pygame import Vector2
 
 from lagarto.render import display, fx
-from lagarto.core import fonts, config as C
+from lagarto.core import fonts, config as C, mathutil as mu
 from lagarto.game.loop import Game
 from lagarto.input.controllers import make_controllers
 from lagarto.flow import rounds
@@ -294,7 +294,164 @@ def test_spine_curvature():
 
 
 # --------------------------------------------------------------------------- #
-# 5. No new authored invulnerability window                                   #
+# 5. Eruption anticipation (issue #161)                                       #
+# --------------------------------------------------------------------------- #
+def _capture_dives(player_vel, frames=FRAMES):
+    """Walk a fight with a straight-line player at ``player_vel`` and
+    return a list of dicts captured at every digging -> under transition.
+
+    Each row: ``{target_pos, target_vel, creature_pos, max_speed, dive_to}``
+    read at the tick the dive_to was set. Used by the anticipation
+    test (#161) to verify the formula matches the spec.
+    """
+    random.seed(161)                       # reproducible (#161) -- the test
+                                           # sees a dig transition deterministically
+    g = _fresh()
+    b = _spawn_centipede(g)
+    p = g.players[0]
+    p.vel = Vector2(player_vel)
+    cap = []
+    for f in range(frames):
+        pre_state = b.burrow_state
+        pre_pos = Vector2(p.pos)
+        pre_vel = Vector2(p.vel)
+        creature_pos = Vector2(b.pos)
+        g.step(DT)
+        _reset(b)
+        if pre_state == 'digging' and b.burrow_state == 'under':
+            cap.append({
+                'target_pos': pre_pos,
+                'target_vel': pre_vel,
+                'creature_pos': creature_pos,
+                'max_speed': b.max_speed,
+                'dive_to': Vector2(b.dive_to),
+            })
+    return cap
+
+
+def test_dive_anticipation():
+    """The eruption point anticipates where the player WILL be, not
+    where they stand (issue #161, lead_quality=0.85).
+
+    Static guard: ``burrow.LEAD_QUALITY == 0.85`` (not 1.0 perfect, not
+    0.6 as in lead_fan). Runtime guard: every captured dive against a
+    straight-line runner sits inside a tolerance ring of the predicted
+    point + jitter -- it is NEVER exactly target.pos (the old
+    no-anticipation shape) and NEVER at the full-perfect prediction
+    (the ANTECIPADOR shape with quality 1.0). A still player falls
+    back to target.pos + jitter (no direction to lead).
+
+    Two teeth: the assertion breaks if the formula reverts to
+    ``dive_to == target.pos``, OR if quality drifts away from 0.85.
+    """
+    import lagarto.creatures.ai.burrow as burrow_ai_mod
+    # 1. Static guard: lead_quality is 0.85 (sub-perfect).
+    assert getattr(burrow_ai_mod, 'LEAD_QUALITY', None) == 0.85, \
+        f"burrow.LEAD_QUALITY={getattr(burrow_ai_mod, 'LEAD_QUALITY', None)}; " \
+        f"expected 0.85 (issue #161 -- 15% margin so a braking player escapes)"
+    # Static guard: ERUPT_JITTER was tightened from 70 to 30.
+    assert getattr(burrow_ai_mod, 'ERUPT_JITTER', None) == 30.0, \
+        f"burrow.ERUPT_JITTER={getattr(burrow_ai_mod, 'ERUPT_JITTER', None)}; " \
+        "expected 30.0 (issue #161 -- narrower 0-30px ring)"
+    # Static guard: predict_target exists and is used by lead_point too
+    # (no duplicated math).
+    import lagarto.core.mathutil as mu
+    assert hasattr(mu, 'predict_target'), \
+        "predict_target missing from lagarto.core.mathutil (no shared " \
+        "lead formula between emitter and burrow)"
+    em_src = open('lagarto/combat/emitter.py').read()
+    assert 'predict_target(' in em_src, \
+        "emitter.lead_point no longer routes through predict_target -- " \
+        "the burrow would diverge from the ANTECIPADOR's lead formula"
+    # 2. Runtime guard: walked against a runner and a still player.
+    runner_vel = (260, 0)                     # straight-line, same speed as
+                                              # the ANTECIPADOR test in
+                                              # check_content
+    caps = _capture_dives(runner_vel)
+    assert caps, "no digging->under transitions observed; cannot verify anticipation"
+    underground_speed = lambda ms: max(1, ms * burrow_ai_mod.UNDER_MULT)
+    bad = []
+    for c in caps:
+        if c['target_vel'].length() < 1e-3:
+            continue                          # still-player branch handled below
+        # the prediction the burrow SHOULD have computed at this tick
+        dist = (c['target_pos'] - c['creature_pos']).length()
+        flight = dist / underground_speed(c['max_speed'])
+        predict = c['target_pos'] + c['target_vel'] * (flight * 0.85)
+        # the picked point must sit close to predict + jitter (0..30).
+        # Allow up to ERUPT_JITTER + an epsilon for float.
+        offset = (c['dive_to'] - predict).length()
+        if offset > burrow_ai_mod.ERUPT_JITTER + 1.5:
+            bad.append((offset, c['dive_to'], predict,
+                        c['target_vel'], c['max_speed']))
+    assert not bad, \
+        f"{len(bad)} dive(s) diverged from prediction by > jitter: " \
+        f"first {bad[0][0]:.1f}px off (dive_to={bad[0][1]}, " \
+        f"predict={bad[0][2]}, vel={bad[0][3]}, max_speed={bad[0][4]:.0f})"
+    # Negative shape: a still-player dive lands at target.pos + jitter
+    # (no direction to lead). The cap for a still player should be within
+    # 32 px of player.pos (vel ~ 0 + 30 px jitter).
+    # Make the player invulnerable (rolling = True) so a boss _contact
+    # doesn't knock the player into motion and break the still-target
+    # assumption -- the burrow formula is the only thing being tested.
+    still_caps = _capture_dives_still(frames=FRAMES)
+    assert still_caps, "no still-player transitions; still-target fallback untested"
+    for c in still_caps:
+        if (c['dive_to'] - c['target_pos']).length() > burrow_ai_mod.ERUPT_JITTER + 1.5:
+            bad.append(('still-target exceeded jitter',
+                        (c['dive_to'] - c['target_pos']).length()))
+    assert not bad, f"still-target fallback out of jitter ring: {bad[0]}"
+    print(f"  anticipation: {len(caps)} diverunner transition(s) within "
+          f"{burrow_ai_mod.ERUPT_JITTER:.0f}px jitter of predict_target at "
+          f"quality=0.85, {len(still_caps)} still-player transition(s) "
+          f"within {burrow_ai_mod.ERUPT_JITTER:.0f}px of player.pos")
+    return caps
+
+
+def _capture_dives_still(frames=FRAMES):
+    """Same as :func:`_capture_dives` but keeps the player invulnerable
+    (so a boss contact can't knock them into motion and break the
+    still-target fallback the burrow formula exercises).
+
+    Patches ``Player.hurt`` to early-out: the contact happens, but no
+    damage and no knockback vel is applied. The still-target assumption
+    (``target.vel.length() < 1e-3`` drives the no-lead fallback) stays
+    intact. Local import to avoid cycle-time cost in the other helpers.
+    """
+    from lagarto.creatures.player import Player as _Player
+    random.seed(0x1611)                    # different seed from the runner;
+                                           # keeps the still-target sequence
+                                           # reproducible too
+    g = _fresh()
+    b = _spawn_centipede(g)
+    p = g.players[0]
+    p.vel = Vector2()
+    cap = []
+    saved_hurt = _Player.hurt
+    _Player.hurt = lambda self, game, src_dir, dmg=10: False     # invulnerable
+    try:
+        for f in range(frames):
+            pre_state = b.burrow_state
+            pre_pos = Vector2(p.pos)
+            pre_vel = Vector2(p.vel)
+            creature_pos = Vector2(b.pos)
+            g.step(DT)
+            _reset(b)
+            if pre_state == 'digging' and b.burrow_state == 'under':
+                cap.append({
+                    'target_pos': pre_pos,
+                    'target_vel': pre_vel,
+                    'creature_pos': creature_pos,
+                    'max_speed': b.max_speed,
+                    'dive_to': Vector2(b.dive_to),
+                })
+    finally:
+        _Player.hurt = saved_hurt
+    return cap
+
+
+# --------------------------------------------------------------------------- #
+# 6. No new authored invulnerability window                                   #
 # --------------------------------------------------------------------------- #
 def test_no_new_invuln_window():
     """The centipede is vulnerable (hit_test returns 'body' or 'head')
@@ -347,7 +504,7 @@ def test_no_new_invuln_window():
 
 
 # --------------------------------------------------------------------------- #
-# 6. Teeth: break each assertion on purpose and confirm the check catches it  #
+# 7. Teeth: break each assertion on purpose and confirm the check catches it  #
 # --------------------------------------------------------------------------- #
 def test_teeth():
     """Prove each assertion has teeth."""
@@ -508,6 +665,49 @@ def test_teeth():
     finally:
         cbase.Lizard.hit_test = saved_hit
 
+    # 6. Anticipation: invert the formula (lead_quality -> 1.0 perfect) and
+    #    confirm the static guard catches the drift. The 1.0 quality is the
+    #    ANTECIPADOR's value, not the burrow's -- if burrow drifts there
+    #    the fair-counter (brake-the-15%-margin) vanishes.
+    from lagarto.creatures.ai import burrow as burrow_ai_mod
+    saved_quality = burrow_ai_mod.LEAD_QUALITY
+    burrow_ai_mod.LEAD_QUALITY = 1.0
+    try:
+        try:
+            test_dive_anticipation()
+            assert False, "anticipation check should have failed with LEAD_QUALITY=1.0"
+        except AssertionError as e:
+            assert '0.85' in str(e), f"unexpected error: {e}"
+            print(f"    anticipation: fails when LEAD_QUALITY drifted to 1.0 (perfect)")
+    finally:
+        burrow_ai_mod.LEAD_QUALITY = saved_quality
+    # Anticipation teeth #2: revert the burrow to the OLD formula (no lead,
+    # explicit 70 px offset) and confirm the runtime guard catches it.
+    # We pin the offset to the maximum (70 px) so the test is deterministic;
+    # random jitter would sometimes land within the 30 px ring and the
+    # assertion would (correctly, but unhelpfully) pass.
+    import lagarto.creatures.ai.burrow as burrow_ai_mod
+    saved_tick = burrow_ai_mod.burrow_tick
+    from lagarto.core.mathutil import vfrom_angle as _vfa
+    def old_tick(creature, game, dt, target):
+        d, s = saved_tick(creature, game, dt, target)
+        if creature.burrow_state == 'under' and target.vel.length() > 1e-3:
+            creature.dive_to = Vector2(target.pos) + _vfa(0.0, 70.0)
+        return d, s
+    burrow_ai_mod.burrow_tick = old_tick
+    try:
+        try:
+            test_dive_anticipation()
+            assert False, "anticipation check should have failed with old (no lead) formula"
+        except AssertionError as e:
+            assert 'diverunner' in str(e) \
+                or 'diverged from prediction' in str(e) \
+                or 'exceeded' in str(e), f"unexpected error: {e}"
+            print(f"    anticipation: fails when formula reverts to pre-#161 "
+                  f"(target.pos + 70px, no lead)")
+    finally:
+        burrow_ai_mod.burrow_tick = saved_tick
+
 
 # --------------------------------------------------------------------------- #
 # Headless screenshot                                                         #
@@ -565,6 +765,7 @@ def main():
     test_dig_floor()
     test_no_surface_straight()
     test_spine_curvature()
+    test_dive_anticipation()
     test_no_new_invuln_window()
     test_teeth()
     print("ALL OK")

@@ -593,7 +593,10 @@ class Lizard:
             self._draw_fixed(surf, cam)
             return
         if plan == 'segmented':
-            self._draw_segmented(surf, cam)
+            if getattr(self.genome, 'boss_id', None) == 'serpente_cristal':
+                parts.draw_serpente_cristal(surf, cam, self)
+            else:
+                self._draw_segmented(surf, cam)
             return
 
         cj = self._cosmetic_joints()

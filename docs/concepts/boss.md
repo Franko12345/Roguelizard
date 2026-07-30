@@ -127,6 +127,37 @@ NORMAL is always that fight. Tiers 6 and 7 are INFINITO-only in practice —
 which is why `tools/check_bosses.py` exists, because reaching them by playing
 takes half an hour and `--smoke` never reaches a boss round at all.
 
+## Rei Lagarto (tier 1 — legibility canonical, graduated for #162)
+
+Three phases at the 66 / 33 HP thresholds, each declaration in
+`king_phases()` (`lagarto/flow/boss/patterns.py`). Phase 1 is the
+"aula" (lesson) from issue #123; phases 2 / 3 graduate **density +
+cadence** without shortening any tell — issue #162. The 27-frame
+rule owns every windup across all three phases.
+
+| phase | patterns | cd_mul | overrides |
+|---|---|---|---|
+| 1.0 | `fan`, `shockwave`, `charge` | 1.00 | — (canonical) |
+| 0.66 | `fan`, `shockwave`, `charge`, `radial` | 0.80 | `fan(count=3, spread=24, dmg=8)`, `radial(count=10)` |
+| 0.33 | `spiral`, `shockwave`, `charge`, `radial` | 0.65 | `spiral(shots=20, turn=18, gap=0.04)`, `radial(count=10)` |
+
+Phase 1's `pattern_dials` slot is empty on purpose; the row IS the
+dial, and a future editor who adds an override gets caught by
+`tools/check_king_signature.py` (the "canonical must stay untouched"
+gate). Phases 2 / 3 carry `pattern_dials`; `BossAI` shallow-merges
+them onto `PATTERNS[pid]` once at pattern pick time, so the
+telegraph draw, the windup, the move binding and the fire call all
+see the same effective dict — the override never drifts between the
+footprint the player reads and the bullets that fire.
+
+Windups (`BOSS_FAN_WINDUP`, `BOSS_SHOCKWAVE_WINDUP`,
+`BOSS_RADIAL_WINDUP`, `BOSS_CHARGE_WINDUP` — all 1.1s) are untouched.
+What changes is the **count** (fan 3 / radial 10 / spiral 20 shots)
+and the **cadence** (`cd_mul` going from 1.00 / 0.95 / 0.85 down to
+1.00 / 0.80 / 0.65). The boss gets denser and faster; the tells
+never shrink. `tell_mult = {}` on `king_personality` enforces it: a
+mood multiplier cannot drag a real telegraph below the floor.
+
 ## Arena
 
 A boss may carry a `BossArena` (`lagarto/flow/boss/arena.py`): a `size`
@@ -134,6 +165,18 @@ A boss may carry a `BossArena` (`lagarto/flow/boss/arena.py`): a `size`
 screen `tint`. The box is what makes an arena felt — one anchored to the world
 origin would only shave the far corners off a 3200x3200 map, which the player
 never reaches. A boss with no entry in `ARENAS` fights in the open world.
+
+The arena lives for the fight only: `BossArena.apply()` installs the bounds
+when the boss spawns (`_spawn_boss`) and at every HP threshold (the per-boss
+`on_phase` callback for #121's shrinking corridors), and `BossArena.clear()`
+drops them the moment the round transitions to `cleared` — issue #157. Without
+that clear, `game.arena_bounds` would still hold the dead boss's box across
+the whole `cleared` and `camp` window, and the player's `integrate()` would
+clamp them inside the box they just killed their way out of. The shop door is
+unreachable through a 900x640 corridor that's still painted on the world. The
+adds that some bosses spawn on death (Mãe-Escaravelho's larvas) don't use
+`arena_bounds` — the arena is per-boss, not per-spawn — so clearing it the
+moment the round clears does not punish the surviving adds.
 
 A Muralha has the tightest box in the game (900x640, a corridor); the
 Primordial and the Terror Alado have none, because both fights are about space.
@@ -201,6 +244,10 @@ phantoms, for the technique abstracted.
 A boss-only species must use `role='boss'`, not `role='enemy'`: the `invasao`
 theme pool is `list(ENEMY_SPECIES)` and the `summon` pattern falls back to it,
 so `role='enemy'` lets a normal wave roll a boss body as a mook.
+
+Serpente de Cristal uses its own boss-only `serpente_cristal` species: a long,
+legless segmented body with cyan faceted segments and four eyes. Its procedural
+head and segments are canonical when optional PNG parts are absent.
 
 ## Related
 

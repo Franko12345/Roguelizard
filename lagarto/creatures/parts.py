@@ -313,6 +313,57 @@ def draw_fangs(surf, cam, creature):
                          max(1, int(2.4 * cam.zoom)))
 
 
+def draw_serpente_cristal(surf, cam, creature):
+    from ..render import boss_assets
+
+    js, rad = creature.spine.joints, creature.spine.radii
+    base = palette.lighten(creature.color, creature.hit_flash)
+    rim = palette.lighten(base, 0.55)
+    ink_w = max(1, int(1.6 * cam.zoom))
+    segment_asset = boss_assets.serpente_segment()
+    for i in range(len(js) - 1, 0, -1):
+        c = js[i]
+        r = rad[i] * 1.25
+        if segment_asset is not None:
+            image = pygame.transform.rotozoom(segment_asset, 0, r * 2 / segment_asset.get_width())
+            surf.blit(image, image.get_rect(center=cam.w2s(c)))
+            continue
+        d = safe_norm(js[i - 1] - c)
+        p = Vector2(-d.y, d.x)
+        points = [c + d * r, c + p * r * 0.75, c - d * r, c - p * r * 0.75]
+        palette.glow(surf, cam.w2s(c), r * 1.8 * cam.zoom, base, 0.24)
+        _poly(surf, cam, points, base, ink_w / cam.zoom)
+        pygame.draw.line(surf, rim, cam.w2s(c - p * r * 0.5), cam.w2s(c + d * r * 0.65), ink_w)
+        wig = _osc_offset(creature, 'antennae', i)
+        for side in (-1, 1):
+            root = c + p * side * r * 0.55
+            tip = root + p * side * r * 0.65 + d.rotate(side * (25 + wig * 15)) * r * 0.55
+            pygame.draw.line(surf, rim, cam.w2s(root), cam.w2s(tip), max(1, int(cam.zoom)))
+
+    head = js[0]
+    d = creature.spine.head_dir()
+    p = Vector2(-d.y, d.x)
+    r = creature.max_r * 1.35
+    head_asset = boss_assets.serpente_head()
+    if head_asset is not None:
+        image = pygame.transform.rotozoom(head_asset, -math.degrees(math.atan2(d.y, d.x)),
+                                          r * 2 / head_asset.get_width())
+        surf.blit(image, image.get_rect(center=cam.w2s(head)))
+    else:
+        points = [head + d.rotate(a) * r for a in (0, 60, 120, 180, 240, 300)]
+        palette.glow(surf, cam.w2s(head), r * 2 * cam.zoom, base, 0.35)
+        _poly(surf, cam, points, base, ink_w / cam.zoom)
+        pygame.draw.line(surf, rim, cam.w2s(head - p * r * 0.6),
+                         cam.w2s(head + d * r * 0.7), ink_w)
+
+    look = creature._pupil_offset()
+    for along, side in ((0.34, -0.42), (0.34, 0.42), (-0.08, -0.55), (-0.08, 0.55)):
+        eye = head + d * r * along + p * r * side
+        pygame.draw.circle(surf, C.COL_WHITE, cam.w2s(eye), max(2, int(r * 0.2 * cam.zoom)))
+        pygame.draw.circle(surf, C.COL_INK, cam.w2s(eye + look * r * 0.08),
+                           max(1, int(r * 0.1 * cam.zoom)))
+
+
 def draw_all(surf, cam, creature):
     """Draw every part the genome declares (called from Creature.draw)."""
     g = creature.genome

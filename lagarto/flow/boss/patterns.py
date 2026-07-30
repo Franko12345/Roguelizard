@@ -185,8 +185,16 @@ def king_phases():
     five" -- the simplest movement (``proud_walk``, a committed walk that
     never retreats), the longest windups (see ``BOSS_FAN_WINDUP`` /
     ``BOSS_SHOCKWAVE_WINDUP`` / ``BOSS_RADIAL_WINDUP`` / ``BOSS_CHARGE_WINDUP``
-    bumped in config), and the loosest rhythm of the pool (1.0/0.95/0.85 --
-    the player's first encounter with cadence still has breath).
+    bumped in config), and the loosest rhythm of the pool -- the player's
+    first encounter with cadence still has breath.
+
+    Issue #162: fase 1 stays canonical (1.0 / untouched pattern dials);
+    fases 2 + 3 graduate density + cadence UP without touching windups.
+    The 27-frame rule still owns every telegraph -- the boss gets denser
+    (count / shots) and faster (cd_mul), not faster tells. The ``cd_mul``
+    ladder moves from 1.0 / 0.95 / 0.85 to 1.0 / 0.80 / 0.65; the
+    per-pattern dials are bumped on phase 2 (fan=3 / radial=10) and
+    phase 3 (spiral denser); the windups stay where #123 put them.
 
     The ``moves=['proud_walk']`` slot is the BACKGROUND between attacks;
     the per-attack ``move='proud_walk'`` (fan / shockwave / radial) keeps
@@ -199,14 +207,34 @@ def king_phases():
     the Centopeiadeira's (#124) is emergent from ``burrow``. The first
     boss of the game doesn't teach "sometimes shooting doesn't work" --
     that's the second lesson, not the first.
+
+    The ``pattern_dials`` slot is the phase-local override on top of the
+    shared ``PATTERNS`` rows. ``BossAI`` merges the row + the override
+    once, at pattern pick time, and every FSM read goes through the
+    merged dict (the windup, the select, the fire call, the move
+    binding) so count / spread / shots / turn / gap never drift between
+    what the telegraph draws and what fires at fire time.
     """
     return [
+        # Phase 1 -- legibility canonical. No overrides; the row IS the dial.
         dict(hp_frac=1.0,  patterns=['fan', 'shockwave', 'charge'],
              cd_mul=1.0,  moves=['proud_walk']),
+        # Phase 2 -- count UP, cadence UP, windups untouched (#162).
         dict(hp_frac=0.66, patterns=['fan', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.95, moves=['proud_walk']),
+             cd_mul=0.80,
+             pattern_dials={
+                 'fan': dict(count=3, spread=24, dmg=8),
+                 'radial': dict(count=10),
+             },
+             moves=['proud_walk']),
+        # Phase 3 -- swap fan for spiral, dial the spiral denser, cadence UP.
         dict(hp_frac=0.33, patterns=['spiral', 'shockwave', 'charge', 'radial'],
-             cd_mul=0.85, moves=['proud_walk']),
+             cd_mul=0.65,
+             pattern_dials={
+                 'radial': dict(count=10),
+                 'spiral': dict(shots=20, turn=18, gap=0.04),
+             },
+             moves=['proud_walk']),
     ]
 
 
