@@ -64,3 +64,19 @@ ranges the behaviour tolerates; visual fields jitter more freely.
 - [Champion](./champion.md) — how a species can promote at spawn.
 - [Boss](./boss.md) — how a species can become a boss.
 - [Round](./round.md) — the wave theme that pulls species names.
+
+## Boss identity: `Genome.boss_id` (issue #159, ADR-0003)
+
+A `Genome` may carry an optional `boss_id` — the boss slot id from
+`BOSS_POOL`, set by `_spawn_boss` after `make_boss`. The field is `None`
+for prey, common enemies, and champions; it is only populated for
+authored bosses. It exists for **one** reason: to gate the
+`boss_part(boss_id, part_name)` override path in `parts.draw_all`. No
+other code reads it.
+
+The override path is per-issue scoped: the PNG, when present, paints
+*on top* of the procedural body. The boss's silhouette, motion,
+hit-test, and physics stay procedural. See
+[ADR-0003](../adr/0003-zero-assets-with-png-fallback.md) and
+[Parts](./parts.md#optional-asset-overrides-for-bosses-159-adr-0003) for
+the rule.

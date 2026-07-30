@@ -225,6 +225,12 @@ chk(12, "cosmetic skeleton", os.path.exists('lagarto/anim/cosmetics.py'),
 chk(10, "ground adaptation", 'height_at' in open('lagarto/world/terrain.py').read(),
     "rejected: height_at/slope_at returned 0.0 unconditionally")
 chk(9, "windup visual", C.DASH_ANTIC_T > 0, f"wind-ups zeroed by request; dash dust kept at launch")
+adr3 = open('docs/adr/0003-zero-assets-with-png-fallback.md').read()
+chk(159, "ADR-0003 boss personality layer",
+    'boss personality' in adr3.lower()
+    and 'assets/boss/' in adr3
+    and 'procedural fallback' in adr3.lower()
+    and 'boss_part' in adr3)
 chk(8, "tail chain", cbase.TAIL_CHAIN_LEN == 5 and
     subprocess.run([sys.executable, 'tools/check_tail_chain.py'], capture_output=True).returncode == 0)
 p_src = src(Player)
