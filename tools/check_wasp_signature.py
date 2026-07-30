@@ -24,7 +24,7 @@ Five things must be true or the boss's whole pitch ("it flies") is decoration:
 
 Run:  python tools/check_wasp_signature.py [--shot out.png]
 """
-import os, sys, math, statistics
+import os, sys, math, statistics, inspect
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -248,7 +248,7 @@ def test_effective_windup_floor():
     pers = BossPersonality()           # defaults, same as Wasp's
     moods = ['calm', 'agitated', 'enraged', 'frustrated', 'cornered']
     checked = 0
-    for pid in ('fan', 'barrage', 'lead_fan', 'dive_arc'):
+    for pid in ('fan', 'barrage', 'lead_fan', 'dive_arc', 'spiral_arc'):
         row = pat.PATTERNS[pid]
         for m in moods:
             eff = row['windup'] * pers.windup_mult(m)
@@ -257,6 +257,33 @@ def test_effective_windup_floor():
                 f"{pers.windup_mult(m):.2f} = {eff:.2f}s < {WINDUP_FLOOR}s"
             checked += 1
     print(f"  windup floor: {checked} (pid, mood) pairs all >= {WINDUP_FLOOR}s")
+
+
+# --------------------------------------------------------------------------- #
+# 3b. Issue #164: spiral_arc is on the Wasp's phase-3 pattern list             #
+# --------------------------------------------------------------------------- #
+def test_spiral_arc_in_phase3():
+    """Phase 3 of the Wasp carries the spiral_arc pattern (issue #164).
+
+    The Wasp earns the orbit only at 30% HP, swapped in for ``lead_fan``
+    (issue #167). The assertion fails the check if someone removes the
+    row from ``wasp_phases``.
+    """
+    phases = pat.wasp_phases()
+    assert len(phases) >= 3, f"wasp_phases has {len(phases)} phases; expected >= 3"
+    phase3 = phases[2]
+    assert 'spiral_arc' in phase3['patterns'], \
+        f"wasp phase 3 patterns = {phase3['patterns']}; " \
+        f"spiral_arc missing (issue #164)"
+    # spiral_arc must also exist in PATTERNS with the spiral hook attached.
+    # The emitter fn attaches proj.spiral_arc to each shot itself (no
+    # dials['mod'] indirection -- same idiom as boomerang_burst).
+    row = pat.PATTERNS['spiral_arc']
+    assert row.get('fn') is not None, "PATTERNS['spiral_arc'] has no fn"
+    assert 'proj.spiral_arc' in inspect.getsource(row['fn']), \
+        "PATTERNS['spiral_arc']'s fn never attaches the spiral_arc movement hook"
+    print(f"  spiral_arc in wasp phase 3: patterns={phase3['patterns']}, "
+          f"windup={row['windup']}s, telegraph={row['telegraph']}")
 
 
 # --------------------------------------------------------------------------- #
@@ -369,6 +396,7 @@ def main():
     test_curved_trajectory()
     test_dive_pass_through()
     test_effective_windup_floor()
+    test_spiral_arc_in_phase3()
     test_variance_above_muralha()
     print("ALL OK -- the wasp flies, dives through, and varies its rhythm")
 

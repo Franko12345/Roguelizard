@@ -15,6 +15,7 @@ resolves hits against players (hostile) or creatures (friendly).
 """
 
 import math
+import random
 from pygame import Vector2
 import pygame
 

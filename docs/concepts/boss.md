@@ -33,9 +33,11 @@ spread, `deathroll` is `spiral_pattern` with a denser one.
 
 `radial`, `fan`, `barrage`, `shockwave`, `spiral`, `charge`, `pincha`,
 `swipe`, `arms_rain`, `sky_slam`, `deathroll`, `summon`, `web_trap`,
-`boomerang_burst`, `burst_stop_burst`, `massive_fan`. Each has a telegraph rule
+`boomerang_burst`, `burst_stop_burst`, `massive_fan`, `spiral_arc`. Each has a telegraph rule
 ([Telegraph](../../CONTEXT.md)): draw the footprint, not just a
-warning icon.
+warning icon. `spiral_arc` (issue #164) is the Wasp's phase-3 "bullet takes a
+turn around you" — the shot orbits the target with a decaying radius and
+collapses onto it, distinct from `spiral`'s rotating bullet-hell stream.
 
 ### Kraken-Mor grapple
 
