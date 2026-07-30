@@ -29,6 +29,13 @@ Defined in `lagarto/creatures/species.py`.
 - **centipede** — `plan='segmented'`, `behavior='burrow'`.
 - **octopus** — `plan='tentacle'`, `behavior='grapple'`, `weight=3.0`.
 
+**Bosses** (`role='boss'`, excluded from normal enemy pools):
+
+- **serpente_cristal** — long, legless `plan='segmented'` body with cyan
+  faceted procedural rendering and four eyes. Optional authored head and segment
+  images may replace individual parts when available.
+- **muralha** — immobile `plan='fixed'` body.
+
 Each entry declares `hp`, `speed`, part counts, and — when a part should
 be transferrable to the player — a `grants` field. A species that shoots also
 declares `shot`: the [emitter](../../CONTEXT.md) pattern it fires plus that
