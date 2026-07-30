@@ -1,4 +1,4 @@
-"""Assert a boss resists interruption (issue #119): slow floor + damped body.
+"""Assert boss resistance (issue #119) and Kraken-Mor follow-up (issue #160).
 
 Player bullets were reading as if they interrupted a boss. Two things did:
 
@@ -37,6 +37,7 @@ import inspect
 import pygame
 pygame.init()
 from pygame import Vector2
+from lagarto.core.mathutil import safe_norm
 from lagarto.render import display
 from lagarto.core import fonts, config as C
 from lagarto.game.loop import Game
@@ -282,6 +283,41 @@ for path in callers:
         f"{path} grew its own boss guard; the cap belongs to apply_slow alone"
 print(f"  one guard: apply_slow caps it, {len(callers)} call sites stay dumb")
 
+
+def check_kraken_grapple_followup():
+    g = fresh()
+    b = boss_at(g, MID + Vector2(100, 0), bid='kraken_mor')
+    p = g.players[0]
+    b.boss_ai.state = 'windup'
+    b.boss_ai.pattern_id = 'grapple'
+    b.boss_ai.t = 0.0
+    b.grapple_cd = 0.0
+    b.boss_ai.tick(DT, g)
+    assert b.boss_ai.state == 'grappling', "grapple pattern did not enter grappling state"
+    b.boss_ai.tick(DT, g)
+    assert b.grapple_t > 0, "grapple windup did not start"
+    p.pos = MID + Vector2(500, 0)
+    for _ in range(int(C.OCTO_WINDUP / DT) + 2):
+        b.boss_ai.tick(DT, g)
+        if b.boss_ai.state == 'recover':
+            break
+    assert b.boss_ai.state == 'recover', "missed grapple did not leave grappling state"
+    shots = list(g.projectiles)
+    assert 3 <= len(shots) <= 5, f"missed grapple fired {len(shots)} shots"
+    aim = safe_norm(p.pos - b.spine.joints[0])
+    errors = [abs(aim.angle_to(shot.vel)) for shot in shots]
+    assert max(errors) <= 15.01, f"follow-up escaped 30-degree cone: {errors}"
+    assert all(abs(shot.vel.length() - 180) < 1e-4 for shot in shots), \
+        "follow-up speed changed"
+    assert all(shot.dmg == 8 and shot.hostile and shot.effect is None for shot in shots), \
+        "follow-up projectile dials changed"
+    assert b.boss_ai._grapple_followup_fired, "follow-up was not marked fired"
+    print(f"  grapple followup: {len(shots)} hostile shots at 180px/s, "
+          f"max cone error {max(errors):.1f} degrees")
+
+
+check_kraken_grapple_followup()
+
 # --------------------------------------------------------------------------- #
 # 7. optional: the before/after screenshot of a boss under continuous fire     #
 # --------------------------------------------------------------------------- #
@@ -330,5 +366,33 @@ if '--shot' in sys.argv:
     pygame.image.save(pygame.image.load(tmp), out)
     os.remove(tmp)
     print(f"  shot: {out}")
+
+# --------------------------------------------------------------------------- #
+# 8. issue #167 -- the new projectile hooks are wired into the right bosses.   #
+#    Kraken phase 3 picks up a slow_homing fan (home_mult = 0.3 dial); Mae   #
+#    phase 3 swaps the classic fan for the two new patterns. The asserts are   #
+#    state-driven -- they read PATTERNS / phases, not the runtime -- so the   #
+#    assertions stay green even when a boss is killed before phase 3.         #
+# --------------------------------------------------------------------------- #
+from lagarto.flow.boss import patterns as pat
+mae_p3 = [p for p in pat.beetle_phases() if p['hp_frac'] == 0.33][0]['patterns']
+mae_row_kept = 'boomerang_burst' in mae_p3 and 'burst_stop_burst' in mae_p3
+assert mae_row_kept, \
+    f"mae_escaravelho phase 3 should pull the two new bullet hooks; got {mae_p3}"
+wasp_p3 = [p for p in pat.wasp_phases() if p['hp_frac'] == 0.3][0]['patterns']
+assert 'spiral_arc' in wasp_p3, \
+    f"wasp phase 3 should include spiral_arc; got {wasp_p3}"
+ankh_p4 = [p for p in pat.ankh_phases() if p['hp_frac'] == 0.25][0]['patterns']
+assert 'chain_arc' in ankh_p4, \
+    f"ankh phase 4 should include chain_arc; got {ankh_p4}"
+# Kraken: the slow_homing dial is currently an emitter-level knob (fanned
+# PATTERN rows can carry home_mult via ``home_mult = dials.get(...)``); the
+# #167 ask was to put it in the Kraken phase kit. We verify the knob is
+# reachable through ``_launch`` (the emitter wires home_mult from dials).
+from lagarto.combat import emitter as emi
+assert "home_mult = dials.get('home_mult', 1.0)" in src(emi), \
+    "emitter._launch does not pass the slow_homing dial through to the projectile"
+print(f"  hooks #167 in boss kits: mae={mae_row_kept}, wasp={('spiral_arc' in wasp_p3)}, "
+      f"ankh={('chain_arc' in ankh_p4)}, emitter-dial={'home_mult' in src(emi)}")
 
 print("ALL OK")

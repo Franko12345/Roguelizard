@@ -34,7 +34,7 @@ def grapple_tick(creature, game, dt, target):
                 game.fx.spark_burst(target.pos, creature.color, 12, 280)
                 game.shake(5)
                 audio.play('hit', 0.45)
-        return to * 0.08, 0.0                   # rooted, mantle exposed
+        return to * 0.5, 0.0                   # rooted, mantle exposed
     creature.arm_target = None
     if creature.grapple_cd > 0:
         creature.grapple_cd -= dt

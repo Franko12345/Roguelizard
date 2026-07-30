@@ -15,6 +15,7 @@ import pygame
 
 from ..audio import engine as audio
 from . import boss as bossai
+from .boss.arena import for_boss
 from ..creatures import champions
 from ..core import config as C
 from ..render import icons
@@ -99,7 +100,7 @@ BOSS_POOL = {
                        personality=lambda: bossai.spider_king_personality(),
                        scar=None,
                        overrides=dict(hue=260, sat=0.12, val=0.92, leg_len=1.6)),
-    'serpente_cristal': dict(species='centipede', name='SERPENTE DE CRISTAL',
+    'serpente_cristal': dict(species='serpente_cristal', name='SERPENTE DE CRISTAL',
                              emblem='boss_serpente_cristal',
                              phases=lambda: bossai.crystal_phases(),
                              personality=lambda: bossai.crystal_personality(),
@@ -147,6 +148,11 @@ BOSS_POOL = {
                  emblem='boss_ankh',
                  phases=lambda: bossai.ankh_phases(),
                  personality=lambda: bossai.ankh_personality(),
+                 # Issue #165: ANKH carries 4 phantombodies (one per phase,
+                 # cross-faded by on_phase). Other bosses don't, so leaving
+                 # these unset keeps the FSM zero-cost.
+                 setup=bossai.ankh_setup,
+                 on_phase=bossai.ankh_on_phase,
                  scar=None,
                  overrides=dict(hue=45, sat=0.35, val=1.0, spikes=0, plates=2)),
 }
@@ -414,6 +420,7 @@ class RoundManager:
         self.is_boss_round = False
         self.is_final = False
         self._boss_bag = {}     # pool -> shuffled bag; sample bosses without replacement
+        self.boss_id = None    # boss pool key for the current fight; cleared on cleared()
 
     def _draw_boss_id(self, pool_ids):
         """Sorteia sem reposição: esvazia o saco antes de repetir qualquer chefe."""
@@ -435,6 +442,7 @@ class RoundManager:
         for p in g.players:
             p.rerolls = p.rerolls_per_round
         self.boss = None
+        self.boss_id = None
         g.arena = None              # issue #26: last round's arena bounds/tint
         g.arena_bounds = None
         self.is_final = (self.game.mode == 'normal' and self.wave >= C.RUN_FINAL_WAVE)
@@ -490,11 +498,11 @@ class RoundManager:
         boss = make_boss(g, boss_id, tier, pos, is_final=self.is_final)
         g.enemies.append(boss)
         self.boss = boss
+        self.boss_id = boss_id      # issue #157: needed to clear arena on cleared()
         # Issue #26: per-boss arena (tighter bounds + screen tint) for the
         # duration of the fight. Issue #121: ``phase_i=0`` picks the
         # spawn-phase size from ``BossArena.phase_sizes`` if present. The
         # per-boss ``on_phase`` callback reapplies on every HP threshold.
-        from .boss.arena import for_boss
         arena = for_boss(boss_id)
         if arena is not None:
             arena.apply(g, pos, phase_i=0)
@@ -562,6 +570,19 @@ class RoundManager:
             if self.cleared():
                 self.state = 'cleared'
                 self.timer = 3.0
+                # Issue #157: drop the dead boss's arena bounds NOW, not at
+                # start_round. Until then the player's integrate() and the
+                # AI's update() keep clamping to arena_bounds and the player
+                # can't walk to the camp shop -- the cleared+camp state must
+                # own the full world. for_boss(boss_id) is None for bosses
+                # without an arena entry AND for the bare-species fallback
+                # (when a tier has no BOSS_POOL entry and _spawn_boss falls
+                # back to a themed species scaled up); both are safe no-ops.
+                if self.boss_id is not None:
+                    arena = for_boss(self.boss_id)
+                    if arena is not None:
+                        arena.clear(g)
+                    self.boss_id = None
                 if g.alive_players():
                     g.fx.popup(g.alive_players()[0].pos + Vector2(0, -140),
                                "ONDA LIMPA!", C.COL_WHITE)

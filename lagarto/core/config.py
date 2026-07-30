@@ -146,7 +146,7 @@ CENT_ERUPT_DMG = 15         # dano do estouro ao aflorar (anel curto)
 # POLVO (corpo 'tentacle'): agarrador. Ataca o habito de FICAR NO MEIO-ALCANCE /
 # kitar de perto -- estica os bracos (telegrafo visivel), e no estalo te puxa para
 # dentro e retarda. So funciona se voce estiver por perto: fugir cedo o nega.
-OCTO_GRAB_RANGE = 190      # dentro disso ele arma o agarrao
+OCTO_GRAB_RANGE = 280      # dentro disso ele arma o agarrao
 OCTO_WINDUP = 0.75         # telegrafo: bracos convergem/esticam (>27 frames)
 OCTO_CD = 2.4              # respiro entre agarroes
 OCTO_PULL_DIST = 120       # o quanto voce e puxado
@@ -652,25 +652,6 @@ BOSS_WEB_TRAP_R = 85
 BOSS_WEB_TRAP_DMG = 2
 BOSS_WEB_TRAP_LIFE = 6.0
 BOSS_WEB_TRAP_SLOW = 0.4
-# Issue #163: two new patterns for the Mae's phase-3 enrage kit. Both keep
-# the 27-frame floor under the worst tell_mult (0.65), so windups >= 0.7 land
-# at the 0.45 s floor even when enraged. Boomerang fires a fan that comes
-# back; burst_stop fires a fan whose shots freeze mid-air and drop a hostile
-# Puddle. Pool cap: 5 projeteis por rajada * BURST_STOP_LIFE/BURST_STOP_CD ~= 5
-# pocas vivas -- well below Game.spawn_puddle's cap of 40.
-BOOMERANG_WINDUP = 0.7
-BOOMERANG_RETURN_TIME = 0.8     # seconds before the shot flips back
-BOOMERANG_RANGE = 280           # px from the shooter -- the out-phase ceiling
-BOOMERANG_DMG = 8
-BOOMERANG_PUDDLE_DMG = 2        # soft pool when the boomerang is left behind
-BURST_STOP_WINDUP = 0.7
-BURST_STOP_TRAVEL = 0.5         # seconds the shot flies before freezing
-BURST_STOP_DMG = 8              # projectile hit (player must dodge)
-BURST_STOP_PUDDLE_DMG = 4       # pool damage PER TICK (Puddle owns its cadence)
-BURST_STOP_RADIUS = 32
-BURST_STOP_LIFE = 1.5
-BURST_STOP_PUDDLE_HUE = 30      # poison-yellow tint (Mae-Escaravelho)
-
 # Olho-Sismico (B9, tier 5) -- "O Observador": globo ocular flutuante (plan='orbital').
 # Mecanica do Olho: acertar o olho ABERTO da o critico de cabeca de graca (ja e o
 # ponto fraco); durante a piscada (0.1s aleatoria) o olho fica blindado -- nao pode
@@ -763,3 +744,24 @@ MURALHA_GRID_LIFE = 1.0
 # Arena fire pushes player
 MURALHA_FIRE_PUSH = 350        # px/s push toward wall
 MURALHA_FIRE_DMG = 6           # dps from ground fire
+
+# --------------------------------------------------------------------------- #
+# Issue #167: 5 new projectile hooks + slow_homing dial.
+# All read by ``lagarto.combat.projectile``; tuning happens here so the
+# pattern rows in ``lagarto.flow.boss.patterns`` can stay dial-only.
+# --------------------------------------------------------------------------- #
+CHAIN_LINK_DIST = 120          # px: a chain link draws between two projectiles within
+CHAIN_BREAK_DIST = 200         # px: link breaks if either end drifts past this
+CHAIN_DMG_BONUS = 3            # bonus damage per chain link on player contact
+CHAIN_MAX_PER_PROJECTILE = 3   # cap partners per projectile (avoids N*(N-1)/2 lines)
+CHAIN_BEZIER_SAMPLES = 6       # segments per chain Bezier render
+CHAIN_SPARK_GAP = 0.07         # seconds between mid-link spark bursts
+WAVE_FREQ = 8.0                # rad/s: base wave phase rate
+WAVE_AMP = 12.0                # px: peak perpendicular displacement
+BOOMERANG_RETURN_TIME = 0.8    # s: time before boomerang flips
+BOOMERANG_RANGE = 280          # px: distance from shooter -> return point
+BURST_STOP_TRAVEL = 0.5        # s: time before burst_stop detonates
+BURST_STOP_PUDDLE = dict(r=42, dmg=4, life=2.5, hue=18, tick=0.5)
+SPIRAL_RADIUS_INIT = 80        # px: starting orbit radius
+SPIRAL_RADIUS_DECAY = 0.96     # factor per FRAME at 60 Hz; == ~0.28s half-life
+SPIRAL_OMEGA = 2.0             # rad/s: angular speed

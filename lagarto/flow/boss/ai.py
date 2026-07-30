@@ -13,9 +13,10 @@ from ...core import config as C
 from ...core import palette
 from ...creatures.ai import burrow as burrow_ai
 from ...creatures.ai import grapple as grapple_ai
-from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir
+from ...core.mathutil import safe_norm, vfrom_angle, clamp, decay, random_dir, approach
 from ...creatures.base import TAIL_SPRING_STIFFNESS
-from ...combat.emitter import _tick_barrage, _tick_spiral, _tick_fire_breath
+from ...combat.emitter import (_tick_barrage, _tick_spiral, _tick_fire_breath,
+                               grapple_followup)
 from .patterns import PATTERNS, default_phases
 from .telegraph import TELEGRAPHS
 from .personality import default_personality
@@ -125,8 +126,19 @@ class BossAI:
         # with the boss's movement; without movement, the puddle is
         # decoration.
         self._path_samples = []   # list[Vector2], newest at the end
+        # Issue #162: per-instance cache of the merged dials for the
+        # ACTIVE pattern (``PATTERNS[pid]`` shallow-merged with the
+        # current phase's ``pattern_dials`` override). Built once at
+        # pattern pick time so the windup, the telegraph draw, the
+        # move binding and the fire call all see the same effective
+        # dict -- the override never drifts between what the
+        # telegraph draws and what fires at fire time. ``None`` when
+        # no pattern is in flight.
+        self.pattern_dials = None
         boss.boss_invuln = True
         self._last_game = None      # back-ref the per-frame hook keeps for on_phase
+        self._grapple_seen_windup = False
+        self._grapple_followup_fired = False
 
     def _apply_invuln(self):
         """Single source of truth for ``boss_invuln``. Called at every state
@@ -155,6 +167,11 @@ class BossAI:
             self._apply_invuln()              # 'transition' is in the always-invuln set
             b.hit_flash = 1.0
             self.pattern_id = None
+            # Issue #162: drop the cached dials so the next pattern pick
+            # rebuilds them against the NEW phase's ``pattern_dials``
+            # override (a phase transition is the only moment the
+            # override set changes for an in-flight fight).
+            self.pattern_dials = None
             if self.scars:                     # scars don't survive a phase change
                 for s in self.scars:
                     s.dead = True
@@ -237,6 +254,29 @@ class BossAI:
         pat = PATTERNS.get(pid, {})
         return pat.get('recover', C.BOSS_RECOVER_TIME)
 
+    def _effective_dials(self, pid):
+        """``PATTERNS[pid]`` shallow-merged with the current phase's
+        ``pattern_dials`` override (issue #162).
+
+        The phase kit may declare ``pattern_dials={pid: {...}}`` to bump
+        count / spread / shots / turn / gap for that phase without
+        mutating the shared ``PATTERNS`` table. The merge happens at
+        pattern pick time and the result is cached in ``self.pattern_dials``;
+        every FSM read (windup, select, fire, move binding, telegraph draw)
+        goes through the cached dict, so what the telegraph draws and
+        what the emitter fires are always the same.
+
+        Returns ``PATTERNS[pid]`` unchanged when the phase has no
+        override for ``pid`` -- the common case (including every boss
+        that doesn't opt into the override) so the rest of the FSM
+        keeps the cheap path.
+        """
+        base = PATTERNS.get(pid, {})
+        override = self.phase().get('pattern_dials', {}).get(pid)
+        if not override:
+            return base
+        return {**base, **override}
+
     def _move(self, target, game):
         """The movement trail: ``(direction, speed)`` for the current frame.
 
@@ -259,8 +299,13 @@ class BossAI:
         mood_speed = self.personality.mood_speed.get(self.mood, 1.0)
         b = self.boss
         # active attack's move (may be None if the pattern doesn't override)
+        # Issue #162: read from the cached dials (PATTERNS + phase override
+        # merged) so the move binding sees the same dial set the fire call
+        # saw -- a future override that changes move-relevant fields
+        # (reach, etc.) reaches the move fn automatically.
         if self.pattern_id:
-            pat = PATTERNS.get(self.pattern_id, {})
+            pat = self.pattern_dials if self.pattern_dials is not None \
+                else PATTERNS.get(self.pattern_id, {})
             mv = pat.get('move')
             if mv and mv in MOVES:
                 d, s = MOVES[mv](b, game, target, pat)
@@ -293,6 +338,14 @@ class BossAI:
         _tick_fire_breath(b, game)
         self.summon_cd = decay(self.summon_cd, dt)
         self._maybe_advance_phase()
+        # Issue #165: ANKH phase ghosts cross-fade. The on_phase callback
+        # (ankh_on_phase) sets each phantom's target_alpha on transition;
+        # this advances the visible alpha toward it every frame so the
+        # swap reads as a 1.5-second cross-fade, not a blink. rate=2.0
+        # is 90% in ~1.15s and 95% in ~1.5s at 60Hz. Empty list = no-op.
+        if b.phantom_bodies:
+            for p in b.phantom_bodies:
+                p.alpha = approach(p.alpha, p.target_alpha, 2.0, dt)
         # Issue #123: ring buffer of recent boss positions for the
         # CicatriZ puddle. Sampling the buffer at ``spawn_scar`` time
         # means the puddle lands where the boss WAS walking (the trail
@@ -345,6 +398,14 @@ class BossAI:
                     pats.remove('summon')          # on cooldown -- don't roll it
                 pid = self._choose_pattern(pats) if pats else 'fan'
                 self.pattern_id = pid
+                # Issue #162: cache PATTERNS[pid] merged with the current
+                # phase's ``pattern_dials`` override, once. Every FSM
+                # read downstream (windup, select, fire, move binding,
+                # telegraph draw) goes through this dict so the override
+                # never drifts between what the telegraph draws and what
+                # the emitter fires. Falls through to PATTERNS[pid] for
+                # bosses that don't opt in (the common case).
+                self.pattern_dials = self._effective_dials(pid)
                 self.state = 'windup'
                 # Issue #118: windup floor (0.45s, the 27-frame rule). The
                 # clamp lives in _eff_windup, applied via the FSM so any
@@ -359,9 +420,9 @@ class BossAI:
                 # original line of attack.
                 if pid == 'dive_arc':
                     b._dive_start = Vector2(b.pos)
-                select = PATTERNS[pid].get('select')
+                select = self.pattern_dials.get('select')
                 if select:
-                    select(b, game, target, PATTERNS[pid])
+                    select(b, game, target, self.pattern_dials)
             # Movement trail: attack > phase > none. The approach vector
             # was the only "movement" before; now the phase's moves slot
             # drives the boss (the per-boss signatures (#121-#125) fill
@@ -378,12 +439,16 @@ class BossAI:
             # to freeze the aim at windup start, which made a walking
             # boss draw a cone that rotated while the shot left from the
             # new position. Now the aim tracks the player each frame.
+            # Issue #162: read from the cached ``pattern_dials`` so a
+            # ``pattern_dials`` override reaches the telegraph too.
             if self.pattern_id:
-                pat = PATTERNS[self.pattern_id]
+                pat = self.pattern_dials if self.pattern_dials is not None \
+                    else PATTERNS[self.pattern_id]
                 if pat.get('telegraph') in ('fan', 'line'):
                     self._windup_target = Vector2(target.pos)
             if self.t <= 0:
-                pat = PATTERNS[self.pattern_id]
+                pat = self.pattern_dials if self.pattern_dials is not None \
+                    else PATTERNS[self.pattern_id]
                 # Issue #122: the dive windup ended -- the dive Bezier
                 # is done, clear the snapshot so a subsequent windup
                 # snapshots its OWN start. The wasp stays past the
@@ -397,6 +462,8 @@ class BossAI:
                 if pat.get('grapple'):
                     self.state = 'grappling'
                     self._grapple_seen_windup = False
+                    self._grapple_followup_fired = False
+                    b.grabbed = None
                     return Vector2(), 0.0
                 pat['fn'](b, game, target, pat)   # the row IS the emitter's dials
                 b.squat_bias = 1.4   # release the coil
@@ -443,6 +510,10 @@ class BossAI:
             if b.grapple_t > 0:
                 self._grapple_seen_windup = True
             elif self._grapple_seen_windup:
+                if getattr(b, 'grabbed', None) is None and not self._grapple_followup_fired:
+                    grapple_followup(b, game, target, {})
+                    self._grapple_followup_fired = True
+                self._grapple_seen_windup = False
                 self.state = 'recover'
                 self.t = self._eff_recover('grapple')
                 self._apply_invuln()
@@ -485,7 +556,11 @@ class BossAI:
         b.crest_bias = TELL_CREST_ENRAGED * speed if self.mood == 'enraged' else 0.0
         if self.state != 'windup' or not self.pattern_id:
             return
-        pat = PATTERNS[self.pattern_id]
+        # Issue #162: read from the cached ``pattern_dials`` (PATTERNS +
+        # phase override merged) so body-tell and emitter both see the
+        # same kind / dial set.
+        pat = self.pattern_dials if self.pattern_dials is not None \
+            else PATTERNS[self.pattern_id]
         # issue #118: progress is computed against the FLOORED windup to
         # match the FSM's countdown -- a pattern clamped to 0.45s reports
         # prog 0->1 across exactly 0.45s, not the table value
@@ -521,7 +596,15 @@ class BossAI:
             return
         if self.state != 'windup' or not self.pattern_id:
             return
-        kind = PATTERNS[self.pattern_id]['telegraph']
+        # Issue #162: read from the cached ``pattern_dials`` (PATTERNS +
+        # phase override merged) so the drawn telegraph kind matches the
+        # emitter call below.
+        pat_row = self.pattern_dials if self.pattern_dials is not None \
+            else PATTERNS[self.pattern_id]
+        kind = pat_row['telegraph']
+
+
+
         # None telegraph kind (burrow, grapple) -> the boss's own body already
         # shows the windup via its own tick (dig state, arms converging). No
         # on-screen telegraph to draw here.

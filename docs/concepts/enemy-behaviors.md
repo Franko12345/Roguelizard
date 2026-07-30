@@ -22,6 +22,19 @@ the other one: it **throws a shell** at a patch picked when it fires, and the
 patch only becomes a hazard when the shell lands ~0.9 s later, so an investida
 aimed at the MORTEIRO ends inside it.
 
+The Centopeiadeira (B2, issue #161) reads the same line on the player but
+at a sub-perfect quality. The burrow's `dive_to` uses
+`predict_target(target.pos, target.vel, flight_time, 0.85)` — the
+flight time is the underground trip (`distance / (max_speed * 2.4)`),
+the 0.85 leaves a 15% margin so a player who brakes the 0.5 s dig
+telegraph still has a window. The ANTECIPADOR's 1.0 is the perfect
+read; the boss's `lead_fan` 0.6 is the generous margin; 0.85 is the
+middle — the eruption lands on a committed player, but a player who
+brakes hard wins. The math is shared with `emitter.lead_point` (one
+`predict_target` in `core/mathutil.py`; the burrow is the one-shot
+case, the ANTECIPADOR refines the flight time once), so the same
+formula reads the player's future wherever aim decides it.
+
 The shell is the wind-up, not a decoration on one. `emitter.lob_shot` gets
 `flight=C.MORTAR_ARM`, so the arc always takes the same beat however far it was
 thrown and lands exactly as the footprint's countdown runs out; the puddle comes
