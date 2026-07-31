@@ -654,6 +654,12 @@ class Game:
 
     # ---- main step ------------------------------------------------------ #
     def step(self, dt):
+        # Issue #172: the punch-driven white screen flash must decay in EVERY
+        # state, not only 'play'. boss.die() sets flash=0.9; the camp/levelup/
+        # pause/over paths never ticked it down, so a boss-death flash stayed on
+        # screen through the whole clearing. Tick it here, before dispatch, so
+        # every state shares one decay source.
+        self.flash = decay(self.flash, dt, 3.2)
         if self.state == 'camp':
             # camp owns its own clock and early returns (frozen while shopping)
             state_camp.update(self, dt)

@@ -71,7 +71,8 @@ def update(game, dt):
         else:
             game._enter_camp()                  # otherwise: camp (route + shop)
     game.fx.update(dt)
-    game.flash = decay(game.flash, dt, 3.2)
+    # NOTE: game.flash is decayed in Game.step (issue #172) so every state
+    # decays it, not only 'play'.
     game.world.update(dt)
     if game.combo_timer > 0:
         game.combo_timer -= dt
