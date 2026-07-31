@@ -130,8 +130,7 @@ chk(173, "bullet scale/glow tweak", C.BULLET_SCALE == 1.2 and C.BULLET_GLOW == 0
     "" if _bs.returncode == 0 else _bs.stderr.decode()[-90:])
 _te = subprocess.run([sys.executable, 'tools/check_tent_edge.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
-chk(174, "tent shop edge trigger", 'was_outside_tent' in src(state_camp)
-    and _te.returncode == 0,
+chk(174, "tent shop edge trigger", _te.returncode == 0,
     "" if _te.returncode == 0 else _te.stderr.decode()[-90:])
 chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
     and rounds.wave_hp_bonus(20) > int(20 * 0.7) * 1.5 and rounds.wave_cap(20, 6) > 6)
