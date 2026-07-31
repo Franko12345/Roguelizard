@@ -160,6 +160,10 @@ class Sandbox:
         # to mask the raw mouse_btn it hands to ctrl.poll -- otherwise a
         # panel click leaks through pygame.mouse.get_pressed() as a dash.
         self._ate_buttons = set()
+        # Scroll offset (rows) for the item list of the active category
+        # (issue #175). Clamped in _layout against the visible row count so
+        # a wheel-up past the top or wheel-down past the bottom is a no-op.
+        self.scroll = 0
         # Round control (SB4): the theme + wave a manual start_round will fire.
         self.round_theme = THEME_KEYS[0]
         self.round_wave = 1
@@ -455,6 +459,9 @@ class Sandbox:
     def _select_cat(self, key):
         self.cat = key
         self.champ_sel = None
+        # Issue #175: each category starts at the top -- the user is choosing
+        # what to browse, not where in the old list they left off.
+        self.scroll = 0
         # the store has no mutation stock, so bounce the pool back if we came from
         # equip with mutations showing
         if key == 'store' and self.pool == 'mutation':
@@ -695,14 +702,29 @@ class Sandbox:
         if self.cat in ('equip', 'store'):   # two columns for the longer pools
             cols = 2
             cw = (r.width - 28 - (cols - 1) * 4) // cols
+            row_h = 24
+            n_rows = (len(rows) + cols - 1) // cols
+            visible_h = max(1, r.bottom - iy - 16)
+            visible_rows = max(1, visible_h // row_h)
+            self.scroll = max(0, min(self.scroll, max(0, n_rows - visible_rows)))
             item_rects = []
             for i, (value, lbl) in enumerate(rows):
                 col, row = i % cols, i // cols
-                item_rects.append((pygame.Rect(x0 + col * (cw + 4), iy + row * 24,
+                # scroll is row-level: skip the first ``scroll`` rows
+                row_idx = row - self.scroll
+                if row_idx < 0:
+                    continue
+                item_rects.append((pygame.Rect(x0 + col * (cw + 4), iy + row_idx * row_h,
                                                 cw, 22), value, lbl))
         else:
-            item_rects = [(pygame.Rect(x0, iy + i * 26, r.width - 28, 24),
-                           value, lbl) for i, (value, lbl) in enumerate(rows)]
+            row_h = 26
+            visible_h = max(1, r.bottom - iy - 16)
+            visible_rows = max(1, visible_h // row_h)
+            self.scroll = max(0, min(self.scroll, max(0, len(rows) - visible_rows)))
+            item_rects = [(pygame.Rect(x0, iy + (i - self.scroll) * row_h,
+                                       r.width - 28, 24), value, lbl)
+                          for i, (value, lbl) in enumerate(rows)
+                          if i - self.scroll >= 0]
         return cat_rects, pool_rects, item_rects
 
     # ---- input ---------------------------------------------------------- #
@@ -751,6 +773,17 @@ class Sandbox:
             if ev.button == 1 and self.armed is not None:
                 kind, key = self.armed
                 self.spawn(kind, key, self.game.cam.s2w(mp))
+                return True
+
+        # Issue #175: wheel scroll over the panel only -- world wheel events
+        # (zoom, etc.) are not the sandbox's concern. ``ev.y`` is +1 (up) or
+        # -1 (down); we scroll the item list opposite the wheel direction so
+        # wheel-up reveals earlier rows.
+        if ev.type == pygame.MOUSEWHEEL and self.open:
+            mp = pygame.mouse.get_pos()
+            mp = display.to_logical(mp)
+            if self.rect.collidepoint(mp):
+                self.scroll = max(0, self.scroll - ev.y)
                 return True
         return False
 
