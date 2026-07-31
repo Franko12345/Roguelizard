@@ -796,6 +796,23 @@ class Sandbox:
                 kind, key = self.armed
                 self.spawn(kind, key, self.game.cam.s2w(mp))
                 return True
+
+        if ev.type == pygame.MOUSEWHEEL:
+            # Mouse wheel over the open panel scrolls the active list. Consumed
+            # so the live game never sees it (sandbox-only -- the world does
+            # not use the wheel today, but if it ever did, the panel should
+            # still win when the cursor is over it).
+            if not self.open:
+                return False
+            mp = display.mouse_logical()
+            if not self.rect.collidepoint(mp):
+                return False
+            sk = self._scroll_key()
+            # ev.y is +1 for one notch up (toward the top of the list) and -1
+            # for one notch down, in pygame-ce. Use a small step so a single
+            # notch moves a couple of rows; the visible window is ~15-20 rows.
+            self.scroll[sk] = self.scroll.get(sk, 0) + ev.y
+            return True
         return False
 
     def _click_panel(self, mp):
