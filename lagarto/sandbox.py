@@ -671,13 +671,34 @@ class Sandbox:
                     clear=clear_r)
 
     # ---- layout (shared by draw + hit-test) ----------------------------- #
+    def _scroll_key(self):
+        """Map the current panel state to its scroll slot.
+
+        The champion category is two-step (champion then species), so the
+        second step needs its own slot — the first step's ``scroll`` is held
+        while the user picks a champion, then ``champion2`` carries the
+        species list scroll. Mixing them would lose the species offset every
+        time the user backed out to a different champion.
+        """
+        if self.cat == 'champion' and self.champ_sel is not None:
+            return 'champion2'
+        return self.cat
+
     def _layout(self):
         """Return (cat_rects, pool_rects, item_rects); computed the same way for
         draw + clicks so hit-testing never depends on a draw having run first.
 
         Categories wrap onto as many rows as the panel width needs (seven of them
         now). ``pool_rects`` is the loadout pool sub-row, live only for equip/store;
-        equip/store items lay out in two columns so the longer pools still fit."""
+        equip/store items lay out in two columns so the longer pools still fit.
+
+        Long lists are clipped to the visible window (issue #175): the sandbox's
+        item rects used to draw every row of the registry, so the bottom of the
+        panel overflowed. We now compute how many rows fit between the list
+        origin and the nearest footer (round / store) or the panel bottom, take
+        that slice of ``self._items()`` offset by ``self.scroll[cat]``, and clamp
+        the scroll so a partial last page cannot over-scroll.
+        """
         r = self.rect
         bw, bh = 52, 28
         x0, by = r.x + 14, r.y + 80
@@ -697,18 +718,43 @@ class Sandbox:
                           for i, (pk, pl) in enumerate(pools)]
             iy += 24 + 8
 
+        # visible area for the item list. round/store hang a footer off the
+        # bottom of the panel, so the list must stop above it. Everything else
+        # fills the panel down to the bottom edge.
+        if self.cat == 'round':
+            list_bottom = self._round_layout()['reset'].y - 8
+        elif self.cat == 'store':
+            list_bottom = self._store_layout()['clear'].y - 8
+        else:
+            list_bottom = r.bottom - 8
+        list_h = max(0, list_bottom - iy - 4)
+
         rows = self._items()
+        sk = self._scroll_key()
         if self.cat in ('equip', 'store'):   # two columns for the longer pools
             cols = 2
+            row_h = 24
+            per_col = max(1, list_h // row_h)
+            per_page = per_col * cols
             cw = (r.width - 28 - (cols - 1) * 4) // cols
+            max_scroll = max(0, len(rows) - per_page)
+            self.scroll[sk] = max(0, min(self.scroll.get(sk, 0), max_scroll))
+            s = self.scroll[sk]
             item_rects = []
-            for i, (value, lbl) in enumerate(rows):
-                col, row = i % cols, i // cols
-                item_rects.append((pygame.Rect(x0 + col * (cw + 4), iy + row * 24,
-                                                cw, 22), value, lbl))
+            for vi, i in enumerate(range(s, min(len(rows), s + per_page))):
+                col, row = vi % cols, vi // cols
+                item_rects.append((pygame.Rect(x0 + col * (cw + 4), iy + row * row_h,
+                                                cw, 22), rows[i][0], rows[i][1]))
         else:
-            item_rects = [(pygame.Rect(x0, iy + i * 26, r.width - 28, 24),
-                           value, lbl) for i, (value, lbl) in enumerate(rows)]
+            row_h = 26
+            per_page = max(1, list_h // row_h)
+            max_scroll = max(0, len(rows) - per_page)
+            self.scroll[sk] = max(0, min(self.scroll.get(sk, 0), max_scroll))
+            s = self.scroll[sk]
+            item_rects = []
+            for vi, i in enumerate(range(s, min(len(rows), s + per_page))):
+                item_rects.append((pygame.Rect(x0, iy + vi * row_h, r.width - 28, 24),
+                                   rows[i][0], rows[i][1]))
         return cat_rects, pool_rects, item_rects
 
     # ---- input ---------------------------------------------------------- #
