@@ -53,6 +53,29 @@ step it was closed. Closing during drop-in is _not_ blocked — the pick
 absorption (`self.pick`) is the only lock, and only for its ~0.36 s
 window.
 
+## Shop offers declare their effect (issue #140)
+
+The five beetle-shop offers are dicts in `_roll_shop` (see
+`lagarto/game/state_camp.py`). Each offer may carry a declarative
+`effect` triple: `(stat, mode, amount)` where:
+
+- `stat` — a `Player` attribute (`health`, `max_health`, `might`,
+  `cooldown_mult`, …)
+- `mode` — `'add'` (sums) or `'mult'` (multiplies)
+- `amount` — the same number the real effect function (`fn`) uses
+
+`effect=None` means the offer has no numeric preview (Charms, Ovo de
+Amigo). The UI skips the delta line for those.
+
+The function `preview_delta(offer, player)` returns `(stat, cur, pred)`
+or `None`. It is pure — no side effects, no I/O — so the focused-card
+overlay can call it on every frame for every player. In 2P the overlay
+shows both deltas side by side (the purchase affects both players, so
+showing only one would lie by half).
+
+The preview and the real effect must agree; `tools/check_shop_delta.py`
+asserts that for every offer.
+
 ## No prey / projectiles cross into camp
 
 `_enter_camp` cleans up prey, projectiles, and puddles. Clean clearing:
