@@ -17,6 +17,7 @@ regression is visible rather than merely detected.
 | Check | Pins |
 |---|---|
 | `check_issues.py` | Walks every open issue and asserts a concrete marker for it. The index. |
+| `check_camp_flash.py` | A morte de um chefe aciona o flash real, mas a transição para `cleared` o zera antes do primeiro frame do camp; restaurar o valor antigo muda pixels e prova que o controle visual tem dentes. |
 | `check_bosses.py` | Every `BOSS_POOL` entry, driven through all its phases and drawn. |
 | `check_sandbox_boss_bar.py` | A hand-spawned boss is mirrored onto `rounds.boss`, so its health bar paints real pixels and tracks HP; without the mirror both bars draw nothing, which is the control. Cleanup clears it, and the real wave path leaves the same observable. |
 | `check_boss_resist.py` | A stack of every slow source never puts a boss under the floor, in any order, and its duration is the cut one; the same stack on a common enemy still matches the pre-cap formula value for value; a maximally slowed boss still covers 70% of its ground through the real `steer`; a hit no longer touches a boss's velocity or trips the `'hurt'` pose. `--shot` writes the before/after body comparison. |
