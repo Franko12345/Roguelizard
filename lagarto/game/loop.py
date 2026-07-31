@@ -353,6 +353,11 @@ class Game:
         self.ui_t = 0.0
         self.pick = None
         self._panels.clear()
+        # Issue #172: boss.die() sets flash=0.9; the spec wants <0.2s before
+        # the camp opens, but decay alone (3.2/s) + freeze (0.06s) is ~0.34s.
+        # Zero it here so the camp can't inherit a stale boss-death overlay,
+        # even if a punch fired during the cleared->camp transition.
+        self.flash = 0.0
         # a clean clearing: drop leftover prey/hazards so nothing clutters a
         # doorway or lingers on the ground while you shop
         self.prey = []
@@ -654,11 +659,7 @@ class Game:
 
     # ---- main step ------------------------------------------------------ #
     def step(self, dt):
-        # Issue #172: the punch-driven white screen flash must decay in EVERY
-        # state, not only 'play'. boss.die() sets flash=0.9; the camp/levelup/
-        # pause/over paths never ticked it down, so a boss-death flash stayed on
-        # screen through the whole clearing. Tick it here, before dispatch, so
-        # every state shares one decay source.
+        # #172: decay flash here so every state ticks it, not only 'play'.
         self.flash = decay(self.flash, dt, 3.2)
         if self.state == 'camp':
             # camp owns its own clock and early returns (frozen while shopping)
