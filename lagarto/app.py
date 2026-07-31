@@ -181,6 +181,9 @@ def main():
             frame_dt = min(raw_dt, 0.05)
             frames += 1
 
+            if sb is not None:
+                sb.begin_frame()
+
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT:
                     pygame.quit(); return
@@ -306,6 +309,12 @@ def main():
 
             keys = pygame.key.get_pressed()
             mouse_btn = pygame.mouse.get_pressed()
+            if sb is not None and sb.open and sb._ate_buttons:
+                mouse_btn = list(mouse_btn)
+                for button in sb._ate_buttons:
+                    if 1 <= button <= len(mouse_btn):
+                        mouse_btn[button - 1] = False
+                mouse_btn = tuple(mouse_btn)
             for p in game.players:
                 p.ctrl.poll(keys, mouse_btn, game.cam, p.pos, frame_dt)
 
