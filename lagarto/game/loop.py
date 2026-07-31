@@ -345,7 +345,10 @@ class Game:
                          focus='shop', shop_sel=0, charm_col=0, charm_row=0,
                          mode='field', center=center, tent=tent, doors=doors,
                          reopen_cd=C.CAMP_REOPEN_CD,
-                         born=self.time, tent_delay=C.CAMP_TENT_DELAY, tent_landed=False)
+                         born=self.time, tent_delay=C.CAMP_TENT_DELAY, tent_landed=False,
+                         # edge detector #174: loja so abre na transicao fora->dentro
+                         # do raio; comeca True para que o primeiro encoste conte
+                         was_outside_tent=True)
         self._route_rects = []
         self._shop_rects = []
         self._charm_rects = []

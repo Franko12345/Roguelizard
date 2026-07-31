@@ -50,16 +50,24 @@ def update(game, dt):
     game.combo_flash = decay(game.combo_flash, dt, 2)
     game.camp['reopen_cd'] = decay(game.camp.get('reopen_cd', 0.0), dt)
     _update_camp_drop(game)               # the pieces fall in with a slam
-    # touch the tent -> open the shop (only once it has landed)
-    if game.camp['reopen_cd'] <= 0 and game.camp['tent_landed']:
-        for p in game.players:
-            if not p.dead and p.pos.distance_to(game.camp['tent']) < C.CAMP_TENT_R:
-                game.camp['mode'] = 'shop'
-                game.camp['focus'] = 'shop'
-                game.ui_t = 0.0           # replay the drop-in
-                game._panels.clear()
-                audio.play('ui', 0.6)
-                return
+    # edge detector da tenda (#174): so abre em transicao fora->dentro do raio.
+    # Ficar parado em cima ou fechar e esperar o reopen_cd nao pode reabrir a
+    # loja por si so -- o player precisa sair do raio antes do proximo encoste.
+    outside_now = True
+    for p in game.players:
+        if not p.dead and p.pos.distance_to(game.camp['tent']) < C.CAMP_TENT_R:
+            outside_now = False
+            break
+    if (game.camp['reopen_cd'] <= 0 and game.camp['tent_landed']
+            and game.camp['was_outside_tent'] and not outside_now):
+        game.camp['mode'] = 'shop'
+        game.camp['focus'] = 'shop'
+        game.ui_t = 0.0                   # replay the drop-in
+        game._panels.clear()
+        audio.play('ui', 0.6)
+        game.camp['was_outside_tent'] = False
+        return
+    game.camp['was_outside_tent'] = outside_now
     # cross a door -> take that route (Hades: doors commit, no menu)
     for i, dr in enumerate(game.camp['doors']):
         if not dr['landed']:
