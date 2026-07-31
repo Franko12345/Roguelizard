@@ -171,6 +171,13 @@ class Sandbox:
         self.infinite_money = False
         self.msg = None                  # transient confirmation line
         self.msg_t = 0                   # frames left to show it (drawn frame-clock)
+        # Mouse buttons consumed from pygame's event queue in this frame. app.main
+        # masks the matching raw mouse state before polling player controllers.
+        self._ate_buttons = set()
+
+    def begin_frame(self):
+        """Clear transient input consumed during the previous frame."""
+        self._ate_buttons.clear()
 
     # ---- registry ------------------------------------------------------- #
     def track(self, entity, kind, key):
@@ -727,6 +734,7 @@ class Sandbox:
             if self.open and self.rect.collidepoint(mp):
                 if ev.button == 1:
                     self._click_panel(mp)
+                self._ate_buttons.add(ev.button)
                 return True
             # Right-click anywhere in the world cancels an armed spawn.
             if ev.button == 3:
