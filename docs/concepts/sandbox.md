@@ -30,6 +30,16 @@ The category row across the top switches what the panel lists:
 **Loja** / **Dbg** / **Pers**. Dropdowns enumerate the real registry ids,
 so you never type a name by hand.
 
+Long lists are scrollable. Each category keeps its own offset on
+`Sandbox.scroll`, and the mouse wheel over the panel scrolls the active
+list (one notch ≈ one row). The list is clipped to the visible window
+between the panel's top and the nearest footer (round/store) or the
+panel bottom, so the full registry stays reachable even when a single
+category holds more rows than fit. Switching category or loadout pool
+resets that list's offset to 0; the champion two-step keeps the species
+offset on a separate slot so backing out of a champion pick does not
+clobber it.
+
 ## Spawn (click-to-place, sticky)
 
 Picking a [Boss](./boss.md), [Champion](./champion.md),
