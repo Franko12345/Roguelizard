@@ -133,6 +133,14 @@ _te = subprocess.run([sys.executable, 'tools/check_tent_edge.py'], capture_outpu
 chk(174, "tent shop edge trigger", 'was_outside_tent' in src(state_camp)
     and _te.returncode == 0,
     "" if _te.returncode == 0 else _te.stderr.decode()[-90:])
+_sm = subprocess.run([sys.executable, 'tools/check_sandbox_input_mask.py'],
+                     capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto import sandbox as _sb_mod
+chk(176, "sandbox panel click nao vaza dash", '_ate_buttons' in src(_sb_mod)
+    and '_ate_buttons.clear()' in open('lagarto/app.py').read()
+    and _sm.returncode == 0,
+    "" if _sm.returncode == 0 else _sm.stderr.decode()[-90:])
 chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
     and rounds.wave_hp_bonus(20) > int(20 * 0.7) * 1.5 and rounds.wave_cap(20, 6) > 6)
 chk(22, "club charm-only", 'club' not in mut.MUTATIONS_LIST_IDS if False else
