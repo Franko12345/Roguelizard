@@ -19,8 +19,8 @@ WORLD_W, WORLD_H = 3200, 3200
 # Os dois botoes de aparencia de projetil. Sao DESENHO, nao regra: colisao e
 # sobreposicao de corpo contra a criatura, entao mexer aqui nao muda o alcance
 # de nada. Cada chamador continua passando `radius=` como peso relativo.
-BULLET_SCALE = 1.45      # tamanho do corpo. 1.0 era o tamanho antigo
-BULLET_GLOW = 1.0        # intensidade do halo aditivo (era 0.75, fixo no draw)
+BULLET_SCALE = 1.2       # tamanho do corpo. 1.45 era "blow out" exagerado (#173)
+BULLET_GLOW = 0.7        # intensidade do halo aditivo (era 1.0, fixo no draw)
 # As faiscas que saem pra tras da bala, no lugar do rastro em linha. Os dois
 # valores sao UM orcamento, nao duas preferencias: as faiscas vivas por bala sao
 # BULLET_SPARK_LIFE*0.75 / BULLET_SPARK_GAP, e a ~100 balas isso tem que caber
