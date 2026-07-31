@@ -21,7 +21,7 @@ from lagarto.combat.evolution import mutations as mut, synergies as syn
 from lagarto.combat import charms
 from lagarto.render import assets, icons, display
 from lagarto.audio import engine as audio
-from lagarto.game import menu, state_camp, loop as gameloop
+from lagarto.game import menu, state_camp, state_play, loop as gameloop
 from lagarto.input.controllers import _ACTIONS
 import lagarto
 
@@ -123,6 +123,12 @@ root_ok = os.path.isdir(os.path.join(assets._ROOT, 'assets'))
 chk(25, "assets", root_ok and 'ferrao_charm' in icons.ICONS
     and charms.CHARMS['ferrao'].icon == 'ferrao_charm')
 chk(24, "adaptive music", hasattr(audio, 'set_music_intensity') and len(audio._STEM_CURVES) == 6)
+_fc = subprocess.run([sys.executable, 'tools/check_flash_camp.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(172, "flash decay em todo state", 'self.flash = decay(self.flash' in src(gameloop.Game)
+    and 'game.flash = decay' not in src(state_play)
+    and _fc.returncode == 0,
+    "" if _fc.returncode == 0 else _fc.stderr.decode()[-90:])
 chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
     and rounds.wave_hp_bonus(20) > int(20 * 0.7) * 1.5 and rounds.wave_cap(20, 6) > 6)
 chk(22, "club charm-only", 'club' not in mut.MUTATIONS_LIST_IDS if False else
