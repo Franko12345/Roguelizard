@@ -91,6 +91,12 @@ _sp = subprocess.run([sys.executable, 'tools/check_shop_prices.py'], capture_out
 chk(105, "shop prices persist", 'shop_prices' in src(state_camp) and 'shop_prices' in src(gameloop)
     and C.SHOP_PRICE_MULT < 1.6 and _sp.returncode == 0,
     "" if _sp.returncode == 0 else _sp.stderr.decode()[-90:])
+_sr = subprocess.run([sys.executable, 'tools/check_shop_reopen.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(174, "shop reopen edge detector",
+    "was_outside_tent" in src(state_camp) and "was_outside_tent" in src(gameloop)
+    and _sr.returncode == 0,
+    "" if _sr.returncode == 0 else _sr.stderr.decode()[-90:])
 from lagarto.combat import emitter as emi
 _fns = [p_['fn'] for p_ in pat.PATTERNS.values() if p_.get('fn')] + \
        [p_['select'] for p_ in pat.PATTERNS.values() if p_.get('select')]
