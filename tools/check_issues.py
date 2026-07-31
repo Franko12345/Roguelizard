@@ -141,6 +141,13 @@ chk(176, "sandbox panel click nao vaza dash", '_ate_buttons' in src(_sb_mod)
     and '_ate_buttons.clear()' in open('lagarto/app.py').read()
     and _sm.returncode == 0,
     "" if _sm.returncode == 0 else _sm.stderr.decode()[-90:])
+_sc = subprocess.run([sys.executable, 'tools/check_sandbox_scroll.py'],
+                     capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(175, "sandbox scroll de listas longas", 'self.scroll' in src(_sb_mod)
+    and 'pygame.MOUSEWHEEL' in src(_sb_mod)
+    and _sc.returncode == 0,
+    "" if _sc.returncode == 0 else _sc.stderr.decode()[-90:])
 chk(23, "difficulty", hasattr(rounds, 'wave_hp_bonus')
     and rounds.wave_hp_bonus(20) > int(20 * 0.7) * 1.5 and rounds.wave_cap(20, 6) > 6)
 chk(22, "club charm-only", 'club' not in mut.MUTATIONS_LIST_IDS if False else
