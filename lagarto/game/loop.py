@@ -345,7 +345,12 @@ class Game:
                          focus='shop', shop_sel=0, charm_col=0, charm_row=0,
                          mode='field', center=center, tent=tent, doors=doors,
                          reopen_cd=C.CAMP_REOPEN_CD,
-                         born=self.time, tent_delay=C.CAMP_TENT_DELAY, tent_landed=False)
+                         born=self.time, tent_delay=C.CAMP_TENT_DELAY, tent_landed=False,
+                         # edge flag (issue #174): init from the actual player
+                         # position so a player who spawns inside the radius
+                         # does NOT get the shop auto-opened on the first edge
+                         was_outside_tent=all(p.dead or p.pos.distance_to(tent) >= C.CAMP_TENT_R
+                                               for p in self.players))
         self._route_rects = []
         self._shop_rects = []
         self._charm_rects = []
@@ -368,6 +373,13 @@ class Game:
         if self.camp and self.camp.get('mode') == 'shop' and self.pick is None:
             self.camp['mode'] = 'field'
             self.camp['reopen_cd'] = C.CAMP_REOPEN_CD
+            # Issue #174: re-seed the edge flag from the actual position so
+            # a player who walks OUT of the radius and back IN can trigger a
+            # fresh open. Without this reset, the flag stays False (set by
+            # the open trigger) and the new edge is invisible.
+            self.camp['was_outside_tent'] = all(
+                p.dead or p.pos.distance_to(self.camp['tent']) >= C.CAMP_TENT_R
+                for p in self.players)
             audio.play('ui', 0.5)
 
     def camp_equip(self, cid):

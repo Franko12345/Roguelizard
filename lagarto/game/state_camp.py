@@ -50,16 +50,29 @@ def update(game, dt):
     game.combo_flash = decay(game.combo_flash, dt, 2)
     game.camp['reopen_cd'] = decay(game.camp.get('reopen_cd', 0.0), dt)
     _update_camp_drop(game)               # the pieces fall in with a slam
-    # touch the tent -> open the shop (only once it has landed)
-    if game.camp['reopen_cd'] <= 0 and game.camp['tent_landed']:
-        for p in game.players:
-            if not p.dead and p.pos.distance_to(game.camp['tent']) < C.CAMP_TENT_R:
-                game.camp['mode'] = 'shop'
-                game.camp['focus'] = 'shop'
-                game.ui_t = 0.0           # replay the drop-in
-                game._panels.clear()
-                audio.play('ui', 0.6)
-                return
+    # touch the tent -> open the shop (only once it has landed). Edge
+    # trigger (issue #174): must be outside->inside, not level. Without the
+    # edge flag, a player who closed the shop while still standing on the
+    # tent radius would have it auto-reopen when reopen_cd expires; with the
+    # edge, the tent only opens on the falling-edge transition.
+    if game.camp['tent_landed']:
+        now_inside = any(not p.dead and p.pos.distance_to(game.camp['tent']) < C.CAMP_TENT_R
+                         for p in game.players)
+        if (game.camp['was_outside_tent'] and now_inside
+                and game.camp['reopen_cd'] <= 0):
+            game.camp['mode'] = 'shop'
+            game.camp['focus'] = 'shop'
+            game.ui_t = 0.0           # replay the drop-in
+            game._panels.clear()
+            audio.play('ui', 0.6)
+            game.camp['was_outside_tent'] = False
+            return
+        # only refresh the edge flag while the shop could actually open.
+        # Updating during the drop or while reopen_cd is still draining
+        # would erase the outside state (from init or a real walk-out)
+        # before the trigger is allowed to fire.
+        if game.camp['reopen_cd'] <= 0:
+            game.camp['was_outside_tent'] = not now_inside
     # cross a door -> take that route (Hades: doors commit, no menu)
     for i, dr in enumerate(game.camp['doors']):
         if not dr['landed']:
