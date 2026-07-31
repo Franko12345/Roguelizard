@@ -155,16 +155,6 @@ They are emitted a body-width behind the shot — emitted at `pos` they are
 swallowed by the bullet's own halo, and the shot grows a hair instead of
 shedding a spark.
 
-## Tuning (issue #173)
-
-The original `BULLET_SCALE` (1.45) blew the centre out hard so the body
-read as a slug. Playtest found it "too intense": the halo ate the
-silhouette of every creature on screen. Scale 1.2 + glow 0.7 keeps the
-"blow out" partial (the tight hot pass at `* 0.8` of the glow is what
-buys the centre) without flooding the scene. The skewer problem from
-the bigger scale (a solid tail glued to a bigger body reads as a
-skewer) goes away at 1.2.
-
 The reference is Enter the Gungeon: the bullet is a clean glowing ball and the
 heading comes from loose bits falling behind it. A solid tail is a flat-capped
 rectangle glued to the body, and the bigger the bullet the more it reads as a
