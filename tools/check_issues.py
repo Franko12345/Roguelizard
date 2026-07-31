@@ -30,6 +30,11 @@ R = []
 def chk(num, name, ok, note=""):
     R.append((num, name, ok, note))
 
+_cf = subprocess.run([sys.executable, 'tools/check_camp_flash.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+chk(172, "flash termina no cleared",
+    _cf.returncode == 0,
+    "" if _cf.returncode == 0 else _cf.stderr.decode()[-90:])
 _mu = subprocess.run([sys.executable, 'tools/check_muralha.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitter',
