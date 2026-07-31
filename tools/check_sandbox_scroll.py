@@ -77,6 +77,12 @@ print(f"  1) species overflow: {rows_total} rows -> scroll reveals bottom; "
 
 
 # 2. wheel over the panel adjusts scroll; wheel outside does not.
+# Stub display.to_logical to a 1:1 mapping -- the real driver depends on
+# surface size, which makes "outside" coords non-deterministic on the
+# dummy headless backend. With the stub, raw pos == logical pos and we
+# can put the mouse at known coords.
+import lagarto.render.display as _display_mod
+_display_mod.to_logical = lambda pos: pos
 g, sb = fresh_sb()
 inside = (sb.rect.centerx, sb.rect.centery)
 outside = (sb.rect.right + 50, sb.rect.bottom + 50)
@@ -84,9 +90,8 @@ outside = (sb.rect.right + 50, sb.rect.bottom + 50)
 sb.scroll = 2
 
 # wheel-up over panel -> scroll decreases (by 1; pygame MOUSEWHEEL y=+1)
-# Note: MOUSEWHEEL events do not carry pos; the handler reads
-# pygame.mouse.get_pos() at the moment of the event. We move the
-# mouse to the panel's centre first.
+# MOUSEWHEEL events do not carry pos; the handler reads
+# pygame.mouse.get_pos() at the moment of the event.
 pygame.mouse.set_pos(inside)
 ev_up_in = pygame.event.Event(pygame.MOUSEWHEEL, y=1)
 assert sb.handle_event(ev_up_in), "panel did not consume its wheel-up"
@@ -99,10 +104,7 @@ assert sb.handle_event(ev_down_in), "panel did not consume its wheel-down"
 assert sb.scroll == 2, f"scroll={sb.scroll}, expected 2 after wheel-down"
 
 # wheel-up outside panel -> ignored, scroll unchanged
-# (the dummy driver reports a 2240x1440 surface and to_logical divides
-# by scale, so raw coordinates far outside the panel work as a true
-# "outside" hit-test)
-pygame.mouse.set_pos((3000, 3000))
+pygame.mouse.set_pos(outside)
 before = sb.scroll
 ev_up_out = pygame.event.Event(pygame.MOUSEWHEEL, y=1)
 assert not sb.handle_event(ev_up_out), "panel wrongly consumed outside wheel"
