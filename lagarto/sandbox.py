@@ -171,6 +171,13 @@ class Sandbox:
         self.infinite_money = False
         self.msg = None                  # transient confirmation line
         self.msg_t = 0                   # frames left to show it (drawn frame-clock)
+        # Scroll offset per list (issue #175). Each category keeps its own
+        # viewport, so jumping Boss -> Spec does not lose the species scroll
+        # position. ``champion2`` covers the second step of the champion flow
+        # (species pick after the champ is chosen) -- otherwise the first
+        # click would clobber the second step's offset.
+        self.scroll = {key: 0 for key, _ in CATEGORIES}
+        self.scroll['champion2'] = 0
 
     # ---- registry ------------------------------------------------------- #
     def track(self, entity, kind, key):
@@ -455,6 +462,9 @@ class Sandbox:
         # equip with mutations showing
         if key == 'store' and self.pool == 'mutation':
             self.pool = 'weapon'
+        # Reset the new category's scroll so a long list (e.g. 25 species) does
+        # not open partway down when you switch to it from a short one.
+        self.scroll[key] = 0
 
     def _select_item(self, value):
         if self.cat == 'boss':
@@ -751,6 +761,10 @@ class Sandbox:
         for rect, pk, _ in pool_rects:       # loadout pool sub-row (equip/store)
             if rect.collidepoint(mp):
                 self.pool = pk
+                # the pool drives the item list (weapon/item/charm/mutation
+                # have very different sizes), so reset the scroll rather than
+                # carrying an offset from the previous pool
+                self.scroll[self.cat] = 0
                 return
         if self.cat == 'round':
             rl = self._round_layout()
