@@ -25,6 +25,11 @@ Backtick (`` ` ``) or `F1` toggles it open/closed. With the panel closed
 the game runs normally and armed spawn clicks still land; a dim `` ` sandbox``
 hint sits in the corner. The world keeps simulating either way.
 
+Panel clicks are consumed in both input paths: the event queue handles the
+widget action, and the corresponding raw mouse-button state is masked before
+player controllers are polled. Selecting a row or button therefore cannot also
+trigger a player dash in the same frame.
+
 The category row across the top switches what the panel lists:
 **Boss** / **Champ** / **Spec** / **Pick** / **Rnd** / **Equip** /
 **Loja** / **Dbg** / **Pers**. Dropdowns enumerate the real registry ids,
