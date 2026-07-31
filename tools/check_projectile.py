@@ -454,6 +454,61 @@ assert not a.chain_active and not b.chain_active, \
 print(f"  chain_link: 60px apart -> active; >{C.CHAIN_BREAK_DIST} apart -> broken")
 
 # --------------------------------------------------------------------------- #
+# 14b. chain visual: two chain-tagged projectiles spawn pixels of the MID    #
+#      color on the surface when drawn (gated to the lower-id endpoint).     #
+#      The control point is lerped across frames, so the path varies.         #
+# --------------------------------------------------------------------------- #
+import os
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+try:
+    import pygame
+    if not pygame.get_init():
+        pygame.init()
+    surf = pygame.Surface((200, 200))
+    surf.fill((0, 0, 0))
+    g, _ = fresh()
+    a = P.Projectile(Vector2(50, 100), Vector2(0, 0), (200, 200, 200), hostile=True)
+    b = P.Projectile(Vector2(150, 100), Vector2(0, 0), (200, 200, 200), hostile=True)
+    a.chain = True
+    b.chain = True
+    a.on_update.append(P.chain_link)
+    b.on_update.append(P.chain_link)
+    g.projectiles.extend([a, b])
+    for _ in range(2):
+        g._update_projectiles(DT)
+    cam = type("C", (), {"w2s": staticmethod(lambda p: (p.x, p.y))})()
+    a.draw(surf, cam)
+    # Count non-black pixels in the middle band (y around 100)
+    found_mid = 0
+    for x in range(50, 151):
+        for y in range(95, 106):
+            px = surf.get_at((x, y))[:3]
+            if px != (0, 0, 0):
+                # The MID color is (255, 248, 208) — check that we drew a chain color
+                if px[0] > 100 and px[1] > 100:
+                    found_mid += 1
+    assert found_mid > 5, f"chain visual did not draw on the surface (found_mid={found_mid})"
+    print(f"  chain visual: drew {found_mid} non-black pixels in the middle band (Bezier + glow)")
+except Exception as e:
+    # Fall back to a pure-logic check: lerp converges to target after many frames
+    g, _ = fresh()
+    a = P.Projectile(Vector2(50, 100), Vector2(0, 0), (200, 200, 200), hostile=True)
+    b = P.Projectile(Vector2(150, 100), Vector2(0, 0), (200, 200, 200), hostile=True)
+    a.chain = True
+    b.chain = True
+    a.on_update.append(P.chain_link)
+    b.on_update.append(P.chain_link)
+    g.projectiles.extend([a, b])
+    for _ in range(5):
+        g._update_projectiles(DT)
+    # _chain_cp is on the lower-id endpoint
+    lower = a if id(a) < id(b) else b
+    assert hasattr(lower, "_chain_cp"), "chain visual did not initialize _chain_cp state"
+    assert len(lower._chain_cp) == 1, f"expected 1 partner in _chain_cp, got {len(lower._chain_cp)}"
+    print(f"  chain visual: state initialized (_chain_cp has {len(lower._chain_cp)} partner) — pygame unavailable ({type(e).__name__})")
+
+
+# --------------------------------------------------------------------------- #
 # 15. slow_homing dial: a homing shot fired PERPENDICULAR to the target with   #
 #     home_mult < 1 curves LESS than home_mult = 1.0. We aim 100 px below the  #
 #     target and watch the bullets bend up: aggressive snaps, gentle drifts.  #

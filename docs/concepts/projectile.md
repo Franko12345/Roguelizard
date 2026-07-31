@@ -59,8 +59,15 @@ later would otherwise silently skip the payload.
   within `CHAIN_LINK_DIST` (px) and breaks on `CHAIN_BREAK_DIST` or death.
   `chain_damage` (on_hit) applies `CHAIN_DMG_BONUS` while a link is active.
   ANKH's `chain_arc` (issue #167). The hook owns link state only — the
-  Bezier line is rendered from `Projectile.draw`, once per pair (gated to the
-  lower-id endpoint so each pair draws exactly once).
+  visual is rendered from `Projectile.draw`, once per pair (gated to the
+  lower-id endpoint so each pair draws exactly once). Visual (issue #169):
+  Bezier **quadrática** com 1 control point, lerp 0.3 entre frames para
+  evitar tremedeira (`CHAIN_FLICKER_LERP`), glow central de raio
+  `CHAIN_GLOW_RADIUS` e alpha `CHAIN_GLOW_ALPHA`, cor interpolada
+  ciano→amarelo→ciano (`_CHAIN_COLOR_TIP`/`_CHAIN_COLOR_MID`),
+  linewidth `CHAIN_LINEWIDTH`, alpha global com flicker senoidal entre
+  `CHAIN_ALPHA_MIN` e `CHAIN_ALPHA_MAX`. Spark burst a cada
+  `CHAIN_SPARK_GAP` s no centro.
 - `projectile.wave` — `on_update`; a perpendicular sine offset applied each
   frame so the trajectory traces an "S" or zigzag rather than a line.
   Primordial's `wave_fan`.

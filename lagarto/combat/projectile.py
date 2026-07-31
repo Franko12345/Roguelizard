@@ -123,10 +123,8 @@ class Projectile:
         else:                            # bullet: cached three-ring body
             surf.blit(_body_sprite(r, self.hostile), (sp[0] - r, sp[1] - r))
         # Chain link rendering: draw only from the lower-id endpoint so each
-        # pair renders exactly once. The draw primitive is reached through
-        # ``_CHAIN_DRAW`` (defined below) which the module imports via
-        # ``getattr`` -- a chain line is not a streak but uses the same SDL
-        # call, so the bare import name does not appear in this source.
+        # pair renders exactly once. Bezier quadratica + flicker + glow + cor
+        # interpolada, ver _bez2 abaixo. Detalhes em docs/concepts/projectile.md.
         partners = getattr(self, 'chain_partners', None)
         if partners:
             for q in partners:
@@ -137,24 +135,77 @@ class Projectile:
                 ax, ay = sp
                 bx, by = qsp
                 mx, my = mxp
-                # Two control points near the midpoint, jittered by the phase
-                # kept by `chain_link` so the link reads as alive.
+                # Bezier quadratica com 1 control point. Flicker: re-rola
+                # um CP alvo a cada frame e interpola com o anterior (lerp 0.3)
+                # para evitar tremedeira. O glow central le como faisca.
                 phase = getattr(self, '_chain_phase', 0.0) + id(q) * 0.07
-                j1 = (mx + math.cos(phase) * 14, my + math.sin(phase * 1.3) * 10)
-                j2 = (mx - math.cos(phase * 0.7) * 12, my - math.sin(phase) * 8)
-                pts = [_bez(ax, ay, j1[0], j1[1], j2[0], j2[1], bx, by, t)
+                target_cx = mx + math.cos(phase) * C.CHAIN_FLICKER_JITTER
+                target_cy = my + math.sin(phase * 1.3) * C.CHAIN_FLICKER_JITTER * 0.7
+                key = id(q)
+                if not hasattr(self, '_chain_cp'):
+                    self._chain_cp = {}
+                prev = self._chain_cp.get(key, (target_cx, target_cy))
+                cx = prev[0] + (target_cx - prev[0]) * C.CHAIN_FLICKER_LERP
+                cy = prev[1] + (target_cy - prev[1]) * C.CHAIN_FLICKER_LERP
+                self._chain_cp[key] = (cx, cy)
+                # Alpha global com flicker entre MIN e MAX
+                alpha_t = 0.5 + 0.5 * math.sin(phase * 0.9)
+                alpha = C.CHAIN_ALPHA_MIN + (C.CHAIN_ALPHA_MAX - C.CHAIN_ALPHA_MIN) * alpha_t
+                # Render: AA line na cor MID + thick line na cor TIP
+                pts = [_bez2(ax, ay, cx, cy, bx, by, t)
                        for t in (i / C.CHAIN_BEZIER_SAMPLES for i in range(C.CHAIN_BEZIER_SAMPLES + 1))]
+                # Glow no centro: circulo de raio pequeno, alpha 0.6
+                try:
+                    glow_surf = pygame.Surface((C.CHAIN_GLOW_RADIUS * 2, C.CHAIN_GLOW_RADIUS * 2),
+                                                pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surf, (*_CHAIN_COLOR_MID, int(255 * C.CHAIN_GLOW_ALPHA)),
+                                       (C.CHAIN_GLOW_RADIUS, C.CHAIN_GLOW_RADIUS),
+                                       C.CHAIN_GLOW_RADIUS)
+                    surf.blit(glow_surf, (int(mx) - C.CHAIN_GLOW_RADIUS,
+                                          int(my) - C.CHAIN_GLOW_RADIUS))
+                except Exception:
+                    pass
+                # Segmentos: cor interpolada tip→mid→tip, alpha global
                 for i in range(len(pts) - 1):
-                    _CHAIN_DRAW(surf, _CHAIN_COLOR,
-                                (int(pts[i][0]), int(pts[i][1])),
-                                (int(pts[i + 1][0]), int(pts[i + 1][1])), 1)
+                    t = i / max(1, len(pts) - 1)
+                    if t < 0.5:
+                        seg = _lerp_rgb(_CHAIN_COLOR_TIP, _CHAIN_COLOR_MID, t * 2)
+                    else:
+                        seg = _lerp_rgb(_CHAIN_COLOR_MID, _CHAIN_COLOR_TIP, (t - 0.5) * 2)
+                    seg = _scale_alpha(seg, alpha)
+                    try:
+                        pygame.draw.aaline(surf, seg,
+                                           (int(pts[i][0]), int(pts[i][1])),
+                                           (int(pts[i + 1][0]), int(pts[i + 1][1])))
+                    except Exception:
+                        pass
+                    if C.CHAIN_LINEWIDTH > 1:
+                        try:
+                            pygame.draw.line(surf, seg,
+                                             (int(pts[i][0]), int(pts[i][1])),
+                                             (int(pts[i + 1][0]), int(pts[i + 1][1])),
+                                             C.CHAIN_LINEWIDTH)
+                        except Exception:
+                            pass
 
 
-def _bez(ax, ay, j1x, j1y, j2x, j2y, bx, by, t):
-    """Cubic Bezier sample at t in [0, 1]."""
+def _bez2(ax, ay, cpx, cpy, bx, by, t):
+    """Quadratic Bezier sample at t in [0, 1]."""
     u = 1.0 - t
-    return (u ** 3 * ax + 3 * u * u * t * j1x + 3 * u * t * t * j2x + t ** 3 * bx,
-            u ** 3 * ay + 3 * u * u * t * j1y + 3 * u * t * t * j2y + t ** 3 * by)
+    return (u * u * ax + 2 * u * t * cpx + t * t * bx,
+            u * u * ay + 2 * u * t * cpy + t * t * by)
+
+
+def _lerp_rgb(a, b, t):
+    return (int(a[0] + (b[0] - a[0]) * t),
+            int(a[1] + (b[1] - a[1]) * t),
+            int(a[2] + (b[2] - a[2]) * t))
+
+
+def _scale_alpha(rgb, alpha):
+    """Apply alpha 0..1 to a 3-tuple color (returns 4-tuple)."""
+    return (rgb[0], rgb[1], rgb[2], int(255 * max(0.0, min(1.0, alpha))))
+
 
 
 # --------------------------------------------------------------------------- #
@@ -296,14 +347,17 @@ def leave_puddle(**kw):
 #  player-side shot may stack them while an enemy shot still picks one.       #
 # --------------------------------------------------------------------------- #
 
-_CHAIN_COLOR = (130, 230, 255)
+_CHAIN_COLOR_TIP = (128, 221, 255)   # ciano nas pontas
+_CHAIN_COLOR_MID = (255, 248, 208)   # amarelo-branco no centro
+# Demais tuning knobs em lagarto/core/config.py (CHAIN_LINEWIDTH,
+# CHAIN_GLOW_RADIUS, CHAIN_GLOW_ALPHA, CHAIN_FLICKER_LERP,
+# CHAIN_FLICKER_JITTER, CHAIN_ALPHA_MIN, CHAIN_ALPHA_MAX) — unica fonte
+# de verdade, editáveis sem tocar o módulo de render.
 
-# Bound at import so the draw path runs a single ``getattr`` per call. A
-# chain link uses the line primitive in the same module that streak-draws
-# share, and the existing check_projectile guards the bare name string
-# against this source -- going through ``getattr`` keeps the call while
-# evading the substring check.
-_CHAIN_DRAW = getattr(pygame.draw, 'line')
+# (legacy) gettattr-binding removido: chain visual agora usa Bezier + AA
+# direto via pygame.draw.aaline/line. Mantido o nome antigo _CHAIN_COLOR só
+# como referência histórica nas buscas — substituído por _CHAIN_COLOR_TIP
+# e _CHAIN_COLOR_MID acima.
 
 
 def chain_link(pr, dt, game):
@@ -366,7 +420,7 @@ def chain_link(pr, dt, game):
         for q in partners:
             if not q.dead and pr.pos.distance_to(q.pos) <= C.CHAIN_BREAK_DIST:
                 mid = (pr.pos + q.pos) * 0.5
-                game.fx.spark_burst(mid, _CHAIN_COLOR, 2, 120)
+                game.fx.spark_burst(mid, _CHAIN_COLOR_MID, 2, 120)
 
 
 def chain_damage(pr, victim, game):
