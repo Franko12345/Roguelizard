@@ -552,6 +552,10 @@ class RoundManager:
 
             if self.cleared():
                 self.state = 'cleared'
+                # Screen flash belongs to the combat hit that produced it.  Camp
+                # does not advance play-state decay, so carrying it past this
+                # boundary would leave the boss-death white wash on every frame.
+                g.flash = 0.0
                 self.timer = 3.0
                 if g.alive_players():
                     g.fx.popup(g.alive_players()[0].pos + Vector2(0, -140),
