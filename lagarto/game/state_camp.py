@@ -340,12 +340,23 @@ def _draw_camp(game, surf):
     # It rides in on the shop row's own offset, so it lands with the cards instead
     # of popping in over a screen that is still assembling.
     if game.show_stat_grid and salpha > 0.01:
+        # Hover state for #141: feed sub-rects into the tooltip manager
+        # so a dwell over a row opens a tooltip. Reset every frame.
+        from ..render import ui_tooltip as tooltip
+        tooltip.manager.begin_frame(pygame.mouse.get_pos())
         for i, p in enumerate(game.players):
-            hud.stat_grid(layer, game.smallfont,
+            block_rect, sub = hud.stat_grid(layer, game.smallfont,
                           (_GRID_MARGIN if i == 0 else C.WIDTH - _GRID_MARGIN,
                            int(y + soff)),
                           hud.stat_rows(p), hud.stat_badges(p), game._panel,
                           right=(i == 1))
+            # Each row: tooltip = "DANO 1.72x\nVigor x3 · charm Presa"
+            for label, val, _ in hud.stat_rows(p):
+                rect = sub["row"].get(label)
+                if rect is not None:
+                    src = tooltip.source_text(label, p, game)
+                    tooltip.manager.hover(rect, f"{label} {val}\n{src}")
+        tooltip.manager.draw(layer, game.smallfont)
 
     # ---- charms loadout ---- #
     p0 = game.players[0]
