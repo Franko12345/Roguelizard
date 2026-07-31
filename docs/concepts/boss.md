@@ -91,6 +91,11 @@ tier rolls one at random from its pool, **without replacement** (see
 |---|---|---|
 | 1–3 | 5 / 10 / 15 | Rei Lagarto · Centopeiadeira · Kraken-Mor |
 | 4–5 | 20 / 25 | Mãe-Escaravelho · Aranha-Rei · Serpente de Cristal · Terror Alado · Olho-Sísmico |
+
+**Serpente de Cristal** (issue #166) uses `boss_part` assets for its head and
+segments: `assets/boss/serpente_cristal/head.png` and `segment.png` (both
+512×512 RGBA, paleta restrita de 5 cores). Procedural fallback ships by
+default per #166 — these PNGs are the visual upgrade, not the requirement.
 | 6 | 30 | A Muralha |
 | 7+ | 35+ | A Muralha · ANKH |
 
