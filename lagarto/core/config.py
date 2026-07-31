@@ -36,6 +36,19 @@ MAX_STEPS = 5            # cap sim steps per frame -> avoids the "spiral of deat
 # --- ability energy costs (shared by the logic and the HUD dials) ---------- #
 RUN_FINAL_WAVE = 20      # modo normal: onda do chefe final (vitoria)
 
+# --- ambient lighting (issue #110): the run turns into night, local light ----- #
+# Knob: 0 disables the whole layer (every existing headless check stays valid
+# without being touched); any positive value means the layer is active and the
+# day -> night scalar goes 0 at wave 1, 1 at wave RUN_FINAL_WAVE. Endless caps
+# at the wave-20 ceiling so the screen never goes pitch black.
+NIGHT_MAX = 0.0
+NIGHT_AMBIENT = (8, 8, 18)            # screen-space base the layer fills with
+PLAYER_AURA_R = 130                   # warm pool radius tied to the lizard
+PLAYER_AURA_COL = (255, 178, 92)      # warm amber (tints to player hue)
+PROP_LIGHT_R = 36                     # dim static light on mushroom / flower / firefly
+PROP_LIGHT_COL = (255, 226, 158)      # matches the existing ambient motes palette
+FX_EMISSION_LIFE = 0.18               # how long an FX burst keeps shedding light (s)
+
 FRIEND_HP = 6            # aliados agora tomam dano de verdade -> precisam aguentar
 # Vida dos inimigos. Historico: 3.0 -> 2.2 (medicao) -> 3.5 (playtest do usuario,
 # que manda). O bot headless media o TTK das ARMAS e concluiu 2.2; jogando de

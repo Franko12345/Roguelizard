@@ -47,6 +47,12 @@ chk(113, "grid na arena", 'arena_bounds' in src(__import__('lagarto.combat.emitt
                                                           fromlist=['x']).grid_of_fire)
     and _mu.returncode == 0,
     "" if _mu.returncode == 0 else _mu.stderr.decode()[-90:])
+_lt = subprocess.run([sys.executable, 'tools/check_lighting.py'], capture_output=True,
+                     env={**os.environ, 'PYTHONPATH': '.'})
+from lagarto.render import lighting as _ltmod
+chk(110, "ambient lighting", 'NIGHT_MAX' in src(C) and 'LightingLayer' in src(_ltmod)
+    and _lt.returncode == 0,
+    "" if _lt.returncode == 0 else _lt.stderr.decode()[-90:])
 _tu = subprocess.run([sys.executable, 'tools/check_turret.py'], capture_output=True,
                      env={**os.environ, 'PYTHONPATH': '.'})
 from lagarto.combat import weapons as weplib
@@ -167,6 +173,17 @@ chk(5, "Anticipation", 'dash_antic' in p_src and ai_antic,
     "player gated; AI half rejected (was instantiate-and-never-read)")
 chk(4, "oscillators", len(parts.OSC_PRESETS) >= 6 and
     subprocess.run([sys.executable, 'tools/check_oscillators.py'], capture_output=True).returncode == 0)
+
+# --- #141: tooltip por dwell nas linhas e icones da grid ---
+from lagarto.render import ui_tooltip
+_tooltip_ok = (hasattr(ui_tooltip, 'Tooltip')
+               and hasattr(ui_tooltip, 'TooltipManager')
+               and hasattr(ui_tooltip, 'source_text')
+               and hasattr(ui_tooltip, 'manager')
+               and ui_tooltip.Tooltip.DWELL_DEFAULT == 0.25
+               and subprocess.run([sys.executable, 'tools/check_tooltip_dwell.py'],
+                                  capture_output=True).returncode == 0)
+chk(141, "tooltip dwell na grid", _tooltip_ok, "" if _tooltip_ok else "ui_tooltip.Tooltip missing or check_tooltip_dwell failed")
 
 print(f"{'#':>4}  {'':2} {'issue':22} note")
 for num, name, ok, note in sorted(R, key=lambda r: -r[0]):

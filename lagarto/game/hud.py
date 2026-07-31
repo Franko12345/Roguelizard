@@ -193,14 +193,34 @@ def stat_grid(surf, font, pos, rows, badges, panel, right=False):
 
     ``right=True`` anchors ``pos`` at the block's top-RIGHT corner, which is what
     keeps P2's column glued to P2's right-aligned health bar. Returns the rect the
-    block occupies.
+    block occupies, plus a dict ``{"row": {label: rect}, "badge": {k: rect}}``
+    so callers (the tooltip system in #141) can hit-test sub-rects.
     """
     rows, badges = tuple(rows), tuple(badges)
     src = panel(('statgrid', rows, badges),
                 lambda: _stat_grid_surface(font, rows, badges))
     x = pos[0] - src.get_width() if right else pos[0]
     surf.blit(src, (x, pos[1]))
-    return src.get_rect(topleft=(x, pos[1]))
+    block_rect = src.get_rect(topleft=(x, pos[1]))
+
+    # Sub-rects for the tooltip system (#141). Each row's full clickable
+    # area is the entire block width -- the label and value are on the
+    # same logical line, so a tooltip on either should fire.
+    row_h = font.get_height() + 1
+    out = {"row": {}, "badge": {}}
+    for i, (label, _value, _color) in enumerate(rows):
+        ry = pos[1] + _GRID_PAD + i * row_h
+        out["row"][label] = pygame.Rect(x, ry, src.get_width(), row_h)
+    brows = -(-len(badges) // _GRID_COLS)          # ceil: 0 badges -> no row
+    badges_top = pos[1] + _GRID_PAD + len(rows) * row_h
+    for k, (_icon_id, _color) in enumerate(badges):
+        cx_b = x + _GRID_PAD + _GRID_BADGE // 2 + (k % _GRID_COLS) * _GRID_BADGE
+        cy_b = badges_top + _GRID_BADGE // 2 + (k // _GRID_COLS) * _GRID_BADGE
+        out["badge"][k] = pygame.Rect(cx_b - _GRID_BADGE // 2,
+                                      cy_b - _GRID_BADGE // 2,
+                                      _GRID_BADGE, _GRID_BADGE)
+
+    return block_rect, out
 
 
 _VIGNETTE = None

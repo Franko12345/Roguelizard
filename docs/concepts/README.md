@@ -69,6 +69,8 @@ wrong.
 - [Input buffer](./input-buffer.md) — grace window for actions
 - [Pause](./pause.md) — the `pause` state
 - [Performance](./performance.md) — timestep, caches, perf rules
+- [Lighting](./lighting.md) — ambient darkness with additive light pools
+  (issue #110)
 - [Networking](./networking.md) — coop-only today; wire-ready seams
 
 ### Meta

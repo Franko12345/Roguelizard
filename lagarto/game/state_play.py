@@ -195,10 +195,18 @@ def _draw_hud(game, surf):
         # sits at dy+62 with an 18px radius), and P2's column is right-anchored
         # because its panel is.
         if game.show_stat_grid:
-            hud.stat_grid(surf, game.smallfont,
+            from ..render import ui_tooltip as tooltip
+            tooltip.manager.begin_frame(pygame.mouse.get_pos())
+            block_rect, sub = hud.stat_grid(surf, game.smallfont,
                           (x if i == 0 else x + bw, _GRID_Y),
                           hud.stat_rows(p), hud.stat_badges(p), game._panel,
                           right=(i == 1))
+            for label, val, _ in hud.stat_rows(p):
+                rect = sub["row"].get(label)
+                if rect is not None:
+                    src = tooltip.source_text(label, p, game)
+                    tooltip.manager.hover(rect, f"{label} {val}\n{src}")
+            tooltip.manager.draw(surf, game.smallfont)
 
         # equipped weapons live in the bottom corners so they never collide
         # with the health/energy bars or the cooldown dials
