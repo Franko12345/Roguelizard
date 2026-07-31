@@ -48,8 +48,13 @@ it now compounds across a whole run instead of one visit.
 ## Shop is choice, not toll
 
 Walking straight to a door and skipping the tent is legal. The tent has
-to earn the visit. `reopen_cd` prevents reopening the shop on the same
-step it was closed. Closing during drop-in is _not_ blocked — the pick
+to earn the visit. `reopen_cd` is just a debounce after `camp_close_shop`
+— it stops the same frame that closes the shop from also counting as an
+"encoste". The real open gate is the edge detector (`was_outside_tent`):
+the shop fires only on the OUT→IN transition of the radius (#174). You
+can stand on the tent, close, wait past the cooldown, walk around inside,
+and none of that reopens the shop on its own — you must leave the radius
+and re-enter. Closing during drop-in is _not_ blocked — the pick
 absorption (`self.pick`) is the only lock, and only for its ~0.36 s
 window.
 
