@@ -808,9 +808,10 @@ class Sandbox:
             if not self.rect.collidepoint(mp):
                 return False
             sk = self._scroll_key()
-            # ev.y is +1 for one notch up (toward the top of the list) and -1
-            # for one notch down, in pygame-ce. Use a small step so a single
-            # notch moves a couple of rows; the visible window is ~15-20 rows.
+            # ev.y is +1 for one notch up and -1 for one notch down (pygame-ce).
+            # We add it raw: the visible window is ~15-20 rows, so a single notch
+            # already moves a useful amount. The clamp in _layout keeps the
+            # resulting offset in range.
             self.scroll[sk] = self.scroll.get(sk, 0) + ev.y
             return True
         return False
