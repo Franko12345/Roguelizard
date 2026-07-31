@@ -306,6 +306,17 @@ def main():
 
             keys = pygame.key.get_pressed()
             mouse_btn = pygame.mouse.get_pressed()
+            # Issue #176: the sandbox panel eats MOUSEBUTTONDOWN events but
+            # pygame.mouse.get_pressed() reads the raw button state and would
+            # still hand a dash to ctrl.poll. Mask buttons the panel ate so
+            # only clicks in the world reach the player controllers.
+            if sb is not None and sb._ate_buttons:
+                mouse_btn = list(mouse_btn)
+                for b in sb._ate_buttons:
+                    if 1 <= b <= len(mouse_btn):
+                        mouse_btn[b - 1] = 0
+                mouse_btn = tuple(mouse_btn)
+                sb._ate_buttons.clear()
             for p in game.players:
                 p.ctrl.poll(keys, mouse_btn, game.cam, p.pos, frame_dt)
 

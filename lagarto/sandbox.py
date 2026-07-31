@@ -156,6 +156,10 @@ class Sandbox:
         self.cat = 'boss'
         self.champ_sel = None            # champ_id awaiting a species to pair with
         self.armed = None                # (kind, key) once a target is chosen
+        # Buttons the panel ate this frame (issue #176). app.main reads this
+        # to mask the raw mouse_btn it hands to ctrl.poll -- otherwise a
+        # panel click leaks through pygame.mouse.get_pressed() as a dash.
+        self._ate_buttons = set()
         # Round control (SB4): the theme + wave a manual start_round will fire.
         self.round_theme = THEME_KEYS[0]
         self.round_wave = 1
@@ -703,7 +707,14 @@ class Sandbox:
 
     # ---- input ---------------------------------------------------------- #
     def handle_event(self, ev):
-        """Return True if the event was consumed by the overlay (so app.main skips it)."""
+        """Return True if the event was consumed by the overlay (so app.main skips it).
+
+        Side-effect: if the event was a MOUSEBUTTONDOWN consumed by the
+        panel, ``ev.button`` is added to ``self._ate_buttons`` for this
+        frame; ``app.main`` masks those buttons out of the raw
+        ``mouse_btn`` it hands to ``ctrl.poll`` so a panel click can't
+        leak as a dash (issue #176).
+        """
         if ev.type == pygame.KEYDOWN:
             if ev.key in TOGGLE_KEYS:
                 self.open = not self.open
@@ -725,6 +736,7 @@ class Sandbox:
             mp = display.to_logical(ev.pos)
             # Panel clicks (only while open) never fall through to the world.
             if self.open and self.rect.collidepoint(mp):
+                self._ate_buttons.add(ev.button)        # mask raw mouse state
                 if ev.button == 1:
                     self._click_panel(mp)
                 return True
