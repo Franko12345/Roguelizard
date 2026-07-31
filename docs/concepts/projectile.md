@@ -158,7 +158,9 @@ shedding a spark.
 The reference is Enter the Gungeon: the bullet is a clean glowing ball and the
 heading comes from loose bits falling behind it. A solid tail is a flat-capped
 rectangle glued to the body, and the bigger the bullet the more it reads as a
-skewer — which is exactly what happened when `BULLET_SCALE` went to 1.45.
+skewer — which is what happened when `BULLET_SCALE` went to 1.45 in
+playtest #173, and the fix lowered it to 1.2 (the halo toned down to
+`BULLET_GLOW = 0.7` for the same reason).
 
 `FX.spark_burst` is shared with the whole game, so the directional cone is an
 optional argument, not a second function: without `direction` the burst is
