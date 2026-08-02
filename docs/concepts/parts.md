@@ -36,6 +36,15 @@ the tail during overshoot or wave. This regressed once (plates, fins,
 spikes) and shipped as a bug; see
 [ADR-0007](../adr/0007-cosmetic-skeleton-for-tail.md).
 
+## Optional asset overrides for bosses
+
+Bosses built from `boss_part` parts (issue #159) can override the
+procedural draw with PNGs in `assets/boss/<name>/`. The fallback is
+the procedural renderer, so missing assets are non-fatal. Example
+concrete: **Serpente de Cristal** uses `head.png` + `segment.png`
+(512×512 RGBA, paleta restrita) — see [boss.md](./boss.md#arena) and
+issue #191.
+
 ## Evolution
 
 Two ways parts enter the player [Genome](./genome.md):

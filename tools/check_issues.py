@@ -174,6 +174,64 @@ chk(5, "Anticipation", 'dash_antic' in p_src and ai_antic,
 chk(4, "oscillators", len(parts.OSC_PRESETS) >= 6 and
     subprocess.run([sys.executable, 'tools/check_oscillators.py'], capture_output=True).returncode == 0)
 
+# --- #191: Serpente de Cristal PNG assets ---
+import struct as _st, zlib as _zl
+def _png_meta(p):
+    with open(p, 'rb') as f:
+        d = f.read()
+    assert d[:8] == b'\x89PNG\r\n\x1a\n', f"not a PNG: {p}"
+    pos = 8
+    idat = b''
+    ihdr = None
+    while pos < len(d):
+        n = _st.unpack(">I", d[pos:pos+4])[0]
+        ct = d[pos+4:pos+8]
+        body = d[pos+8:pos+8+n]
+        pos += 12 + n
+        if ct == b'IHDR':
+            ihdr = _st.unpack(">IIBBBBB", body)
+        elif ct == b'IDAT':
+            idat += body
+        elif ct == b'IEND':
+            break
+    assert ihdr is not None, f"no IHDR in {p}"
+    return ihdr, idat
+def _png_palette_ok(p, allowed):
+    ihdr, idat = _png_meta(p)
+    w, h, depth, ctype, *_ = ihdr
+    if (w, h, depth, ctype) != (512, 512, 8, 6):
+        return False
+    raw = _zl.decompress(idat)
+    bpp, stride = 4, w * 4
+    out = bytearray()
+    prev = bytes(stride)
+    for y in range(h):
+        f = raw[y*(stride+1)]
+        sl = raw[y*(stride+1)+1: y*(stride+1)+1+stride]
+        if f == 0:
+            row = bytes(sl)
+        elif f == 1:
+            row = bytearray(sl)
+            for i in range(bpp, stride):
+                row[i] = (row[i] + row[i-bpp]) & 0xff
+            row = bytes(row)
+        elif f == 2:
+            row = bytes((a + b) & 0xff for a, b in zip(sl, prev))
+        else:
+            row = bytes(sl)
+        out += row
+        prev = row
+    colors = {(out[i], out[i+1], out[i+2]) for i in range(0, len(out), 4)}
+    return colors <= allowed
+_SERP_PALETTE = {(10,22,40), (27,73,101), (95,168,211), (190,233,232), (255,255,255), (0,0,0)}
+_h = 'assets/boss/serpente_cristal/head.png'
+_s = 'assets/boss/serpente_cristal/segment.png'
+_serp_ok = (os.path.exists(_h) and os.path.exists(_s)
+             and _png_palette_ok(_h, _SERP_PALETTE)
+             and _png_palette_ok(_s, _SERP_PALETTE))
+chk(191, "Serpente de Cristal PNGs", _serp_ok,
+    "" if _serp_ok else f"missing or palette leak: head={os.path.exists(_h)}, segment={os.path.exists(_s)}")
+
 print(f"{'#':>4}  {'':2} {'issue':22} note")
 for num, name, ok, note in sorted(R, key=lambda r: -r[0]):
     print(f"{num:>4}  {'OK' if ok else '--'} {name:22} {note}")
