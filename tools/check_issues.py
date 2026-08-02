@@ -174,6 +174,18 @@ chk(5, "Anticipation", 'dash_antic' in p_src and ai_antic,
 chk(4, "oscillators", len(parts.OSC_PRESETS) >= 6 and
     subprocess.run([sys.executable, 'tools/check_oscillators.py'], capture_output=True).returncode == 0)
 
+# --- #140: Card focado na loja mostra o delta que a compra causa ---
+from lagarto.game import state_camp as _camp
+_ofertas = _camp._roll_shop  # avoid touching rng; just check the function exists
+_d_ok = (hasattr(_camp, 'preview_delta')
+         and hasattr(_camp, 'EFFECT_FIELDS')
+         and 'health' in _camp.EFFECT_FIELDS
+         and 'max_health' in _camp.EFFECT_FIELDS
+         and 'might' in _camp.EFFECT_FIELDS
+         and subprocess.run([sys.executable, 'tools/check_shop_delta.py'],
+                            capture_output=True).returncode == 0)
+chk(140, "shop delta preview", _d_ok, "" if _d_ok else "preview_delta/EFFECT_FIELDS missing or check_shop_delta failed")
+
 print(f"{'#':>4}  {'':2} {'issue':22} note")
 for num, name, ok, note in sorted(R, key=lambda r: -r[0]):
     print(f"{num:>4}  {'OK' if ok else '--'} {name:22} {note}")

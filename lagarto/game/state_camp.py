@@ -87,6 +87,53 @@ def draw(game, surf):
         _draw_camp_field_ui(game, surf)   # walking the clearing
 
 
+# Schema declarativo do efeito de cada oferta.
+# `None` significa "sem preview": o efeito nao e numerico (Charms/Ovo de Amigo).
+# Uma tupla de 3: (stat, mode, amount).
+#   stat  -- campo do Player tocado ('health', 'max_health', 'might', ...)
+#   mode  -- 'add' soma amount, 'mult' multiplica por amount
+#   amount -- valor que o efeito real aplica (mesmo numero que `fn` usa)
+# A funcao real `fn` continua sendo a fonte da verdade; a declaracao existe
+# para que a UI projete o delta no card focado sem executar o efeito. O check
+# em tools/check_shop_delta.py compara a previsao com o efeito real.
+EFFECT_FIELDS = {
+    'health':        ('health',       'add',  40),    # Nectar
+    'max_health':    ('max_health',   'add',  20),    # Vitalidade
+    'might':         ('might',        'mult', 1.15),  # Vigor
+    'cooldown_mult': ('cooldown_mult', 'mult', 0.9),  # Haste (nao usado pela loja hoje)
+}
+
+
+def _preview_value(player, stat, mode, amount):
+    """Aplica a declaracao do efeito SEM efeitos colaterais, retorna o valor previsto.
+
+    Para 'add' no health respeita o teto do max_health (mesma semantica da funcao
+    real de Nectar). Para 'add' em outros stats e 'mult' em qualquer, e aritmetica
+    direta. Nao mexe no player.
+    """
+    cur = getattr(player, stat)
+    if mode == 'add':
+        if stat == 'health':
+            return min(player.max_health, cur + amount)
+        return cur + amount
+    if mode == 'mult':
+        return cur * amount
+    raise ValueError(f"modo de efeito desconhecido: {mode!r}")
+
+
+def preview_delta(offer, player):
+    """O delta que a compra causaria neste jogador, ou None se a oferta nao tem
+    preview. Retorna (stat, current, predicted) para a UI projetar.
+    """
+    eff = offer.get('effect')
+    if eff is None:
+        return None
+    stat, mode, amount = eff
+    cur = getattr(player, stat)
+    pred = _preview_value(player, stat, mode, amount)
+    return (stat, cur, pred)
+
+
 def _roll_shop(game):
     def heal(g):
         for pl in g.players:
@@ -123,12 +170,18 @@ def _roll_shop(game):
             if avail:
                 pl.gain_charm(random.choice(avail), g)
     items = [
-        dict(name='Nectar de Cura', desc='+40 vida', cost=12, hue=140, icon='health', fn=heal),
-        dict(name='Vitalidade', desc='+20 vida maxima', cost=28, hue=5, icon='health', fn=vitality),
-        dict(name='Vigor', desc='+15% dano das armas', cost=32, hue=0, icon='might', fn=might),
+        dict(name='Nectar de Cura', desc='+40 vida', cost=12, hue=140, icon='health',
+             fn=heal, effect=EFFECT_FIELDS['health']),
+        dict(name='Vitalidade', desc='+20 vida maxima', cost=28, hue=5, icon='health',
+             fn=vitality, effect=EFFECT_FIELDS['max_health']),
+        dict(name='Vigor', desc='+15% dano das armas', cost=32, hue=0, icon='might',
+             fn=might, effect=EFFECT_FIELDS['might']),
         # charms sao permanentes e fortes -> tem que doer no bolso (era 30)
-        dict(name='Charm', desc='adaptacao p/ um slot', cost=150, hue=280, icon='nectar', fn=charm),
-        dict(name='Ovo de Amigo', desc='aliado temporario', cost=40, hue=270, icon='legs', fn=egg),
+        # efeito None = sem preview (delta nao-numerico, nao cabe na grid)
+        dict(name='Charm', desc='adaptacao p/ um slot', cost=150, hue=280, icon='nectar',
+             fn=charm, effect=None),
+        dict(name='Ovo de Amigo', desc='aliado temporario', cost=40, hue=270, icon='legs',
+             fn=egg, effect=None),
     ]
     # o dict do camp e descartado a cada camp; o preco nao. Game.shop_prices
     # guarda o que ja encareceu nesta run (Game._apply_buy escreve nele).
@@ -173,7 +226,13 @@ def _update_camp_drop(game):
 
 
 def _shop_surface(game, it, i, focused):
-    """One beetle-shop item, drawn at the origin (see _card_surface)."""
+    """One beetle-shop item, drawn at the origin (see _card_surface).
+
+    When ``focused`` and the offer has a numeric ``effect`` (issue #140),
+    a 'fantasma' delta is drawn under the description so the player can
+    see what the purchase does. Only the focused card shows it -- a
+    five-card preview would compete with the grid below for the eye.
+    """
     cw, chh = 176, 132
     s = pygame.Surface((cw, chh), pygame.SRCALPHA)
     box = pygame.Rect(0, 0, cw, chh)
@@ -189,11 +248,60 @@ def _shop_surface(game, it, i, focused):
     s.blit(nm, (cw // 2 - nm.get_width() // 2, 62))
     ds = game.font.render(ui.fit(game.font, it['desc'], cw - 16), True, (190, 190, 210))
     s.blit(ds, (cw // 2 - ds.get_width() // 2, 84))
+    # Delta fantasmado do que a compra causaria (#140). So no card focado;
+    # quando o foco muda, o delta anterior desaparece (novo card focado
+    # ja vem sem o texto ate' ser redesenhado com seu proprio preview).
+    if focused and it.get('effect') is not None and game.players:
+        # Em 2P, mostramos o delta dos DOIS jogadores lado a lado. So' um
+        # jogador cairia em info pela metade, ja que a compra afeta ambos.
+        deltas = []
+        for p in game.players:
+            d = preview_delta(it, p)
+            if d is None: continue
+            stat, cur, pred = d
+            deltas.append(f"{_stat_label(stat)} {_fmt(cur, stat)} -> {_fmt(pred, stat)}")
+        if deltas:
+            txt = "  |  ".join(deltas)
+            t = game.smallfont.render(txt, True, (180, 220, 250))
+            # ghost: alpha 0.55 via surface SRCALPHA
+            t.set_alpha(140)
+            s.blit(t, (cw // 2 - t.get_width() // 2, 102))
     cc = C.COL_POLLEN if afford else (150, 120, 60)
     cost = game.font.render(f"{it['cost']}  polen", True, cc)
     s.blit(cost, (cw // 2 - cost.get_width() // 2, 106))
     s.blit(game.font.render(f"[{i + 1}]", True, edge), (8, 6))
     return s
+
+
+# Helpers de formatacao do delta. Nao fazem parte do schema do efeito,
+# sao apenas display: arredondam o numero para o que o grid mostraria e
+# usam o mesmo rotulo que a stat_row da grid usa.
+_STAT_LABELS = {
+    'health':        'VIDA',
+    'max_health':    'VIDA',
+    'might':         'DANO',
+    'cooldown_mult': 'RECAR',
+    'speed_mult':    'VELOC',
+    'area_mult':     'AREA',
+}
+
+
+def _stat_label(stat):
+    return _STAT_LABELS.get(stat, stat)
+
+
+def _fmt(v, stat):
+    """Match the formatting the HUD's stat_rows uses for the same field.
+
+    VIDA is shown as current/max integers; mults as two-decimal x. The
+    preview must round identically so the delta is read as 'this is what
+    you'll see', not 'this is the raw float'.
+    """
+    if stat == 'health':
+        return f"{int(v)}"
+    if stat == 'max_health':
+        return f"+{int(v - 0):d}"  # the amount is the predicted max, just show it
+    return f"{v:.2f}x"
 
 
 def _route_surface(game, r, sel, focused):
